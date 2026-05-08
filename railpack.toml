@@ -1,0 +1,4 @@
+[phases.install:composer]
+cmds = [
+  "composer install --optimize-autoloader --no-scripts --no-interaction --ignore-platform-req=ext-gd --ignore-platform-req=ext-zip"
+]
