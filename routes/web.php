@@ -44,6 +44,19 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+    // ── Dashboard ────────────────────────────────────────────────
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getRoleGroup('payroll'))])
+        ->get('/dashboard', [\Modules\Payroll\Http\Controllers\DashboardController::class, 'index'])
+        ->name('payroll.dashboard');
+
+    // ── My Payslip (Employee self-service) ────────────────────────
+    Route::get('/my-payslip', [\Modules\Payroll\Http\Controllers\PayrollController::class, 'myPayslip'])
+        ->name('my-payslip');
+
+    // ── TEV Dashboard ─────────────────────────────────────────────
+    Route::get('/tev', [\Modules\Tev\Http\Controllers\TevController::class, 'dashboard'])
+        ->name('tev.dashboard');
+
     // ── Employees ────────────────────────────────────────────────
     Route::middleware(['role:payroll_officer|hrmo|accountant|chief_admin_officer|super_admin'])
         ->group(function () {
