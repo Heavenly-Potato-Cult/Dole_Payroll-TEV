@@ -59,10 +59,10 @@ class AuthController extends Controller
 
         if ($isEmployee && !$isOfficer) {
             // Pure employee - redirect to my-payslip
-            $redirectTo = route('my-payslip');
+            $redirectTo = 'https://dolepayroll-production.up.railway.app/my-payslip';
         } else {
             // Officer/staff - redirect to dashboard
-            $redirectTo = route('payroll.dashboard');
+            $redirectTo = 'https://dolepayroll-production.up.railway.app/dashboard';
         }
 
         return $this->handleHrisAuth($request, $redirectTo);
@@ -73,7 +73,7 @@ class AuthController extends Controller
      */
     public function tevHrisAuth(Request $request)
     {
-        return $this->handleHrisAuth($request, route('tev.dashboard'));
+        return $this->handleHrisAuth($request, 'https://dolepayroll-production.up.railway.app/tev/dashboard');
     }
 
     // ── Shared logic ──────────────────────────────────────────────────────────
