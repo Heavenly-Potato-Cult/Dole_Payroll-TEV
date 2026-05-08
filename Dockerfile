@@ -30,4 +30,6 @@ RUN chown -R www-data:www-data /var/www \
 
 RUN composer install --no-interaction --optimize-autoloader --ignore-platform-reqs
 
-EXPOSE 8000
+EXPOSE 8080
+
+CMD ["php", "-S", "0.0.0.0:8080", "-t", "public/"]
