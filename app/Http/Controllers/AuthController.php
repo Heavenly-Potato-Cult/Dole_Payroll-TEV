@@ -58,11 +58,11 @@ class AuthController extends Controller
         $isOfficer = $user->hasAnyRole(\App\SharedKernel\Services\RoleService::getRoleGroup('payroll'));
 
         if ($isEmployee && !$isOfficer) {
-            // Pure employee - redirect to my-payslip
-            $redirectTo = 'https://dolepayroll-production.up.railway.app/my-payslip';
+            // Pure employee - redirect to Payroll HRIS auth for my-payslip
+            $redirectTo = 'https://dolepayroll-production.up.railway.app/hris-auth';
         } else {
-            // Officer/staff - redirect to dashboard
-            $redirectTo = 'https://dolepayroll-production.up.railway.app/dashboard';
+            // Officer/staff - redirect to Payroll HRIS auth for dashboard
+            $redirectTo = 'https://dolepayroll-production.up.railway.app/hris-auth';
         }
 
         return $this->handleHrisAuth($request, $redirectTo);
@@ -73,7 +73,7 @@ class AuthController extends Controller
      */
     public function tevHrisAuth(Request $request)
     {
-        return $this->handleHrisAuth($request, 'https://dolepayroll-production.up.railway.app/tev/dashboard');
+        return $this->handleHrisAuth($request, 'https://dolepayroll-production.up.railway.app/tev-hris-auth');
     }
 
     // ── Shared logic ──────────────────────────────────────────────────────────
