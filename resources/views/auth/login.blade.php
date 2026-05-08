@@ -14,7 +14,7 @@
         {{-- Logo + agency label --}}
         <div class="login-logo-row">
             <div class="login-logo-box">
-                <img src="{{ asset('assets/img/dole_logo.png') }}" alt="DOLE Logo" class="login-logo-img">
+                <img src="https://dolepayroll-production.up.railway.app/assets/img/dole_logo.png" alt="DOLE Logo" class="login-logo-img">
             </div>
             <div class="login-logo-label">
                 <span class="login-logo-abbr">DOLE — REGION IX</span>

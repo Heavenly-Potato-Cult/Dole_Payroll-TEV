@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'TEV Dashboard') — DOLE RO9 Payroll</title>
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+    <link rel="stylesheet" href="https://dolepayroll-production.up.railway.app/css/app.css">
     <style>
     /* ── Topbar User Pill Container (replicated from main dashboard) ─────────────────────────────────── */
     .topbar-user-pill {
@@ -136,7 +136,7 @@
 
         <div class="sidebar-brand">
             <div class="sidebar-logo-wrap">
-                <img src="{{ asset('assets/img/dole_logo.png') }}" alt="DOLE" class="sidebar-logo">
+                <img src="https://dolepayroll-production.up.railway.app/assets/img/dole_logo.png" alt="DOLE" class="sidebar-logo">
             </div>
             <div class="sidebar-title">
                 <strong>DOLE RO9 TEV</strong>
@@ -264,7 +264,7 @@
 
 </div>
 
-<script src="{{ asset('js/app.js') }}"></script>
+<script src="https://dolepayroll-production.up.railway.app/js/app.js"></script>
 <script>
 function openSidebar() {
     document.getElementById('sidebar').classList.add('open');
