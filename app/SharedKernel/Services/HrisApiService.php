@@ -22,14 +22,14 @@ class HrisApiService
 
     /**
      * Fetch all employees from HRIS API.
-     * Dummy API: GET /employees → { total: 82, data: [...] }
+     * Unified HRIS API: GET /api/employees → { total: 82, data: [...] }
      */
     public function fetchEmployees(): array
     {
         try {
             $response = Http::withToken($this->apiKey)
                 ->timeout(30)
-                ->get("{$this->baseUrl}/employees");
+                ->get("{$this->baseUrl}/api/employees");
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -54,13 +54,13 @@ class HrisApiService
     /**
      * Fetch attendance for one employee for a cut-off period.
      *
-     * Dummy API: GET /attendance?employee_id=EMP-0001&cutoff_start=YYYY-MM-DD&cutoff_end=YYYY-MM-DD
+     * Unified HRIS API: GET /api/attendance?employee_id=EMP001&cutoff_start=YYYY-MM-DD&cutoff_end=YYYY-MM-DD
      * Returns an ARRAY of records (not a single object), filtered by the params above.
      * We take the first matching record.
      *
      * Real HRIS API (Ma'am Eden's) will use the same shape once integrated.
      *
-     * @param  string $employeeNo   employee_no value (e.g. "EMP-0001")
+     * @param  string $employeeNo   employee_id value (e.g. "EMP001")
      * @param  string $cutoffStart  "YYYY-MM-DD"
      * @param  string $cutoffEnd    "YYYY-MM-DD"
      * @return array  Single attendance record or perfect-attendance fallback
@@ -73,8 +73,8 @@ class HrisApiService
         try {
             $response = Http::withToken($this->apiKey)
                 ->timeout(30)
-                ->get("{$this->baseUrl}/attendance", [
-                    'employee_id'  => $employeeNo,   // dummy API param name
+                ->get("{$this->baseUrl}/api/attendance", [
+                    'employee_id'  => $employeeNo,   // unified API param name
                     'cutoff_start' => $cutoffStart,
                     'cutoff_end'   => $cutoffEnd,
                 ]);
@@ -82,7 +82,7 @@ class HrisApiService
             if ($response->successful()) {
                 $data = $response->json();
 
-                // Dummy API returns an ARRAY of records — take the first match.
+                // Unified API returns an ARRAY of records — take the first match.
                 // If the API returns a single object instead, handle both shapes.
                 if (is_array($data) && isset($data[0])) {
                     return $data[0];
@@ -178,7 +178,7 @@ class HrisApiService
         try {
             $response = Http::withToken($this->apiKey)
                 ->timeout(30)
-                ->get("{$this->baseUrl}/attendance", [
+                ->get("{$this->baseUrl}/api/attendance", [
                     'cutoff_start' => $cutoffStart,
                     'cutoff_end'   => $cutoffEnd,
                 ]);
