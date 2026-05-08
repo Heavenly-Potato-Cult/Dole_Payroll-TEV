@@ -36,7 +36,13 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        return redirect('https://hris-dummysystem-production.up.railway.app/');
+        
+        // Check if user is super admin
+        if (auth()->user()->hasRole('super_admin')) {
+            return redirect('https://dolepayroll-production.up.railway.app/login');
+        } else {
+            return redirect('https://hris-dummysystem-production.up.railway.app/');
+        }
     }
 
     /**

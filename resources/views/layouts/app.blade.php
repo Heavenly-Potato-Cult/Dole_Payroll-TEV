@@ -359,9 +359,7 @@
                         For all non-super-admin users (including HRIS employees),
                         logging out also redirects back to the HRIS portal.
                     --}}
-                    <form method="POST" action="https://dolepayroll-production.up.railway.app/logout"
-                          onsubmit="setTimeout(() => { window.location.href = 'https://hris-dummysystem-production.up.railway.app/'; }, 100);"
-                          style="display: inline;">
+                    <form method="POST" action="https://dolepayroll-production.up.railway.app/logout" style="display: inline;">
                         @csrf
                         <button type="submit" class="sign-out-btn">
                             <span class="sign-out-icon">←</span>

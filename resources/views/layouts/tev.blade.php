@@ -221,7 +221,7 @@
                         </button>
                     </form>
                     @else
-                    <form method="POST" action="https://dolepayroll-production.up.railway.app/logout" onsubmit="setTimeout(() => { window.location.href = 'https://hris-dummysystem-production.up.railway.app/'; }, 100);" style="display: inline;">
+                    <form method="POST" action="https://dolepayroll-production.up.railway.app/logout" style="display: inline;">
                         @csrf
                         <button type="submit" class="sign-out-btn">
                             <span class="sign-out-icon">←</span>
