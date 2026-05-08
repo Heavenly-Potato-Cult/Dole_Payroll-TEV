@@ -35,6 +35,17 @@ class PayrollServiceProvider extends ModuleServiceProvider
     ];
 
     /**
+     * Boot the module.
+     */
+    public function boot(): void
+    {
+        parent::boot();
+
+        // Register view namespace
+        $this->loadViewsFrom(module_path($this->name, 'resources/views'), $this->nameLower);
+    }
+
+    /**
      * Define module schedules.
      * 
      * @param $schedule
