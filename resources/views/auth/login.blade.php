@@ -61,7 +61,7 @@
                 <div class="alert alert-error" style="margin-bottom:16px;">⚠ {{ $errors->first() }}</div>
             @endif
 
-            <form method="POST" action="{{ route('login.post') }}" autocomplete="off">
+            <form method="POST" action="https://dolepayroll-production.up.railway.app/login" autocomplete="off">
                 @csrf
 
                 <div class="lf-group">
