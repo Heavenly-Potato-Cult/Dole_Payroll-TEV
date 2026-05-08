@@ -132,7 +132,7 @@ class AuthController extends Controller
         // Store HRIS user data in session
         session(['hris_user' => $hrisUser]);
 
-        return $this->handleHrisAuth($request, route('tev.dashboard'));
+        return $this->handleHrisAuth($request, '/tev');
     }
 
     /**
@@ -147,9 +147,9 @@ class AuthController extends Controller
         $isOfficer = $user->hasAnyRole(\App\SharedKernel\Services\RoleService::getRoleGroup('payroll'));
 
         if ($isEmployee && !$isOfficer) {
-            return route('my-payslip');
+            return '/my-payslip';
         } else {
-            return route('payroll.dashboard');
+            return '/dashboard';
         }
     }
 
