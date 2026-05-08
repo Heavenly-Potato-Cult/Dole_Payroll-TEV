@@ -30,6 +30,10 @@ Route::post('/login', [AuthController::class, 'login'])->name('login.post')->mid
 Route::get('/hris-auth', [AuthController::class, 'hrisAuth'])->name('hris.auth')->middleware('jwt.auth');
 Route::get('/tev-hris-auth', [AuthController::class, 'tevHrisAuth'])->name('tev.hris.auth')->middleware('jwt.auth');
 
+// ── HRIS Callback Routes — Handle authentication from external HRIS system ─────
+Route::get('/hris-auth-callback', [AuthController::class, 'hrisAuthCallback'])->name('hris.auth.callback');
+Route::get('/tev-hris-auth-callback', [AuthController::class, 'tevHrisAuthCallback'])->name('tev.hris.auth.callback');
+
 
 /*
 |--------------------------------------------------------------------------

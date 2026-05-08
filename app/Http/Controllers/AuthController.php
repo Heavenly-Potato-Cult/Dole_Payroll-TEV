@@ -57,12 +57,21 @@ class AuthController extends Controller
         $isEmployee = $user->hasRole('employee');
         $isOfficer = $user->hasAnyRole(\App\SharedKernel\Services\RoleService::getRoleGroup('payroll'));
 
+        // Pass HRIS user data to Payroll system via query parameters
+        $hrisUser = session('hris_user');
+        $queryParams = http_build_query([
+            'employee_id' => $hrisUser['employee_id'],
+            'name' => $hrisUser['name'],
+            'department' => $hrisUser['department'],
+            'role' => $hrisUser['role'] ?? 'employee'
+        ]);
+        
         if ($isEmployee && !$isOfficer) {
-            // Pure employee - redirect to Payroll HRIS auth for my-payslip
-            $redirectTo = 'https://dolepayroll-production.up.railway.app/hris-auth';
+            // Pure employee - redirect to Payroll with HRIS data for my-payslip
+            $redirectTo = 'https://dolepayroll-production.up.railway.app/hris-auth-callback?' . $queryParams;
         } else {
-            // Officer/staff - redirect to Payroll HRIS auth for dashboard
-            $redirectTo = 'https://dolepayroll-production.up.railway.app/hris-auth';
+            // Officer/staff - redirect to Payroll with HRIS data for dashboard
+            $redirectTo = 'https://dolepayroll-production.up.railway.app/hris-auth-callback?' . $queryParams;
         }
 
         return $this->handleHrisAuth($request, $redirectTo);
@@ -73,7 +82,75 @@ class AuthController extends Controller
      */
     public function tevHrisAuth(Request $request)
     {
-        return $this->handleHrisAuth($request, 'https://dolepayroll-production.up.railway.app/tev-hris-auth');
+        // Pass HRIS user data to Payroll system via query parameters
+        $hrisUser = session('hris_user');
+        $queryParams = http_build_query([
+            'employee_id' => $hrisUser['employee_id'],
+            'name' => $hrisUser['name'],
+            'department' => $hrisUser['department'],
+            'role' => $hrisUser['role'] ?? 'employee',
+            'tev' => 'true'
+        ]);
+        
+        return $this->handleHrisAuth($request, 'https://dolepayroll-production.up.railway.app/tev-hris-auth-callback?' . $queryParams);
+    }
+
+    /**
+     * HRIS callback from external HRIS system.
+     */
+    public function hrisAuthCallback(Request $request)
+    {
+        // Build HRIS user data from query parameters
+        $hrisUser = [
+            'employee_id' => $request->get('employee_id'),
+            'name' => $request->get('name'),
+            'department' => $request->get('department'),
+            'role' => $request->get('role', 'employee'),
+            'full_profile' => $request->all()
+        ];
+
+        // Store HRIS user data in session
+        session(['hris_user' => $hrisUser]);
+
+        return $this->handleHrisAuth($request, $this->getRedirectDestination($hrisUser));
+    }
+
+    /**
+     * TEV HRIS callback from external HRIS system.
+     */
+    public function tevHrisAuthCallback(Request $request)
+    {
+        // Build HRIS user data from query parameters
+        $hrisUser = [
+            'employee_id' => $request->get('employee_id'),
+            'name' => $request->get('name'),
+            'department' => $request->get('department'),
+            'role' => $request->get('role', 'employee'),
+            'full_profile' => $request->all()
+        ];
+
+        // Store HRIS user data in session
+        session(['hris_user' => $hrisUser]);
+
+        return $this->handleHrisAuth($request, route('tev.dashboard'));
+    }
+
+    /**
+     * Get redirect destination based on HRIS user role.
+     */
+    private function getRedirectDestination(array $hrisUser): string
+    {
+        // Create a temporary user to check roles
+        $user = $this->resolveHrisUser($hrisUser);
+        
+        $isEmployee = $user->hasRole('employee');
+        $isOfficer = $user->hasAnyRole(\App\SharedKernel\Services\RoleService::getRoleGroup('payroll'));
+
+        if ($isEmployee && !$isOfficer) {
+            return route('my-payslip');
+        } else {
+            return route('payroll.dashboard');
+        }
     }
 
     // ── Shared logic ──────────────────────────────────────────────────────────
