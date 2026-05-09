@@ -1,0 +1,36 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "php artisan serve --host=0.0.0.0 --port=8080"
+healthcheckPath = "/"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[env]
+PHP_VERSION = "8.2"
+APP_ENV = "production"
+APP_DEBUG = "false"
+APP_URL = "https://your-app-name.railway.app"
+
+[phases.setup]
+nixPkgs = ["php82", "php82Packages.composer", "nodejs_22"]
+
+[phases.build]
+cmds = [
+    "composer install --no-dev --optimize-autoloader",
+    "npm install",
+    "npm run build"
+]
+
+[phases.start]
+cmds = [
+    "php artisan storage:link",
+    "php artisan config:cache",
+    "php artisan route:cache"
+]
+
+[[statics]]
+guestPath = "/app/public"
+src = "public/dist"
