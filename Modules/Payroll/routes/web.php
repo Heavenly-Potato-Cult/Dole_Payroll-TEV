@@ -13,7 +13,8 @@ use Modules\Payroll\Http\Controllers\PayrollController;
 Route::middleware(['auth'])->group(function () {
 
     // ── Dashboard ────────────────────────────────────────────────
-    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getRoleGroup('payroll'))])
+    // Exclude cashiers from dashboard access
+    Route::middleware(['role:' . implode('|', array_diff(\App\SharedKernel\Services\RoleService::getRoleGroup('payroll'), ['cashier']))])
         ->get('/dashboard', [DashboardController::class, 'index'])
         ->name('payroll.dashboard');
 

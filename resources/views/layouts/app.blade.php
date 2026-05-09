@@ -146,14 +146,18 @@
 
         <nav class="sidebar-nav">
 
+            @role('cashier')
+            {{-- Dashboard hidden for cashiers --}}
+        @else
             <a href="{{ route('payroll.dashboard') }}"
-               class="nav-item {{ request()->routeIs('payroll.dashboard') ? 'active' : '' }}">
-                <span class="nav-icon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white" style="display: block;">
-                        <path d="M21,3H3c-1.654,0-3,1.346-3,3v15H24V6c0-1.654-1.346-3-3-3Zm-13,14.5c-2.761,0-5-2.239-5-5,0-2.419,1.718-4.436,4-4.899v5.313l3.754,3.754c-.79,.523-1.736,.832-2.754,.832Zm4.168-2.246l-3.168-3.168V7.601c2.282,.463,4,2.48,4,4.899,0,1.019-.308,1.964-.832,2.754Zm8.832,1.746h-5v-2h5v2Zm0-4h-5v-2h5v2Zm0-4h-5v-2h5v2Z"/>
-                    </svg>
-                </span> Dashboard
-            </a>
+                       class="nav-item {{ request()->routeIs('payroll.dashboard') ? 'active' : '' }}">
+                    <span class="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="white" style="display: block;">
+                            <path d="M21,3H3c-1.654,0-3,1.346-3,3v15H24V6c0-1.654-1.346-3-3-3Zm-13,14.5c-2.761,0-5-2.239-5-5,0-2.419,1.718-4.436,4-4.899v5.313l3.754,3.754c-.79,.523-1.736,.832-2.754,.832Zm4.168-2.246l-3.168-3.168V7.601c2.282,.463,4,2.48,4,4.899,0,1.019-.308,1.964-.832,2.754Zm8.832,1.746h-5v-2h5v2Zm0-4h-5v-2h5v2Zm0-4h-5v-2h5v2Z"/>
+                        </svg>
+                    </span> Dashboard
+                </a>
+        @endrole
 
             {{-- ── Employees ─────────────────────────────────────────── --}}
             @role('payroll_officer|hrmo|accountant|chief_admin_officer|super_admin')

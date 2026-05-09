@@ -121,10 +121,16 @@ class EmployeeAuthService
     {
         $isEmployee = $user->hasRole('employee');
         $isOfficer = $user->hasAnyRole(RoleService::getRoleGroup('payroll'));
+        $isCashier = $user->hasRole('cashier');
 
-        if ($isEmployee && !$isOfficer) {
+        if ($isCashier) {
+            // Cashiers go to payroll index where they can access their functions
+            return route('payroll.index');
+        } elseif ($isEmployee && !$isOfficer) {
+            // Pure employees go to payslip
             return route('my-payslip');
         } else {
+            // Officers and admins go to dashboard
             return route('payroll.dashboard');
         }
     }
