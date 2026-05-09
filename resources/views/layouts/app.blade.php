@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') — DOLE RO9 Payroll</title>
-    <link rel="stylesheet" href="https://dolepayroll-production.up.railway.app/css/app.css">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     <style>
     /* ── Topbar User Pill Container ─────────────────────────────────── */
     .topbar-user-pill {
@@ -136,7 +136,7 @@
 
         <div class="sidebar-brand">
             <div class="sidebar-logo-wrap">
-                <img src="https://dolepayroll-production.up.railway.app/assets/img/dole_logo.png" alt="DOLE" class="sidebar-logo">
+                <img src="{{ asset('assets/img/dole_logo.png') }}" alt="DOLE" class="sidebar-logo">
             </div>
             <div class="sidebar-title">
                 <strong>DOLE RO9 Payroll</strong>
@@ -347,7 +347,7 @@
                     </div>
                     <div class="user-divider"></div>
                     @role('super_admin')
-                    <form method="POST" action="https://dolepayroll-production.up.railway.app/logout" style="display: inline;">
+                    <form method="POST" action="{{ route('logout') }}" style="display: inline;">
                         @csrf
                         <button type="submit" class="sign-out-btn">
                             <span class="sign-out-icon">⏻</span>
@@ -359,7 +359,9 @@
                         For all non-super-admin users (including HRIS employees),
                         logging out also redirects back to the HRIS portal.
                     --}}
-                    <form method="POST" action="https://dolepayroll-production.up.railway.app/logout" style="display: inline;">
+                    <form method="POST" action="{{ route('logout') }}"
+                          onsubmit="setTimeout(() => { window.location.href = 'http://localhost:3001'; }, 100);"
+                          style="display: inline;">
                         @csrf
                         <button type="submit" class="sign-out-btn">
                             <span class="sign-out-icon">←</span>
@@ -402,7 +404,7 @@
 
 </div>
 
-<script src="https://dolepayroll-production.up.railway.app/js/app.js"></script>
+<script src="{{ asset('js/app.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 function openSidebar() {

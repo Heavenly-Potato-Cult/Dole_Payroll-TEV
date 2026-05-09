@@ -14,7 +14,7 @@
         {{-- Logo + agency label --}}
         <div class="login-logo-row">
             <div class="login-logo-box">
-                <img src="https://dolepayroll-production.up.railway.app/assets/img/dole_logo.png" alt="DOLE Logo" class="login-logo-img">
+                <img src="{{ asset('assets/img/dole_logo.png') }}" alt="DOLE Logo" class="login-logo-img">
             </div>
             <div class="login-logo-label">
                 <span class="login-logo-abbr">DOLE — REGION IX</span>
@@ -61,7 +61,7 @@
                 <div class="alert alert-error" style="margin-bottom:16px;">⚠ {{ $errors->first() }}</div>
             @endif
 
-            <form method="POST" action="https://dolepayroll-production.up.railway.app/login" autocomplete="off">
+            <form method="POST" action="{{ route('login.post') }}" autocomplete="off">
                 @csrf
 
                 <div class="lf-group">

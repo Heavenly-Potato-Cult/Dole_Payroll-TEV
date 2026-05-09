@@ -3,6 +3,4 @@
 return [
     App\Providers\AppServiceProvider::class,
     Spatie\Permission\PermissionServiceProvider::class,  // ← was Spatie\LaravelPermission\...
-    Modules\Payroll\Providers\PayrollServiceProvider::class,
-    Modules\Tev\Providers\TevServiceProvider::class,
 ];
