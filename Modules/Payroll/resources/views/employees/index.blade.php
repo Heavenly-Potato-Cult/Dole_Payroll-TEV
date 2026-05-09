@@ -485,15 +485,6 @@ async function executeHrisSync() {
         if (progress < 90) {
             progress += Math.random() * 15;
             if (progress > 90) progress = 90;
-            Swal.update({
-                html: `<div style="margin-top:10px;">
-                    <div style="background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden;">
-                        <div style="background:#0F1B4C;height:100%;width:${progress}%;transition:width 0.3s;"></div>
-                    </div>
-                    <p style="margin-top:8px;font-size:0.9rem;color:#6b7280;">${Math.round(progress)}%</p>
-                </div>`
-            });
-        }
     }, 800);
 
     Swal.fire({
@@ -502,21 +493,19 @@ async function executeHrisSync() {
             <div style="background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden;">
                 <div style="background:#0F1B4C;height:100%;width:0%;transition:width 0.3s;"></div>
             </div>
-            <p style="margin-top:8px;font-size:0.9rem;color:#6b7280;">0%</p>
         </div>`,
-        allowOutsideClick: false,
-        allowEscapeKey: false,
         showConfirmButton: false,
-        showCancelButton: false,
+        allowOutsideClick: false,
         didOpen: () => {
-            Swal.showLoading();
+            updateProgressBar(0);
         }
     });
 
     try {
         const form = document.getElementById('syncHrisForm');
         const formData = new FormData(form);
-        const csrfToken = formData.get('_token');
+        // Get fresh CSRF token from meta tag
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
