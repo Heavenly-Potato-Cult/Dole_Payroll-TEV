@@ -27,12 +27,24 @@ class HrisApiService
     public function fetchEmployees(): array
     {
         try {
+            $url = "{$this->baseUrl}/api/employees";
+            
+            Log::info('HRIS API Request', [
+                'base_url' => $this->baseUrl,
+                'full_url' => $url,
+                'api_key' => $this->apiKey ? 'SET' : 'NOT SET',
+            ]);
+
             $response = Http::withToken($this->apiKey)
                 ->timeout(30)
-                ->get("{$this->baseUrl}/api/employees");
+                ->get($url);
 
             if ($response->successful()) {
                 $data = $response->json();
+                Log::info('HRIS API Success', [
+                    'status' => $response->status(),
+                    'employee_count' => count($data['data'] ?? []),
+                ]);
                 return $data['data'] ?? [];
             }
 
@@ -41,7 +53,10 @@ class HrisApiService
                 'body'   => $response->body(),
             ]);
         } catch (\Exception $e) {
-            Log::error('HRIS API employees error', ['error' => $e->getMessage()]);
+            Log::error('HRIS API employees error', [
+                'error' => $e->getMessage(),
+                'base_url' => $this->baseUrl,
+            ]);
         }
 
         return $this->mockEmployees();

@@ -114,6 +114,12 @@ class EmployeeController extends Controller
     public function pullFromApi(Request $request)
     {
         try {
+            // Debug: Log environment variables
+            Log::info('HRIS API Debug', [
+                'hris_url' => config('services.hris.url'),
+                'hris_key' => config('services.hris.key') ? 'SET' : 'NOT SET',
+            ]);
+
             $employees = app(HrisApiService::class)->fetchEmployees();
 
             Log::info('HRIS sync starting', [
