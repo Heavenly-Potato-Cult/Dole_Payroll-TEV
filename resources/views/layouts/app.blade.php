@@ -359,13 +359,11 @@
                         For all non-super-admin users (including HRIS employees),
                         logging out also redirects back to the HRIS portal.
                     --}}
-                    <form method="POST" action="{{ route('logout') }}"
-                          onsubmit="setTimeout(() => { window.location.href = 'http://localhost:3001'; }, 100);"
-                          style="display: inline;">
+                    <form method="POST" action="{{ route('logout') }}" style="display: inline;">
                         @csrf
                         <button type="submit" class="sign-out-btn">
                             <span class="sign-out-icon">←</span>
-                            Back to HRIS
+                            Logout
                         </button>
                     </form>
                     @endrole

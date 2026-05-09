@@ -17,30 +17,30 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        // Check if this is employee login (employee_id) or admin login (email)
-        $loginField = $request->has('employee_id') ? 'employee_id' : 'email';
-        
-        if ($loginField === 'employee_id') {
-            return $this->handleEmployeeLogin($request);
-        } else {
-            return $this->handleAdminLogin($request);
-        }
-    }
-
-    private function handleEmployeeLogin(Request $request)
-    {
         $credentials = $request->validate([
-            'employee_id' => ['required', 'string'],
+            'login_field' => ['required', 'string'],
             'password'    => ['required'],
         ]);
 
+        $loginValue = $credentials['login_field'];
+        
+        // Check if it's an employee ID (starts with EMP) or email
+        if (str_starts_with(strtoupper($loginValue), 'EMP')) {
+            return $this->handleEmployeeLogin($loginValue, $credentials['password'], $request);
+        } else {
+            return $this->handleAdminLogin($loginValue, $credentials['password'], $request);
+        }
+    }
+
+    private function handleEmployeeLogin(string $employeeId, string $password, Request $request)
+    {
         $employeeAuthService = app(EmployeeAuthService::class);
-        $employee = $employeeAuthService->authenticate($credentials['employee_id'], $credentials['password']);
+        $employee = $employeeAuthService->authenticate($employeeId, $password);
 
         if (!$employee) {
             return back()
-                ->withInput($request->only('employee_id'))
-                ->withErrors(['employee_id' => 'Invalid Employee ID or password.']);
+                ->withInput($request->only('login_field'))
+                ->withErrors(['login_field' => 'Invalid Employee ID or password.']);
         }
 
         // Resolve or create user account
@@ -62,21 +62,16 @@ class AuthController extends Controller
         return redirect($redirectTo)->with('success', 'Welcome, ' . $employee->full_name . '!');
     }
 
-    private function handleAdminLogin(Request $request)
+    private function handleAdminLogin(string $email, string $password, Request $request)
     {
-        $credentials = $request->validate([
-            'email'    => ['required', 'email'],
-            'password' => ['required'],
-        ]);
-
-        if (Auth::attempt($credentials, $request->boolean('remember'))) {
+        if (Auth::attempt(['email' => $email, 'password' => $password], $request->boolean('remember'))) {
             $request->session()->regenerate();
             return redirect()->intended(route('payroll.dashboard'));
         }
 
         return back()
-            ->withInput($request->only('email'))
-            ->withErrors(['email' => 'The provided credentials do not match our records.']);
+            ->withInput($request->only('login_field'))
+            ->withErrors(['login_field' => 'The provided credentials do not match our records.']);
     }
 
     public function logout(Request $request)

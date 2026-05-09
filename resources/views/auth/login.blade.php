@@ -4,35 +4,6 @@
 
 @push('styles')
 <style>
-.login-tabs {
-    display: flex;
-    margin-bottom: 24px;
-    border-bottom: 2px solid #e5e7eb;
-}
-
-.login-tab {
-    flex: 1;
-    padding: 12px 16px;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    font-size: 14px;
-    font-weight: 600;
-    color: #6b7280;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-bottom: -2px;
-}
-
-.login-tab:hover {
-    color: #374151;
-}
-
-.login-tab.active {
-    color: #1a3c5e;
-    border-bottom-color: #1a3c5e;
-}
-
 .login-form {
     animation: fadeIn 0.3s ease-in-out;
 }
@@ -116,70 +87,25 @@
                 <div class="alert alert-error" style="margin-bottom:16px;">⚠ {{ $errors->first() }}</div>
             @endif
 
-            <!-- Login Type Tabs -->
-            <div class="login-tabs">
-                <button type="button" class="login-tab active" data-tab="employee">Employee Login</button>
-                <button type="button" class="login-tab" data-tab="admin">Admin Login</button>
-            </div>
-
-            <!-- Employee Login Form -->
-            <form method="POST" action="{{ route('login.post') }}" autocomplete="off" id="employee-form" class="login-form">
+            <!-- Unified Login Form -->
+            <form method="POST" action="{{ route('login.post') }}" autocomplete="off" class="login-form">
                 @csrf
 
                 <div class="lf-group">
-                    <label for="employee_id">Employee ID</label>
+                    <label for="login_field">Employee ID or Email</label>
                     <input
                         type="text"
-                        id="employee_id"
-                        name="employee_id"
-                        value="{{ old('employee_id') }}"
-                        placeholder="e.g. EMP001"
+                        id="login_field"
+                        name="login_field"
+                        value="{{ old('employee_id') ?? old('email') }}"
+                        placeholder="Employee ID (e.g. EMP001) or Email"
                         required
                         autofocus
-                        class="{{ $errors->has('employee_id') ? 'is-invalid' : '' }}"
+                        class="{{ $errors->has('employee_id') || $errors->has('email') ? 'is-invalid' : '' }}"
                     >
                     @error('employee_id')
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror
-                </div>
-
-                <div class="lf-group">
-                    <label for="password">Password</label>
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        placeholder="••••••••"
-                        required
-                        class="{{ $errors->has('password') ? 'is-invalid' : '' }}"
-                    >
-                    @error('password')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
-
-                <button type="submit" class="login-submit">Sign in as Employee</button>
-
-                <div class="login-hint">
-                    <small>Demo: Use any EMP001-EMP082 with password "pass123"</small>
-                </div>
-            </form>
-
-            <!-- Admin Login Form -->
-            <form method="POST" action="{{ route('login.post') }}" autocomplete="off" id="admin-form" class="login-form" style="display: none;">
-                @csrf
-
-                <div class="lf-group">
-                    <label for="email">Email Address</label>
-                    <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value="{{ old('email') }}"
-                        placeholder="you@dole.gov.ph"
-                        required
-                        class="{{ $errors->has('email') ? 'is-invalid' : '' }}"
-                    >
                     @error('email')
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror
@@ -200,7 +126,12 @@
                     @enderror
                 </div>
 
-                <button type="submit" class="login-submit">Sign in as Admin</button>
+                <button type="submit" class="login-submit">Sign In</button>
+
+                <div class="login-hint">
+                    <small>Employees: Use your Employee ID (EMP001-EMP082) with password "pass123"<br>
+                    Admins: Use your email address and assigned password</small>
+                </div>
             </form>
 
             <div class="login-card-footer">
@@ -213,32 +144,5 @@
 
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const tabs = document.querySelectorAll('.login-tab');
-    const forms = document.querySelectorAll('.login-form');
-
-    tabs.forEach(tab => {
-        tab.addEventListener('click', function() {
-            const targetTab = this.dataset.tab;
-
-            // Update active tab
-            tabs.forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-
-            // Show/hide forms
-            forms.forEach(form => {
-                if (form.id === targetTab + '-form') {
-                    form.style.display = 'block';
-                    // Focus first input
-                    form.querySelector('input').focus();
-                } else {
-                    form.style.display = 'none';
-                }
-            });
-        });
-    });
-});
-</script>
 
 @endsection

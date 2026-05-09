@@ -377,7 +377,7 @@
         }
 
         .top-nav-back-btn::before {
-            content: '← HRIS';
+            content: 'Logout';
         }
 
         .page-header {
@@ -421,12 +421,10 @@
                 <div class="top-nav-avatar">
                     {{ strtoupper(substr(session('hris_employee_name') ?? auth()->user()->name, 0, 1)) }}
                 </div>
-                <form method="POST" action="{{ route('logout') }}"
-                      onsubmit="setTimeout(() => { window.location.href = 'http://localhost:3001'; }, 100);"
-                      style="display: inline;">
+                <form method="POST" action="{{ route('logout') }}" style="display: inline;">
                     @csrf
                     <button type="submit" class="top-nav-back-btn">
-                        <span>← Back to HRIS</span>
+                        <span>Logout</span>
                     </button>
                 </form>
             </div>

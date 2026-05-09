@@ -71,8 +71,8 @@ class DashboardController extends Controller
             $pendingPayroll = PayrollBatch::where('status', 'pending_rd')->count();
 
         } elseif ($user->hasRole('cashier')) {
-            // Cashier only sees payroll-related approvals
-            $pendingPayroll = 0;
+            // Cashier can see payroll batches for release processing
+            $pendingPayroll = PayrollBatch::where('status', 'released')->count();
 
         } elseif ($user->hasRole('budget_officer')) {
             // Budget officer has no approval action for payroll
