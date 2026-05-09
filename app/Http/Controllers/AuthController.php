@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\SharedKernel\Models\Employee;
+use App\SharedKernel\Services\EmployeeAuthService;
 use App\Models\User;
 
 class AuthController extends Controller
@@ -15,6 +16,53 @@ class AuthController extends Controller
     }
 
     public function login(Request $request)
+    {
+        // Check if this is employee login (employee_id) or admin login (email)
+        $loginField = $request->has('employee_id') ? 'employee_id' : 'email';
+        
+        if ($loginField === 'employee_id') {
+            return $this->handleEmployeeLogin($request);
+        } else {
+            return $this->handleAdminLogin($request);
+        }
+    }
+
+    private function handleEmployeeLogin(Request $request)
+    {
+        $credentials = $request->validate([
+            'employee_id' => ['required', 'string'],
+            'password'    => ['required'],
+        ]);
+
+        $employeeAuthService = app(EmployeeAuthService::class);
+        $employee = $employeeAuthService->authenticate($credentials['employee_id'], $credentials['password']);
+
+        if (!$employee) {
+            return back()
+                ->withInput($request->only('employee_id'))
+                ->withErrors(['employee_id' => 'Invalid Employee ID or password.']);
+        }
+
+        // Resolve or create user account
+        $user = $employeeAuthService->resolveUser($employee);
+        
+        // Login the user
+        Auth::login($user, $request->boolean('remember'));
+        $request->session()->regenerate();
+
+        // Store employee data in session for payroll calculations
+        session([
+            'hris_employee_id'  => $employee->employee_no,
+            'hris_full_profile' => $employee->toArray(),
+        ]);
+
+        // Get redirect destination
+        $redirectTo = $employeeAuthService->getRedirectDestination($user);
+
+        return redirect($redirectTo)->with('success', 'Welcome, ' . $employee->full_name . '!');
+    }
+
+    private function handleAdminLogin(Request $request)
     {
         $credentials = $request->validate([
             'email'    => ['required', 'email'],

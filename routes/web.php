@@ -23,12 +23,9 @@ use Modules\Tev\Http\Controllers\TevReportController;
 */
 Route::get('/', fn() => redirect()->route('login'));
 
-Route::get('/login',  [AuthController::class, 'showLogin'])->name('login')->middleware('guest');
+// ── Login Routes — Supports both employee and admin authentication ─────
+Route::get('/login', [AuthController::class, 'showLogin'])->name('login')->middleware('guest');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post')->middleware('guest');
-
-// ── HRIS SSO Routes — JWT authentication from HRIS simulation ─────
-Route::get('/hris-auth', [AuthController::class, 'hrisAuth'])->name('hris.auth')->middleware('jwt.auth');
-Route::get('/tev-hris-auth', [AuthController::class, 'tevHrisAuth'])->name('tev.hris.auth')->middleware('jwt.auth');
 
 
 /*
