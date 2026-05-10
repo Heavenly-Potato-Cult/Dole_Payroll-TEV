@@ -1,6 +1,5 @@
 [build]
 builder = "railpack"
-buildCommand = "composer install --no-dev --optimize-autoloader && npm install && npm run build"
 
 [deploy]
 startCommand = "chmod +x .railway/start.sh && .railway/start.sh"

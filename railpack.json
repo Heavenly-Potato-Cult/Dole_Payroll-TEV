@@ -1,3 +1,6 @@
 {
-  "providers": ["php", "node"]
+  "providers": ["php", "node"],
+  "php": {
+    "version": "8.2"
+  }
 }
