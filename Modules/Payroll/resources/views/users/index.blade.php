@@ -487,11 +487,11 @@
                         ✎
                     </a>
                     @if ($user->id !== auth()->id())
-                    <form method="POST" action="{{ route('users.destroy', $user) }}" style="display: inline;">
+                    <form method="POST" action="{{ route('users.destroy', $user) }}" id="deleteForm-{{ $user->id }}" style="display: inline;">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="action-btn delete" title="Delete" 
-                                onclick="return confirm('Remove {{ addslashes($user->name) }}?\nThis cannot be undone.')">
+                        <button type="button" class="action-btn delete" title="Delete" 
+                                onclick="confirmDeleteUser({{ $user->id }}, '{{ addslashes($user->name) }}')">
                             ✕
                         </button>
                     </form>
@@ -620,6 +620,30 @@ function toggleRoleGuide() {
     
     header.classList.toggle('collapsed');
     content.classList.toggle('collapsed');
+}
+
+// Confirm delete user with SweetAlert
+function confirmDeleteUser(userId, userName) {
+    const formId = 'deleteForm-' + userId;
+    
+    Swal.fire({
+        title: 'Remove User?',
+        html: `<div style="text-align:center;">
+            <p style="margin-bottom:8px;">Are you sure you want to remove <strong>${userName}</strong>?</p>
+            <p style="color:#dc2626;font-size:0.9rem;">This action cannot be undone.</p>
+        </div>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Yes, remove',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById(formId).submit();
+        }
+    });
 }
 
 // Search and filter functionality
