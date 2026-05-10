@@ -128,10 +128,10 @@
 
                 <button type="submit" class="login-submit">Sign In</button>
 
-                <!-- <div class="login-hint">
+                <div class="login-hint">
                     <small>Employees: Use your Employee ID (EMP001-EMP082) with password "pass123"<br>
                     Admins: Use your email address and assigned password</small>
-                </div> -->
+                </div>
             </form>
 
             <div class="login-card-footer">

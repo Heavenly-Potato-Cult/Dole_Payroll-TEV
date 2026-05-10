@@ -23,16 +23,6 @@ use Modules\Tev\Http\Controllers\TevReportController;
 */
 Route::get('/', fn() => redirect()->route('login'));
 
-// Health check endpoint for Railway
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'ok',
-        'timestamp' => now()->toISOString(),
-        'app' => config('app.name'),
-        'environment' => config('app.env'),
-    ]);
-});
-
 // ── Login Routes — Supports both employee and admin authentication ─────
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login')->middleware('guest');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post')->middleware('guest');

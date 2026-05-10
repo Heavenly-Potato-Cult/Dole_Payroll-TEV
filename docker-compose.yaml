@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dole_payroll_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/var/www
+    env_file:
+      - .env
+    environment:
+      SANCTUM_STATEFUL_DOMAINS: localhost:8000
+    command: ["sh", "/var/www/start.sh"]
+
+  adminer:
+    image: adminer
+    container_name: dole_payroll_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
