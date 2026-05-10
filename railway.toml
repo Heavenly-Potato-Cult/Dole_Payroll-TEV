@@ -1,5 +1,5 @@
 [build]
-builder = "railpack"
+builder = "nixpacks"
 
 [deploy]
 startCommand = "chmod +x .railway/start.sh && .railway/start.sh"
