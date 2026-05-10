@@ -43,8 +43,8 @@ class OfficeOrder extends Model
         return $this->belongsTo(\App\Models\User::class, 'approved_by');
     }
 
-    public function tevRequests()
-    {
-        return $this->hasMany(TevRequest::class, 'office_order_id');
-    }
+public function tevRequests()
+{
+    return $this->hasMany(\Modules\Tev\Models\TevRequest::class, 'office_order_id');
+}
 }

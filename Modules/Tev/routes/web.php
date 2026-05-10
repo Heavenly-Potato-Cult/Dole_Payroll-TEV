@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Tev\Http\Controllers\TevController;
 use Modules\Tev\Http\Controllers\TevItineraryController;
-use Modules\Payroll\Http\Controllers\OfficeOrderController;
+use Modules\Tev\Http\Controllers\OfficeOrderController; // ← now in TEV module
 
 /*
 |--------------------------------------------------------------------------
@@ -22,7 +22,7 @@ Route::middleware(['auth'])
     ->group(function () {
         // TEV Dashboard - role-based routing
         Route::get('/', [TevController::class, 'dashboard'])->name('dashboard');
-        
+
         // Explicit routes for each dashboard type
         Route::get('/employee', [TevController::class, 'dashboard'])->name('dashboard.employee');
         Route::get('/officer', [TevController::class, 'officerDashboard'])->name('dashboard.officer');
@@ -30,18 +30,18 @@ Route::middleware(['auth'])
         // TEV Requests - employees can create/view their own requests
         Route::resource('requests', TevController::class, [
             'names' => [
-                'index' => 'requests.index',
-                'create' => 'requests.create',
-                'store' => 'requests.store',
-                'show' => 'requests.show',
-                'edit' => 'requests.edit',
-                'update' => 'requests.update',
+                'index'   => 'requests.index',
+                'create'  => 'requests.create',
+                'store'   => 'requests.store',
+                'show'    => 'requests.show',
+                'edit'    => 'requests.edit',
+                'update'  => 'requests.update',
                 'destroy' => 'requests.destroy',
             ]
         ]);
 
         // Employee actions - submit own requests
-        Route::post('/requests/{tevRequest}/submit',  [TevController::class, 'submit'])->name('requests.submit');
+        Route::post('/requests/{tevRequest}/submit', [TevController::class, 'submit'])->name('requests.submit');
 
         // Itinerary management - employees can manage their own itinerary
         Route::post(  '/requests/{tevRequest}/itinerary',
@@ -61,12 +61,12 @@ Route::middleware(['auth'])
                 // Office Orders
                 Route::resource('office-orders', OfficeOrderController::class, [
                     'names' => [
-                        'index' => 'office-orders.index',
-                        'create' => 'office-orders.create',
-                        'store' => 'office-orders.store',
-                        'show' => 'office-orders.show',
-                        'edit' => 'office-orders.edit',
-                        'update' => 'office-orders.update',
+                        'index'   => 'office-orders.index',
+                        'create'  => 'office-orders.create',
+                        'store'   => 'office-orders.store',
+                        'show'    => 'office-orders.show',
+                        'edit'    => 'office-orders.edit',
+                        'update'  => 'office-orders.update',
                         'destroy' => 'office-orders.destroy',
                     ]
                 ]);

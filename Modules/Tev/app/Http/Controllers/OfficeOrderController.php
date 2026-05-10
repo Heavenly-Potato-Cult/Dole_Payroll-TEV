@@ -1,12 +1,12 @@
 <?php
 
-namespace Modules\Payroll\Http\Controllers;
+namespace Modules\Tev\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Modules\Payroll\Http\Requests\StoreOfficeOrderRequest;
+use Modules\Payroll\Http\Requests\StoreOfficeOrderRequest;  // ← stays in Payroll (shared)
 use App\SharedKernel\Models\Employee;
 use App\SharedKernel\Models\OfficeOrder;
-use Modules\Payroll\Models\PayrollAuditLog;
+use Modules\Payroll\Models\PayrollAuditLog;                 // ← stays in Payroll (shared)
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -29,7 +29,7 @@ class OfficeOrderController extends Controller
         $orders      = $query->paginate(20)->withQueryString();
         $currentYear = now()->year;
 
-        return view('payroll::office-orders.index', compact('orders', 'currentYear'));
+        return view('tev::office-orders.index', compact('orders', 'currentYear'));
     }
 
     public function create()
@@ -41,7 +41,7 @@ class OfficeOrderController extends Controller
             ->orderBy('first_name')
             ->get(['id', 'last_name', 'first_name', 'middle_name', 'position_title']);
 
-        return view('payroll::office-orders.create', compact('employees'));
+        return view('tev::office-orders.create', compact('employees'));
     }
 
     public function store(StoreOfficeOrderRequest $request)
@@ -55,7 +55,7 @@ class OfficeOrderController extends Controller
 
         $this->auditLog($request, 'Created Office Order: ' . $order->office_order_no, null, 'draft');
 
-        return redirect()->route('office-orders.show', $order->id)
+        return redirect()->route('tev.office-orders.show', $order->id)
             ->with('success', 'Office Order ' . $order->office_order_no . ' created successfully.');
     }
 
@@ -65,7 +65,7 @@ class OfficeOrderController extends Controller
 
         $order = OfficeOrder::with(['employee', 'approver', 'tevRequests.employee'])->findOrFail($id);
 
-        return view('payroll::office-orders.show', compact('order'));
+        return view('tev::office-orders.show', compact('order'));
     }
 
     public function edit(int $id)
@@ -80,7 +80,7 @@ class OfficeOrderController extends Controller
             ->orderBy('first_name')
             ->get(['id', 'last_name', 'first_name', 'middle_name', 'position_title']);
 
-        return view('payroll::office-orders.edit', compact('order', 'employees'));
+        return view('tev::office-orders.edit', compact('order', 'employees'));
     }
 
     public function update(StoreOfficeOrderRequest $request, int $id)
@@ -102,7 +102,7 @@ class OfficeOrderController extends Controller
 
         $this->auditLog($request, 'Updated Office Order: ' . $order->office_order_no, null, 'draft');
 
-        return redirect()->route('office-orders.show', $order->id)
+        return redirect()->route('tev.office-orders.show', $order->id)
             ->with('success', 'Office Order updated successfully.');
     }
 
@@ -129,7 +129,7 @@ class OfficeOrderController extends Controller
 
         $this->auditLog($request, 'Approved Office Order: ' . $order->office_order_no, $old, 'approved');
 
-        return redirect()->route('office-orders.show', $order->id)
+        return redirect()->route('tev.office-orders.show', $order->id)
             ->with('success', 'Office Order approved successfully.');
     }
 
@@ -164,7 +164,7 @@ class OfficeOrderController extends Controller
 
         $this->auditLog($request, 'Cancelled Office Order: ' . $order->office_order_no, $old, 'cancelled');
 
-        return redirect()->route('office-orders.show', $order->id)
+        return redirect()->route('tev.office-orders.show', $order->id)
             ->with('success', 'Office Order cancelled.');
     }
 

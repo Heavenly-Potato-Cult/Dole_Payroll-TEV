@@ -8,7 +8,8 @@ use Modules\Payroll\Http\Controllers\EmployeeDeductionController;
 use Modules\Payroll\Http\Controllers\EmployeePromotionController;
 use Modules\Payroll\Http\Controllers\PayrollEntryController;
 use Modules\Payroll\Http\Controllers\SpecialPayrollController;
-use Modules\Payroll\Http\Controllers\OfficeOrderController;
+// OfficeOrderController removed from Payroll — it now lives in Modules\Tev and is
+// registered in the TEV module's own routes/web.php (under the tev. prefix).
 use Modules\Payroll\Http\Controllers\PayrollReportController;
 use Modules\Payroll\Http\Controllers\DivisionController;
 use Modules\Payroll\Http\Controllers\UserController;
@@ -218,7 +219,7 @@ Route::middleware(['auth'])->group(function () {
         ->group(function () {
             Route::resource('users', UserController::class);
 
-            // ↓ NEW: Toggle active/inactive for a specific role assignment on a user
+            // Toggle active/inactive for a specific role assignment on a user
             Route::post('users/{user}/activate-role', [UserController::class, 'activateRole'])
                 ->name('users.activate-role');
         });
@@ -227,8 +228,8 @@ Route::middleware(['auth'])->group(function () {
     // Manages the dynamic signing officers shown on payslips and reports.
     Route::middleware(['role:payroll_officer|super_admin'])
         ->group(function () {
-            // ↓ NEW: Must be declared BEFORE the resource to avoid Laravel
-            //   treating 'users-for-role' as a {signatory} model binding.
+            // Must be declared BEFORE the resource to avoid Laravel
+            // treating 'users-for-role' as a {signatory} model binding.
             Route::get('signatories/users-for-role', [SignatoryController::class, 'usersForRole'])
                 ->name('signatories.users-for-role');
 
