@@ -88,7 +88,8 @@ class EmployeeAuthService
             return $user;
         }
 
-        // Create new user
+        // Create new user with employee role only
+        // Officers must be explicitly registered in user management
         $user = User::create([
             'name' => $employee->full_name,
             'email' => null, // Employees may not have email accounts
@@ -96,20 +97,12 @@ class EmployeeAuthService
             'employee_id' => $employee->id,
         ]);
 
-        // Assign role based on position
-        if ($this->isOfficer($employee)) {
-            $user->assignRole('payroll_officer');
-            Log::info('New user created as officer', [
-                'employee_id' => $employee->employee_no,
-                'position' => $employee->position_title,
-            ]);
-        } else {
-            $user->assignRole('employee');
-            Log::info('New user created as employee', [
-                'employee_id' => $employee->employee_no,
-                'position' => $employee->position_title,
-            ]);
-        }
+        $user->assignRole('employee');
+
+        Log::info('New user created as employee', [
+            'employee_id' => $employee->employee_no,
+            'position' => $employee->position_title,
+        ]);
 
         return $user;
     }
