@@ -302,13 +302,13 @@
         </nav>
 
         {{-- ═══ SIDEBAR FOOTER ═══ --}}
-        @role('super_admin')
+        @unlessrole('payroll_officer')
         <div class="sidebar-footer">
             <a href="{{ route('tev.dashboard') }}" class="btn-switch" title="Go to TEV">
                 Go to TEV
             </a>
         </div>
-        @endrole
+        @endunlessrole
 
     </aside>
 
