@@ -239,13 +239,13 @@
                   (b) A user explicitly assigned the "employee" role by Super Admin
                 We use @unlessrole so it only shows for pure employees.
             --}}
-            @unlessrole('payroll_officer|hrmo|accountant|ard|cashier|chief_admin_officer|super_admin')
+            @unless(auth()->user()->hasAnyRole(['payroll_officer','hrmo','accountant','ard','cashier','chief_admin_officer','super_admin']))
             <div class="nav-section-label">Payroll</div>
             <a href="{{ route('my-payslip') }}"
                class="nav-item {{ request()->routeIs('my-payslip') ? 'active' : '' }}">
                 <span class="nav-icon">💰</span> My Payslip
             </a>
-            @endunlessrole
+            @endunless
 
             {{-- ── Deductions & Loans CMS ─────────────────────────────── --}}
             @role('payroll_officer|super_admin')
@@ -302,13 +302,13 @@
         </nav>
 
         {{-- ═══ SIDEBAR FOOTER ═══ --}}
-        @role('super_admin')
+        @unless(auth()->user()->hasRole('payroll_officer'))
         <div class="sidebar-footer">
             <a href="{{ route('tev.dashboard') }}" class="btn-switch" title="Go to TEV">
                 Go to TEV
             </a>
         </div>
-        @endrole
+        @endunless
 
     </aside>
 

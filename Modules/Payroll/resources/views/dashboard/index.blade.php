@@ -979,7 +979,8 @@
                 </div>
             </a>
         </div>
-        @else
+        @endrole
+        @role('budget_officer')
         <div class="db-queue-section">
             <div class="db-queue-header">
                 <span class="db-queue-label">Payroll Status</span>

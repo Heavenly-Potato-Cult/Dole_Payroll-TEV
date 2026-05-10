@@ -180,13 +180,13 @@
         </nav>
 
         {{-- ═══ SIDEBAR FOOTER ═══ --}}
-        @role('super_admin')
+        @unless(auth()->user()->hasRole('payroll_officer'))
         <div class="sidebar-footer">
             <a href="{{ route('payroll.dashboard') }}" class="btn-switch" title="Go to Payroll">
                 Go to Payroll
             </a>
         </div>
-        @endrole
+        @endunless
 
     </aside>
 
