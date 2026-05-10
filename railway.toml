@@ -1,0 +1,10 @@
+[build]
+builder = "railpack"
+
+[deploy]
+startCommand = "chmod +x .railway/start.sh && .railway/start.sh"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+healthcheckInterval = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
