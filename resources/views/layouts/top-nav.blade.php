@@ -405,6 +405,16 @@
                 <div class="top-nav-brand-subtitle">Zamboanga Peninsula</div>
             </div>
 
+            {{-- Navigation Links --}}
+            <div class="top-nav-links">
+                <a href="{{ route('my-payslip') }}" class="top-nav-link {{ request()->routeIs('my-payslip') ? 'active' : '' }}">
+                    My Payslip
+                </a>
+                <a href="{{ route('tev.requests.index') }}" class="top-nav-link {{ request()->routeIs('tev.requests.*') ? 'active' : '' }}">
+                    TEV Requests
+                </a>
+            </div>
+
             {{-- User Section --}}
             <div class="top-nav-user">
                 <div class="top-nav-user-info">
