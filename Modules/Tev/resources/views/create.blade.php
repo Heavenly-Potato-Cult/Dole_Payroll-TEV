@@ -1,5 +1,5 @@
 {{-- resources/views/tev/create.blade.php --}}
-@extends(isset($isEmployee) && $isEmployee ? 'layouts.top-nav' : 'layouts.tev')
+@extends(isset($isEmployee) && $isEmployee ? 'layouts.employee' : 'layouts.tev')
 
 @section('title', 'New TEV Request')
 @section('page-title', 'Travel (TEV)')

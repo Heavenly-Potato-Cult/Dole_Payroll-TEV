@@ -25,9 +25,11 @@ document.querySelectorAll('[data-confirm]').forEach(el => {
 });
 
 // ── Active nav highlight (fallback for Blade active class) ────
-const currentPath = window.location.pathname;
-document.querySelectorAll('.nav-item').forEach(link => {
-    if (link.getAttribute('href') === currentPath) {
-        link.classList.add('active');
-    }
-});
+if (typeof currentPath === 'undefined') {
+    window.currentPath = window.location.pathname;
+    document.querySelectorAll('.nav-item').forEach(link => {
+        if (link.getAttribute('href') === currentPath) {
+            link.classList.add('active');
+        }
+    });
+}

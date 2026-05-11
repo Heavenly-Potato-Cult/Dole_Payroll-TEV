@@ -1,5 +1,5 @@
 {{-- resources/views/tev/show.blade.php --}}
-@extends('layouts.tev')
+@extends(isset($isEmployee) && $isEmployee ? 'layouts.employee' : 'layouts.tev')
 
 @section('title', 'TEV — ' . $tev->tev_no)
 @section('page-title', 'Travel (TEV)')
@@ -147,6 +147,30 @@
     .detail-grid { grid-template-columns: 1fr; }
     .page-header h1 { font-size: 1.1rem; }
 }
+
+/* ── Employee Layout Fixes ── */
+@if(isset($isEmployee) && $isEmployee)
+.show-grid { 
+    grid-template-columns: 1fr; 
+    max-width: 100%;
+}
+.show-right { 
+    position: static; 
+    order: -1;
+    margin-top: 20px;
+}
+@media (min-width: 769px) {
+    .show-grid {
+        grid-template-columns: 1fr 320px;
+        gap: 24px;
+    }
+    .show-right {
+        position: sticky;
+        top: 24px;
+        order: 1;
+    }
+}
+@endif
 
 @media print {
     .no-print { display: none !important; }

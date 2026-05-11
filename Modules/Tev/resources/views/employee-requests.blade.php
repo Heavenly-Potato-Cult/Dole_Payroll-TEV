@@ -6,7 +6,7 @@
       $currentYear        — int
 --}}
 
-@extends('layouts.top-nav')
+@extends('layouts.employee')
 
 @section('title', 'My TEV Requests')
 @section('page-title', 'My TEV Requests')
