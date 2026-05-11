@@ -250,7 +250,7 @@
 <div class="tev-timeline no-print">
     @foreach ($steps as $i => $label)
         @php
-            $isDone     = $i < $currentIdx;
+            $isDone     = $i <= $currentIdx && $tev->status !== 'rejected';
             $isActive   = $i === $currentIdx;
             $isTerminal = $isActive && $i === count($steps) - 1;
             $isRejected = $tev->status === 'rejected' && $isActive;
@@ -773,7 +773,7 @@
                         <label for="approve_remarks">Remarks (optional)</label>
                         <textarea id="approve_remarks" name="remarks" rows="2" placeholder="Add remarks..."></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary" onclick="return confirm('Proceed with: {{ $nextAction }}?')">✓ {{ $nextAction }}</button>
+                    <button type="submit" class="btn btn-primary" onclick="event.preventDefault(); confirmApprove('{{ $nextAction }}', this.form)">✓ {{ $nextAction }}</button>
                 </form>
             </div>
         </div>
@@ -799,7 +799,7 @@
                         <label for="liquidation_remarks">Remarks (optional)</label>
                         <textarea id="liquidation_remarks" name="remarks" rows="2" placeholder="Add notes about the liquidation..."></textarea>
                     </div>
-                    <button type="submit" class="btn btn-gold" onclick="return confirm('File liquidation with this actual amount?')">💸 File Liquidation</button>
+                    <button type="submit" class="btn btn-gold" onclick="event.preventDefault(); confirmFileLiquidation(this.form)">💸 File Liquidation</button>
                 </form>
             </div>
         </div>
@@ -834,7 +834,7 @@
                         <label for="liq_approve_remarks">Remarks (optional)</label>
                         <textarea id="liq_approve_remarks" name="remarks" rows="2" placeholder="Add remarks..."></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary" onclick="return confirm('Approve this liquidation and mark TEV as liquidated?')">✓ Approve Liquidation</button>
+                    <button type="submit" class="btn btn-primary" onclick="event.preventDefault(); confirmApproveLiquidation(this.form)">✓ Approve Liquidation</button>
                 </form>
             </div>
         </div>
@@ -908,5 +908,61 @@
     </div>{{-- end right --}}
 
 </div>{{-- end show-grid --}}
+
+@section('scripts')
+<script>
+function confirmApprove(action, form) {
+    Swal.fire({
+        title: 'Confirm Approval',
+        text: 'Are you sure you want to proceed with: ' + action + '?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0F1B4C',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Yes, proceed',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            form.submit();
+        }
+    });
+}
+
+function confirmFileLiquidation(form) {
+    var actualAmount = document.getElementById('actual_amount').value;
+    Swal.fire({
+        title: 'File Liquidation',
+        text: 'Are you sure you want to file liquidation with this actual amount: ₱' + actualAmount + '?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0F1B4C',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'File Liquidation',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            form.submit();
+        }
+    });
+}
+
+function confirmApproveLiquidation(form) {
+    Swal.fire({
+        title: 'Approve Liquidation',
+        text: 'Are you sure you want to approve this liquidation and mark the TEV as liquidated?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0F1B4C',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Approve Liquidation',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            form.submit();
+        }
+    });
+}
+</script>
+@endsection
 
 @endsection

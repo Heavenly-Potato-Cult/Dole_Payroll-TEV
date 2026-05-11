@@ -206,6 +206,8 @@ Route::middleware(['auth'])->group(function () {
                        [TevReportController::class, 'tevTravelCompleted'])->name('reports.tev-travel-completed');
             Route::get('/reports/tev/{tevRequest}/annex-a',
                        [TevReportController::class, 'tevAnnexA'])->name('reports.tev-annex-a');
+            Route::get('/reports/tev/{tevRequest}/liquidation-dv',
+                       [TevReportController::class, 'tevLiquidationDv'])->name('reports.tev-liquidation-dv');
 
             // TEV Register report + export
             Route::get('/reports/tev-register/export',

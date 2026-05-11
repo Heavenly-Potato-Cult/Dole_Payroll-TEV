@@ -189,26 +189,45 @@ class TevController extends Controller
         /** @var User $user */
         $user = Auth::user();
         $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
-        $query = TevRequest::with(['employee', 'officeOrder'])->orderByDesc('id');
-
+        
+        // Base query
+        $baseQuery = TevRequest::with(['employee', 'officeOrder'])->orderByDesc('id');
+        
         // Employees can only see their own requests
         if ($isEmployee) {
-            $query->where('employee_id', $this->resolveHrisEmployeeId());
+            $baseQuery->where('employee_id', $this->resolveHrisEmployeeId());
         }
 
-        if ($request->filled('track'))  $query->where('track', $request->track);
-        if ($request->filled('status')) $query->where('status', $request->status);
-        if ($request->filled('year'))   $query->whereYear('travel_date_start', $request->year);
+        // Separate liquidated TEVs (completed)
+        $liquidatedQuery = clone $baseQuery;
+        $liquidatedQuery->whereIn('status', ['reimbursed', 'liquidated']);
+        
+        // Apply filters to liquidated
+        if ($request->filled('track'))  $liquidatedQuery->where('track', $request->track);
+        if ($request->filled('year'))   $liquidatedQuery->whereYear('travel_date_start', $request->year);
+        
+        $liquidatedRequests = $liquidatedQuery->paginate(20, ['*'], 'liquidated_page')->withQueryString();
 
-        $tevRequests = $query->paginate(20)->withQueryString();
+        // Separate in-process TEVs (not completed)
+        $inProcessQuery = clone $baseQuery;
+        $inProcessQuery->whereNotIn('status', ['reimbursed', 'liquidated']);
+        
+        // Apply filters to in-process
+        if ($request->filled('process_track'))  $inProcessQuery->where('track', $request->process_track);
+        if ($request->filled('process_status')) $inProcessQuery->where('status', $request->process_status);
+        if ($request->filled('year'))         $inProcessQuery->whereYear('travel_date_start', $request->year);
+        
+        $inProcessRequests = $inProcessQuery->paginate(20, ['*'], 'process_page')->withQueryString();
+
         $currentYear = now()->year;
+        $activeTab = $request->get('tab', 'process'); // Default to process tab
 
         // Use employee-specific view for employees, regular view for officers
         if ($isEmployee) {
-            return view('tev::my-requests', compact('tevRequests', 'currentYear', 'isEmployee'));
+            return view('tev::my-requests', compact('liquidatedRequests', 'inProcessRequests', 'currentYear', 'isEmployee', 'activeTab'));
         }
 
-        return view('tev::index', compact('tevRequests', 'currentYear', 'isEmployee'));
+        return view('tev::index', compact('liquidatedRequests', 'inProcessRequests', 'currentYear', 'isEmployee', 'activeTab'));
     }
 
     // =====================================================================

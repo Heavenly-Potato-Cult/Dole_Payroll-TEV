@@ -15,8 +15,46 @@
 @section('styles')
 <style>
 /* ─────────────────────────────────────────────────────
+   TABS INTERFACE
+──────────────────────────────────────────────────── */
+.tev-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 20px;
+    background: var(--surface);
+    border-radius: 8px 8px 0 0;
+}
+.tev-tab {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-mid);
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+}
+.tev-tab:hover {
+    color: var(--text);
+    background: rgba(0, 0, 0, 0.02);
+}
+.tev-tab.active {
+    color: var(--navy);
+    border-bottom-color: var(--navy);
+    background: white;
+}
+.tev-tab-content {
+    display: none;
+}
+.tev-tab-content.active {
+    display: block;
+}
+
+/* ─────────────────────────────────────────────────────
    FILTER FORM — buttons match input/select height
-───────────────────────────────────────────────────── */
+──────────────────────────────────────────────────── */
 .filter-form {
     display: flex;
     gap: 10px;
@@ -248,222 +286,112 @@
     <div class="alert alert-error">{{ session('error') }}</div>
 @endif
 
-{{-- ── Filter bar ── --}}
-<div class="card mb-3">
-    <div class="card-body" style="padding:14px 20px;">
-        <form method="GET" action="{{ route('tev.office-orders.index') }}" class="filter-form">
-
-            <div class="ff-group" style="min-width:180px;">
-                <label for="track">Track</label>
-                <select name="track" id="track">
-                    <option value="">All Tracks</option>
-                    <option value="cash_advance"  {{ request('track') === 'cash_advance'  ? 'selected' : '' }}>Cash Advance</option>
-                    <option value="reimbursement" {{ request('track') === 'reimbursement' ? 'selected' : '' }}>Reimbursement</option>
-                </select>
-            </div>
-
-            <div class="ff-btns">
-                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                <a href="{{ route('tev.office-orders.index') }}" class="btn btn-outline btn-sm">Reset</a>
-            </div>
-
-        </form>
-    </div>
-</div>
-
-{{-- ── Table ── --}}
+{{-- ── Tabs ── --}}
 <div class="card">
     <div class="card-body" style="padding:0;">
-        <div class="table-wrap">
-            <table class="sd-table">
-                <thead>
-                    <tr>
-                        <th>TEV No.</th>
-                        <th>Employee</th>
-                        <th>Track</th>
-                        <th>Office Order</th>
-                        <th>Travel Dates</th>
-                        <th class="text-right">Grand Total</th>
-                        <th>Status</th>
-                        <th class="text-center">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($tevRequests as $tev)
-                        @php
-                            $emp = $tev->employee;
+        <div class="tev-tabs">
+            <button class="tev-tab {{ $activeTab === 'process' ? 'active' : '' }}" onclick="switchTab('process')">
+                🔄 In Process ({{ $inProcessRequests->total() }})
+            </button>
+            <button class="tev-tab {{ $activeTab === 'liquidated' ? 'active' : '' }}" onclick="switchTab('liquidated')">
+                ✅ Liquidated ({{ $liquidatedRequests->total() }})
+            </button>
+        </div>
+        
+        {{-- ── In Process Tab ── --}}
+        <div id="process-tab" class="tev-tab-content {{ $activeTab === 'process' ? 'active' : '' }}">
+            <div style="padding:20px;">
+                {{-- Filter bar for in-process --}}
+                <div class="card mb-3">
+                    <div class="card-body" style="padding:14px 20px;">
+                        <form method="GET" action="{{ route('tev.requests.index') }}" class="filter-form">
+                            <input type="hidden" name="tab" value="process">
+                            
+                            <div class="ff-group" style="min-width:150px;">
+                                <label for="process_track">Track</label>
+                                <select name="process_track" id="process_track">
+                                    <option value="">All Tracks</option>
+                                    <option value="cash_advance"  {{ request('process_track') === 'cash_advance'  ? 'selected' : '' }}>Cash Advance</option>
+                                    <option value="reimbursement" {{ request('process_track') === 'reimbursement' ? 'selected' : '' }}>Reimbursement</option>
+                                </select>
+                            </div>
+                            
+                            <div class="ff-group" style="min-width:180px;">
+                                <label for="process_status">Status</label>
+                                <select name="process_status" id="process_status">
+                                    <option value="">All Status</option>
+                                    <option value="submitted" {{ request('process_status') === 'submitted' ? 'selected' : '' }}>Submitted</option>
+                                    <option value="accountant_certified" {{ request('process_status') === 'accountant_certified' ? 'selected' : '' }}>Accountant Certified</option>
+                                    <option value="rd_approved" {{ request('process_status') === 'rd_approved' ? 'selected' : '' }}>RD Approved</option>
+                                    <option value="cashier_released" {{ request('process_status') === 'cashier_released' ? 'selected' : '' }}>Cashier Released</option>
+                                    <option value="liquidation_filed" {{ request('process_status') === 'liquidation_filed' ? 'selected' : '' }}>Liquidation Filed</option>
+                                    <option value="rejected" {{ request('process_status') === 'rejected' ? 'selected' : '' }}>Rejected</option>
+                                </select>
+                            </div>
 
-                            $trackLabel = $tev->track === 'cash_advance' ? 'Cash Advance' : 'Reimbursement';
-                            $trackStyle = $tev->track === 'cash_advance'
-                                ? 'background:#E8F5E9; color:#1B5E20; border:1px solid #43A047;'
-                                : 'background:#E8EAF6; color:#1A237E; border:1px solid #3949AB;';
+                            <div class="ff-btns">
+                                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                                <a href="{{ route('tev.requests.index', ['tab' => 'process']) }}" class="btn btn-outline btn-sm">Reset</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                @include('tev::partials.tev-table', ['tevRequests' => $inProcessRequests, 'pageName' => 'process_page'])
+            </div>
+        </div>
+        
+        {{-- ── Liquidated Tab ── --}}
+        <div id="liquidated-tab" class="tev-tab-content {{ $activeTab === 'liquidated' ? 'active' : '' }}">
+            <div style="padding:20px;">
+                {{-- Filter bar for liquidated --}}
+                <div class="card mb-3">
+                    <div class="card-body" style="padding:14px 20px;">
+                        <form method="GET" action="{{ route('tev.requests.index') }}" class="filter-form">
+                            <input type="hidden" name="tab" value="liquidated">
+                            
+                            <div class="ff-group" style="min-width:150px;">
+                                <label for="track">Track</label>
+                                <select name="track" id="track">
+                                    <option value="">All Tracks</option>
+                                    <option value="cash_advance"  {{ request('track') === 'cash_advance'  ? 'selected' : '' }}>Cash Advance</option>
+                                    <option value="reimbursement" {{ request('track') === 'reimbursement' ? 'selected' : '' }}>Reimbursement</option>
+                                </select>
+                            </div>
 
-                            $statusClass = match ($tev->status) {
-                                'submitted'            => 'badge-pending',
-                                'hr_approved'          => 'badge-computed',
-                                'accountant_certified' => 'badge-computed',
-                                'rd_approved'          => 'badge-released',
-                                'cashier_released'     => 'badge-locked',
-                                'reimbursed'           => 'badge-locked',
-                                'rejected'             => 'badge-inactive',
-                                default                => 'badge-draft',
-                            };
-                            $statusLabel = ucwords(str_replace('_', ' ', $tev->status));
-
-                            $isOwner  = $emp && ($emp->user_id === auth()->id() || $emp->employee_id === session('hris_employee_id'));
-                            $canSubmit = $tev->status === 'draft'
-                                && ($isOwner || auth()->user()->hasAnyRole(['payroll_officer', 'hrmo']));
-                        @endphp
-
-                        {{-- ── Main visible row ── --}}
-                        <tr class="sd-main-row" data-id="{{ $tev->id }}" onclick="toggleSdRow(this)">
-
-                            <td class="col-tev fw-bold" style="color:var(--navy); white-space:nowrap;">
-                                {{ $tev->tev_no }}
-                            </td>
-
-                            <td class="col-employee">
-                                <span class="sd-name-label">
-                                    {{ optional($emp)->last_name }},
-                                    {{ optional($emp)->first_name }}
-                                    @if (optional($emp)->middle_name)
-                                        {{ substr($emp->middle_name, 0, 1) }}.
-                                    @endif
-                                </span>
-                                <span class="sd-name-sub">
-                                    {{ optional($tev->officeOrder)->office_order_no ?? '—' }}
-                                </span>
-                            </td>
-
-                            <td class="col-track">
-                                <span style="font-size:0.72rem; font-weight:700; padding:3px 8px;
-                                             border-radius:12px; {{ $trackStyle }}">
-                                    {{ $trackLabel }}
-                                </span>
-                            </td>
-
-                            <td class="col-oo" style="font-size:0.82rem;">
-                                {{ optional($tev->officeOrder)->office_order_no ?? '—' }}
-                            </td>
-
-                            <td class="col-dates text-muted" style="font-size:0.82rem; white-space:nowrap;">
-                                {{ $tev->travel_date_start->format('M d') }}
-                                –
-                                {{ $tev->travel_date_end->format('M d, Y') }}
-                            </td>
-
-                            <td class="col-total text-right fw-bold">
-                                ₱{{ number_format($tev->grand_total, 2) }}
-                            </td>
-
-                            <td class="col-status">
-                                <span class="badge {{ $statusClass }}">{{ $statusLabel }}</span>
-                            </td>
-
-                            <td class="col-actions">
-                                <div class="d-flex gap-2" style="justify-content:center;">
-                                    <a href="{{ route('tev.requests.show', $tev->id) }}"
-                                       class="btn btn-outline btn-sm"
-                                       onclick="event.stopPropagation();">View</a>
-
-                                    @if ($canSubmit)
-                                        <form method="POST"
-                                              action="{{ route('tev.requests.submit', $tev->id) }}"
-                                              onsubmit="event.stopPropagation(); return confirm('Submit this TEV for approval?')">
-                                            @csrf
-                                            <button type="submit" class="btn btn-sm btn-primary"
-                                                    onclick="event.stopPropagation();">Submit</button>
-                                        </form>
-                                    @endif
-                                </div>
-
-                                {{-- Mobile expand chevron --}}
-                                <span class="sd-expand-btn" aria-label="Expand">▼</span>
-                            </td>
-
-                        </tr>
-
-                        {{-- ── Expandable detail row (mobile only) ── --}}
-                        <tr class="sd-detail-row" id="sd-detail-{{ $tev->id }}">
-                            <td colspan="8">
-                                <div class="sd-detail-grid">
-                                    <div class="sd-detail-item">
-                                        <label>TEV No.</label>
-                                        <span style="color:var(--navy); font-weight:700;">{{ $tev->tev_no }}</span>
-                                    </div>
-                                    <div class="sd-detail-item">
-                                        <label>Track</label>
-                                        <span>
-                                            <span style="font-size:0.72rem; font-weight:700;
-                                                         padding:2px 8px; border-radius:10px;
-                                                         {{ $trackStyle }}">{{ $trackLabel }}</span>
-                                        </span>
-                                    </div>
-                                    <div class="sd-detail-item">
-                                        <label>Office Order</label>
-                                        <span>{{ optional($tev->officeOrder)->office_order_no ?? '—' }}</span>
-                                    </div>
-                                    <div class="sd-detail-item">
-                                        <label>Grand Total</label>
-                                        <span class="mono" style="color:var(--navy); font-weight:700;">
-                                            ₱{{ number_format($tev->grand_total, 2) }}
-                                        </span>
-                                    </div>
-                                    <div class="sd-detail-item">
-                                        <label>Travel Start</label>
-                                        <span>{{ $tev->travel_date_start->format('M d, Y') }}</span>
-                                    </div>
-                                    <div class="sd-detail-item">
-                                        <label>Travel End</label>
-                                        <span>{{ $tev->travel_date_end->format('M d, Y') }}</span>
-                                    </div>
-                                    <div class="sd-detail-item">
-                                        <label>Status</label>
-                                        <span><span class="badge {{ $statusClass }}">{{ $statusLabel }}</span></span>
-                                    </div>
-                                </div>
-                                <div class="sd-detail-actions">
-                                    <a href="{{ route('tev.requests.show', $tev->id) }}"
-                                       class="btn btn-outline btn-sm">View</a>
-
-                                    @if ($canSubmit)
-                                        <form method="POST"
-                                              action="{{ route('tev.requests.submit', $tev->id) }}"
-                                              style="flex:1;"
-                                              onsubmit="return confirm('Submit this TEV for approval?')">
-                                            @csrf
-                                            <button type="submit" class="btn btn-sm btn-primary"
-                                                    style="width:100%;">Submit</button>
-                                        </form>
-                                    @endif
-                                </div>
-                            </td>
-                        </tr>
-
-                    @empty
-                        <tr>
-                            <td colspan="8" style="text-align:center; padding:40px; color:var(--text-light);">
-                                No TEV requests found.
-                                <a href="{{ route('tev.requests.create') }}">Create one now →</a>
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+                            <div class="ff-btns">
+                                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                                <a href="{{ route('tev.requests.index', ['tab' => 'liquidated']) }}" class="btn btn-outline btn-sm">Reset</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                @include('tev::partials.tev-table', ['tevRequests' => $liquidatedRequests, 'pageName' => 'liquidated_page'])
+            </div>
         </div>
     </div>
 </div>
-
-@if ($tevRequests->hasPages())
-<div style="padding:4px 20px 8px;">
-    {{ $tevRequests->links('pagination::custom') }}
-</div>
-@endif
 
 @endsection
 
 @section('scripts')
 <script>
+function switchTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.tev-tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelector(`.tev-tab[onclick="switchTab('${tabName}')"]`).classList.add('active');
+    
+    // Update tab content
+    document.querySelectorAll('.tev-tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById(tabName + '-tab').classList.add('active');
+    
+    // Update URL without page reload
+    const url = new URL(window.location);
+    url.searchParams.set('tab', tabName);
+    window.history.replaceState({}, '', url);
+}
+
 function toggleSdRow(mainRow) {
     if (window.innerWidth > 768) return;
 

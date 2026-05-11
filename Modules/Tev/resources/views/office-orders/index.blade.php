@@ -270,12 +270,12 @@
             </div>
 
             <div class="ff-group" style="min-width:160px;">
-                <label for="status">Status</label>
-                <select name="status" id="status">
-                    <option value="">All Statuses</option>
-                    <option value="draft"     {{ request('status') === 'draft'     ? 'selected' : '' }}>Draft</option>
-                    <option value="approved"  {{ request('status') === 'approved'  ? 'selected' : '' }}>Approved</option>
-                    <option value="cancelled" {{ request('status') === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                <label for="travel_type">Travel Type</label>
+                <select name="travel_type" id="travel_type">
+                    <option value="">All Travel Types</option>
+                    <option value="regional" {{ request('travel_type') === 'regional' ? 'selected' : '' }}>Regional</option>
+                    <option value="national" {{ request('travel_type') === 'national' ? 'selected' : '' }}>National</option>
+                    <option value="international" {{ request('travel_type') === 'international' ? 'selected' : '' }}>International</option>
                 </select>
             </div>
 

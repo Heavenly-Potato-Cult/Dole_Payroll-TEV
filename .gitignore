@@ -61,3 +61,5 @@ data-backups/
 # Test files (keep structure, ignore examples)
 tests/Feature/ExampleTest.php
 tests/Unit/ExampleTest.php
+
+docs

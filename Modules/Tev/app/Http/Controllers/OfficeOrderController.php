@@ -24,8 +24,8 @@ class OfficeOrderController extends Controller
 
         $query = OfficeOrder::with('employee')->orderByDesc('id');
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        if ($request->filled('travel_type')) {
+            $query->where('travel_type', $request->travel_type);
         }
 
         if ($request->filled('year')) {
