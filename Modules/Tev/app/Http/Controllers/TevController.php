@@ -3,6 +3,7 @@
 namespace Modules\Tev\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Modules\Tev\Http\Requests\StoreTevRequest;
 use App\SharedKernel\Models\Employee;
 use App\SharedKernel\Models\OfficeOrder;
@@ -17,6 +18,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * @mixin \Spatie\Permission\Traits\HasRoles
+ */
 class TevController extends Controller
 {
     public function __construct(private TevComputationService $tevService) {}
@@ -31,8 +35,9 @@ class TevController extends Controller
      */
     public function dashboard()
     {
+        /** @var User $user */
         $user = Auth::user();
-        
+
         // Officers get the comprehensive dashboard
         if ($user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin'])) {
             return $this->officerDashboard();
@@ -48,6 +53,7 @@ class TevController extends Controller
      */
     public function employeeDashboard()
     {
+        /** @var User $user */
         $user = Auth::user();
         $userId = $user->id;
         $employeeId = $this->resolveHrisEmployeeId();
@@ -90,6 +96,7 @@ class TevController extends Controller
      */
     public function officerDashboard()
     {
+        /** @var User $user */
         $user = Auth::user();
 
         // ----------------------------------------------------------------
@@ -179,6 +186,7 @@ class TevController extends Controller
      */
     public function index(Request $request)
     {
+        /** @var User $user */
         $user = Auth::user();
         $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
         $query = TevRequest::with(['employee', 'officeOrder'])->orderByDesc('id');
@@ -215,6 +223,7 @@ class TevController extends Controller
      */
     public function create()
     {
+        /** @var User $user */
         $user = Auth::user();
         $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'super_admin']);
 
@@ -246,8 +255,9 @@ class TevController extends Controller
      */
     public function store(StoreTevRequest $request)
     {
+        /** @var User $user */
         $user = Auth::user();
-        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'super_admin']);
+        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
 
         $validated = $request->validated();
 
@@ -336,8 +346,9 @@ class TevController extends Controller
      */
     public function show(int $id)
     {
+        /** @var User $user */
         $user = Auth::user();
-        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'super_admin']);
+        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
 
         $tev = TevRequest::with([
             'employee',
@@ -420,7 +431,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('success', 'TEV ' . $stepLabel . ' successfully.');
     }
 
@@ -444,7 +455,9 @@ class TevController extends Controller
             ['remarks.required' => 'A reason is required when rejecting a TEV.']
         );
 
+        /** @var User $user */
         $user = Auth::user();
+
         $authorized = (
             ($tev->status === 'submitted'            && $user->hasAnyRole(['accountant'])) ||
             ($tev->status === 'accountant_certified' && $user->hasAnyRole(['ard', 'chief_admin_officer'])) ||
@@ -475,7 +488,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('error', 'TEV has been rejected.');
     }
 
@@ -532,7 +545,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('success', 'TEV certification saved.');
     }
 
@@ -552,6 +565,7 @@ class TevController extends Controller
     public function fileLiquidation(Request $request, int $tevRequest)
     {
         $tev  = TevRequest::findOrFail($tevRequest);
+        /** @var User $user */
         $user = Auth::user();
 
         if ($tev->track !== 'cash_advance') {
@@ -615,7 +629,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('success', 'Liquidation filed successfully. Awaiting cashier approval.');
     }
 
@@ -660,7 +674,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('success', 'Liquidation approved. TEV is now fully liquidated.');
     }
 
@@ -693,6 +707,7 @@ class TevController extends Controller
      */
     private function resolveApproval(TevRequest $tev): array
     {
+        /** @var User $user */
         $user   = Auth::user();
         $status = $tev->status;
 
@@ -720,6 +735,7 @@ class TevController extends Controller
      */
     private function resolveTransition(TevRequest $tev): array
     {
+        /** @var User $user */
         $user   = Auth::user();
         $status = $tev->status;
 
@@ -744,11 +760,13 @@ class TevController extends Controller
     private function authorizeRole(array $roles): void
     {
         // super_admin bypasses all role checks — view access to all modules
-        if (Auth::user()->hasRole('super_admin')) {
+        /** @var User $user */
+        $user = Auth::user();
+        if ($user->hasRole('super_admin')) {
             return;
         }
 
-        if (!Auth::user()->hasAnyRole($roles)) {
+        if (!$user->hasAnyRole($roles)) {
             abort(403);
         }
     }

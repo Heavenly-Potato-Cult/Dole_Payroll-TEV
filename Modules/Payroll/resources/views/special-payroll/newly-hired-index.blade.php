@@ -225,7 +225,7 @@
         <h1>Pro-Rated Payroll — Newly Hired / Transferee</h1>
         <p>Individual payroll records for employees who started mid-period.</p>
     </div>
-@if (auth()->user()->hasRole('payroll_officer|super_admin'))
+@if (auth()->user()->hasRole('payroll_officer'))
     <a href="{{ route('special-payroll.newly-hired.create') }}" class="btn btn-primary">
         + New Entry
     </a>

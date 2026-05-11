@@ -1,9 +1,10 @@
 <?php
 
-namespace Modules\Payroll\Http\Controllers;
+namespace Modules\Tev\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Modules\Payroll\Http\Requests\StoreOfficeOrderRequest;
+use App\Models\User;
+use Modules\Payroll\Http\Requests\StoreOfficeOrderRequest;  // ← stays in Payroll (shared)
 use App\SharedKernel\Models\Employee;
 use App\SharedKernel\Models\OfficeOrder;
 use App\SharedKernel\Services\HrisApiService;
@@ -12,6 +13,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * @mixin \Spatie\Permission\Traits\HasRoles
+ */
 class OfficeOrderController extends Controller
 {
     public function index(Request $request)
@@ -31,7 +35,7 @@ class OfficeOrderController extends Controller
         $orders      = $query->paginate(20)->withQueryString();
         $currentYear = now()->year;
 
-        return view('payroll::office-orders.index', compact('orders', 'currentYear'));
+        return view('tev::office-orders.index', compact('orders', 'currentYear'));
     }
 
     public function create()
@@ -43,7 +47,7 @@ class OfficeOrderController extends Controller
             ->orderBy('first_name')
             ->get(['id', 'last_name', 'first_name', 'middle_name', 'position_title']);
 
-        return view('payroll::office-orders.create', compact('employees'));
+        return view('tev::office-orders.create', compact('employees'));
     }
 
     public function store(StoreOfficeOrderRequest $request)
@@ -67,7 +71,7 @@ class OfficeOrderController extends Controller
 
         $order = OfficeOrder::with(['employee', 'approver', 'tevRequests.employee'])->findOrFail($id);
 
-        return view('payroll::office-orders.show', compact('order'));
+        return view('tev::office-orders.show', compact('order'));
     }
 
     public function approve(Request $request, int $id)
@@ -248,11 +252,13 @@ class OfficeOrderController extends Controller
     private function authorizeRole(array $roles): void
     {
         // super_admin bypasses all role checks — view access to all modules
-        if (Auth::user()->hasRole('super_admin')) {
+        /** @var User $user */
+        $user = Auth::user();
+        if ($user->hasRole('super_admin')) {
             return;
         }
 
-        if (! Auth::user()->hasAnyRole($roles)) {
+        if (! $user->hasAnyRole($roles)) {
             abort(403);
         }
     }

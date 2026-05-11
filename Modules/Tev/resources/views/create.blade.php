@@ -677,6 +677,7 @@
     var ooSelect = document.getElementById('office_order_id');
 
     function applyOoSelection() {
+        if (!ooSelect) return;
         var opt = ooSelect.options[ooSelect.selectedIndex];
         if (!opt || !opt.value) {
             document.getElementById('oo-preview').style.display  = 'none';
@@ -704,6 +705,7 @@
         document.getElementById('travel_type').value    = type;
         if (dS) document.getElementById('travel_date_start').value = dS;
         if (dE) document.getElementById('travel_date_end').value   = dE;
+        if (dS) document.getElementById('travel_date_end').setAttribute('min', dS);
 
         currentType = type;
 
@@ -740,8 +742,10 @@
         refreshAllPerDiem();
     }
 
-    ooSelect.addEventListener('change', applyOoSelection);
-    if (ooSelect.value) applyOoSelection();
+if (ooSelect) {
+        ooSelect.addEventListener('change', applyOoSelection);
+        if (ooSelect.value) applyOoSelection();
+    }
 
     // ── Track radio styling ───────────────────────────────────────────────
     document.querySelectorAll('.track-card input[type="radio"]').forEach(function (radio) {
@@ -753,6 +757,20 @@
             });
         });
     });
+
+document.getElementById('travel_date_start').addEventListener('change', function () {
+    var endInput = document.getElementById('travel_date_end');
+    endInput.setAttribute('min', this.value);
+    if (endInput.value && endInput.value < this.value) {
+        endInput.value = '';
+    }
+
+    // ── Auto-fill the first itinerary row's date ──
+    if (this.value && rowsData.length > 0) {
+        rowsData[0].travel_date = this.value;
+        renderAllRows();
+    }
+});
 
     // ── Per diem helpers ──────────────────────────────────────────────────
     function getDailyRate(half) {

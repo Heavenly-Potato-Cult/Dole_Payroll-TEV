@@ -227,7 +227,7 @@
         <h1>Salary Differential</h1>
         <p>Payroll records for promotions, step increments, and salary adjustments.</p>
     </div>
-@if (auth()->user()->hasRole('payroll_officer|super_admin'))
+@if (auth()->user()->hasRole('payroll_officer'))
     <a href="{{ route('special-payroll.differential.create') }}" class="btn btn-primary">
         + New Entry
     </a>

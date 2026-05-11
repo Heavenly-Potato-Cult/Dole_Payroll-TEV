@@ -3,12 +3,16 @@
 namespace Modules\Tev\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Modules\Tev\Models\TevItineraryLine;
 use Modules\Tev\Models\TevRequest;
 use Modules\Tev\Services\TevComputationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * @mixin \Spatie\Permission\Traits\HasRoles
+ */
 class TevItineraryController extends Controller
 {
     public function __construct(private TevComputationService $tevService) {}
@@ -138,6 +142,7 @@ class TevItineraryController extends Controller
      */
     private function authorizeEdit(TevRequest $tev): void
     {
+        /** @var User $user */
         $user    = Auth::user();
         $isStaff = $user->hasAnyRole(['hrmo']);
         $isOwner = $tev->employee && $tev->employee->user_id === $user->id;

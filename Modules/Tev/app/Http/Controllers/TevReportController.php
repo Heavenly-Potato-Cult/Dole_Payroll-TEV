@@ -3,6 +3,7 @@
 namespace Modules\Tev\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Modules\Tev\Exports\TevRegisterExport;
 use App\SharedKernel\Models\Employee;
 use Modules\Tev\Models\TevRequest;
@@ -10,6 +11,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 
+/**
+ * @mixin \Spatie\Permission\Traits\HasRoles
+ */
 class TevReportController extends Controller
 {
     // ─────────────────────────────────────────────────────────────────────────
@@ -172,11 +176,13 @@ class TevReportController extends Controller
     private function authorizeRole(array $roles): void
     {
         // super_admin bypasses all role checks — view access to all modules
-        if (Auth::user()->hasRole('super_admin')) {
+        /** @var User $user */
+        $user = Auth::user();
+        if ($user->hasRole('super_admin')) {
             return;
         }
 
-        if (!Auth::user()->hasAnyRole($roles)) {
+        if (!$user->hasAnyRole($roles)) {
             abort(403);
         }
     }

@@ -228,7 +228,7 @@
         <h1>NOSI / NOSA</h1>
         <p>Notice of Salary Increase and Notice of Salary Adjustment payroll records.</p>
     </div>
-@if (auth()->user()->hasRole('payroll_officer|super_admin'))
+@if (auth()->user()->hasRole('payroll_officer'))
     <a href="{{ route('special-payroll.nosi-nosa.create') }}" class="btn btn-primary">
         + New Entry
     </a>
