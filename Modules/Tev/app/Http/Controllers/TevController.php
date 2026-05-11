@@ -50,7 +50,7 @@ class TevController extends Controller
     {
         $user = Auth::user();
         $userId = $user->id;
-        $employeeId = session('hris_employee_id');
+        $employeeId = $this->resolveHrisEmployeeId();
 
         // Count of pending TEV requests (system-wide - for info only)
         $pendingRequests = TevRequest::where('status', 'submitted')->count();
@@ -180,11 +180,12 @@ class TevController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
         $query = TevRequest::with(['employee', 'officeOrder'])->orderByDesc('id');
 
         // Employees can only see their own requests
-        if (!$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin'])) {
-            $query->where('employee_id', session('hris_employee_id'));
+        if ($isEmployee) {
+            $query->where('employee_id', $this->resolveHrisEmployeeId());
         }
 
         if ($request->filled('track'))  $query->where('track', $request->track);
@@ -195,12 +196,11 @@ class TevController extends Controller
         $currentYear = now()->year;
 
         // Use employee-specific view for employees, regular view for officers
-        $viewName = 'tev::index';
-        if (!$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin'])) {
-            $viewName = 'tev::my-requests';
+        if ($isEmployee) {
+            return view('tev::my-requests', compact('tevRequests', 'currentYear', 'isEmployee'));
         }
 
-        return view($viewName, compact('tevRequests', 'currentYear'));
+        return view('tev::index', compact('tevRequests', 'currentYear', 'isEmployee'));
     }
 
     // =====================================================================
@@ -218,14 +218,20 @@ class TevController extends Controller
         $user = Auth::user();
         $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'super_admin']);
 
-        $approvedOrders = null;
-        if (!$isEmployee) {
-            // HRMO can see approved office orders
-            $approvedOrders = OfficeOrder::with('employee')
-                ->where('status', 'approved')
-                ->orderByDesc('id')
-                ->get();
+        $approvedOrdersQuery = OfficeOrder::with('employee')
+            ->where('status', 'approved');
+
+        if ($isEmployee) {
+            $employeeId = $this->resolveHrisEmployeeId();
+            if ($employeeId) {
+                $approvedOrdersQuery->where('employee_id', $employeeId);
+            } else {
+                $approvedOrders = collect();
+                return view('tev::create', compact('approvedOrders'));
+            }
         }
+
+        $approvedOrders = $approvedOrdersQuery->orderByDesc('id')->get();
 
         $perDiemRates = PerDiemRate::all()->groupBy('travel_type');
 
@@ -248,11 +254,10 @@ class TevController extends Controller
         DB::transaction(function () use ($validated, $request, $user, $isEmployee) {
             // Determine employee_id
             $employeeId = $isEmployee
-                ? session('hris_employee_id') // Employee filing for themselves
+                ? $this->resolveHrisEmployeeId() // Employee filing for themselves
                 : OfficeOrder::findOrFail($validated['office_order_id'])->employee_id; // HRMO filing for employee
 
-            // For employees, office_order_id is optional (can be null)
-            $officeOrderId = $isEmployee ? null : $validated['office_order_id'];
+            $officeOrderId = $validated['office_order_id'];
 
             $tev = TevRequest::create([
                 'tev_no'               => $this->tevService->generateTevNo(),
@@ -311,8 +316,8 @@ class TevController extends Controller
             $this->lastCreatedId = $tev->id;
         });
 
-        return redirect()->route('tev.show', $this->lastCreatedId)
-            ->with('success', 'TEV created and submitted to the Accountant for review.');
+        return redirect()->route('tev.requests.show', $this->lastCreatedId)
+            ->with('success', 'TEV created and submitted to Accountant for review.');
     }
 
     // Holds the ID of the record created inside the transaction so the
@@ -343,13 +348,13 @@ class TevController extends Controller
         ])->findOrFail($id);
 
         // Employees can only view their own requests
-        if ($isEmployee && $tev->employee_id !== session('hris_employee_id')) {
+        if ($isEmployee && $tev->employee_id !== $this->resolveHrisEmployeeId()) {
             abort(403, 'You can only view your own TEV requests.');
         }
 
         [$canApprove, $nextAction] = $this->resolveApproval($tev);
 
-        return view('tev::show', compact('tev', 'canApprove', 'nextAction'));
+        return view('tev::show', compact('tev', 'canApprove', 'nextAction', 'isEmployee'));
     }
 
     // =====================================================================
@@ -561,7 +566,7 @@ class TevController extends Controller
         $isOwner = false;
         if ($tev->employee) {
             $isOwner = ($tev->employee->user_id === $user->id) ||
-                       ($tev->employee_id === session('hris_employee_id'));
+                       ($tev->employee_id === $this->resolveHrisEmployeeId());
         }
         $isStaff = $user->hasAnyRole(['hrmo']);
 
@@ -746,5 +751,34 @@ class TevController extends Controller
         if (!Auth::user()->hasAnyRole($roles)) {
             abort(403);
         }
+    }
+
+    /**
+     * Resolve the integer employee PK from the HRIS session token.
+     *
+     * The HRIS passes employee_no (e.g. "EMP001") via session('hris_employee_id').
+     * TevRequest.employee_id is the integer PK from the employees table.
+     * This method bridges the two so queries always use the correct integer ID.
+     *
+     * @return int|null  Returns null if no HRIS session or employee not found.
+     */
+    private function resolveHrisEmployeeId(): ?int
+    {
+        $raw = session('hris_employee_id');
+
+        if (! $raw) {
+            return null;
+        }
+
+        // If the session already holds a plain integer PK, return it directly.
+        // This handles a future HRIS upgrade that stores the PK instead of employee_no.
+        if (is_numeric($raw)) {
+            return (int) $raw;
+        }
+
+        // Otherwise it's a string employee_no like "EMP001" — resolve to the PK.
+        $employee = \App\SharedKernel\Models\Employee::where('employee_no', $raw)->first();
+
+        return $employee?->id;
     }
 }

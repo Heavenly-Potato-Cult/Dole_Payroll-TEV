@@ -434,7 +434,7 @@
                 <form method="POST" action="{{ route('logout') }}" style="display: inline;">
                     @csrf
                     <button type="submit" class="top-nav-back-btn">
-                        <span>Logout</span>
+                        Logout
                     </button>
                 </form>
             </div>
@@ -448,26 +448,31 @@
         @if (session('success'))
             <div class="alert alert-success">✓ {{ session('success') }}</div>
         @endif
-        @if (session('error'))
-            <div class="alert alert-error">⚠ {{ session('error') }}</div>
-        @endif
-        @if (session('warning'))
-            <div class="alert alert-warning">⚠ {{ session('warning') }}</div>
-        @endif
-        @if ($errors->any())
-            <div class="alert alert-error">
-                <div>
-                    <strong>Please fix the following errors:</strong>
-                    <ul style="margin-top:6px; padding-left:16px;">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            </div>
-        @endif
 
         @yield('content')
+
+        <script>
+        @if (session('error'))
+            Swal.fire({ icon: 'error', title: 'Error', text: '{{ addslashes(session('error')) }}', confirmButtonColor: '#0F1B4C' });
+        @endif
+        @if (session('warning'))
+            Swal.fire({ icon: 'warning', title: 'Warning', text: '{{ addslashes(session('warning')) }}', confirmButtonColor: '#0F1B4C' });
+        @endif
+        @if ($errors->any())
+            Swal.fire({
+                icon: 'error',
+                title: 'Please fix the following:',
+                html: '<ul style="text-align:left;margin:0;padding-left:18px;line-height:1.8;">' +
+                      @json($errors->all())->map(function(e) {
+                          return '<li style="margin-bottom:4px;">' + e + '</li>';
+                      }).join('') +
+                      '</ul>',
+                confirmButtonColor: '#0F1B4C',
+                confirmButtonText: 'OK',
+                customClass: { popup: 'swal-wide' }
+            });
+        @endif
+        </script>
 
     </main>
 

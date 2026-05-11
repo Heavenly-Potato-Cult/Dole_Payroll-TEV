@@ -58,18 +58,10 @@ Route::middleware(['auth'])
         // ── Officer-only actions ─────────────────────────────────
         Route::middleware(['role:hrmo|accountant|budget_officer|ard|cashier|chief_admin_officer|super_admin'])
             ->group(function () {
-                // Office Orders
-                Route::resource('office-orders', OfficeOrderController::class, [
-                    'names' => [
-                        'index' => 'office-orders.index',
-                        'create' => 'office-orders.create',
-                        'store' => 'office-orders.store',
-                        'show' => 'office-orders.show',
-                        'edit' => 'office-orders.edit',
-                        'update' => 'office-orders.update',
-                        'destroy' => 'office-orders.destroy',
-                    ]
-                ]);
+                // Office Orders - only index, show, approve, cancel, and pullFromApi are available
+                // Create/edit removed since orders are pulled from Employee API
+                Route::get('office-orders', [OfficeOrderController::class, 'index'])->name('office-orders.index');
+                Route::get('office-orders/{id}', [OfficeOrderController::class, 'show'])->name('office-orders.show')->where('id', '[0-9]+');
 
                 Route::post('/office-orders/{id}/approve',
                             [OfficeOrderController::class, 'approve'])
@@ -80,6 +72,10 @@ Route::middleware(['auth'])
                             [OfficeOrderController::class, 'cancel'])
                     ->name('office-orders.cancel')
                     ->where('id', '[0-9]+');
+
+                Route::post('/office-orders/pull-from-api',
+                            [OfficeOrderController::class, 'pullFromApi'])
+                    ->name('office-orders.pullFromApi');
 
                 // Approval actions
                 Route::post('/requests/{tevRequest}/approve', [TevController::class, 'approve'])->name('requests.approve');

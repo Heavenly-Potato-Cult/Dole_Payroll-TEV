@@ -37,11 +37,8 @@ class StoreTevRequest extends FormRequest
 
     public function rules(): array
     {
-        $isEmployee = !auth()->user()->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'super_admin']);
-
         return [
-            // office_order_id is required for HRMO, optional for employees
-            'office_order_id'             => [$isEmployee ? 'nullable' : 'required', 'integer', 'exists:office_orders,id'],
+            'office_order_id'             => ['required', 'integer', 'exists:office_orders,id'],
             'track'                       => ['required', 'in:cash_advance,reimbursement'],
             'purpose'                     => ['required', 'string', 'max:500'],
             'destination'                 => ['required', 'string', 'max:255'],
@@ -73,8 +70,8 @@ class StoreTevRequest extends FormRequest
             'lines.required'                      => 'At least one itinerary line is required.',
             'lines.min'                           => 'At least one itinerary line is required.',
             'lines.*.travel_date.required'        => 'Each line must have a travel date.',
-            'lines.*.origin.required'             => 'Each line must have an origin (From).',
-            'lines.*.destination.required'        => 'Each line must have a destination (To).',
+            'lines.*.origin.required'             => 'Each line must have a From (Origin).',
+            'lines.*.destination.required'        => 'Each line must have a To (Destination).',
             'lines.*.mode_of_transport.required'  => 'Each line must have a mode of transport.',
             'lines.*.transportation_cost.required' => 'Transportation cost is required for each line.',
             'lines.*.per_diem_amount.required'    => 'Per diem amount is required for each line.',

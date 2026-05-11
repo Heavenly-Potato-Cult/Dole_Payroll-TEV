@@ -64,6 +64,10 @@
 .sd-detail-row  { display: none !important; }
 .sd-expand-btn  { display: none !important; }
 
+/* Fix pagination to prevent oversized angle brackets */
+.pagination { font-size: 0.875rem !important; }
+.pagination .page-link { font-size: 0.85rem !important; }
+
 /* ── DESKTOP (≥ 769px) ── */
 @media (min-width: 769px) {
     .sd-table              { display: table; width: 100%; border-collapse: collapse; }
@@ -232,9 +236,12 @@
         <p>Manage travel authority documents for DOLE RO9 employees.</p>
     </div>
     @if (auth()->user()->hasAnyRole(['payroll_officer', 'hrmo', 'super_admin']))
-        <a href="{{ route('tev.office-orders.create') }}" class="btn btn-primary">
-            + New Office Order
-        </a>
+        <form method="POST" action="{{ route('tev.office-orders.pullFromApi') }}" style="display:inline;">
+            @csrf
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Pull approved Office Orders from Employee API? This will sync 164 orders (2 per employee).');">
+                📥 Pull Office Orders
+            </button>
+        </form>
     @endif
 </div>
 
@@ -477,10 +484,7 @@
                     @empty
                         <tr>
                             <td colspan="8" style="text-align:center; padding:40px; color:var(--text-light);">
-                                No office orders found.
-                                @if (auth()->user()->hasAnyRole(['payroll_officer', 'hrmo', 'super_admin']))
-                                    <a href="{{ route('tev.office-orders.create') }}">Create one now →</a>
-                                @endif
+                                No office orders found. Click "Pull Office Orders" to sync from Employee API.
                             </td>
                         </tr>
                     @endforelse
@@ -490,7 +494,11 @@
     </div>
 </div>
 
-<div style="margin-top:12px;">{{ $orders->links() }}</div>
+@if ($orders->hasPages())
+<div style="padding:4px 20px 8px;">
+    {{ $orders->links('pagination::custom') }}
+</div>
+@endif
 
 @endsection
 

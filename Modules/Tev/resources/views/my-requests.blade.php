@@ -10,6 +10,8 @@
 @section('title', 'My TEV Requests')
 @section('page-title', 'My TEV Requests')
 
+@section('content')
+
 @section('styles')
 <style>
 /* ─────────────────────────────────────────────────────

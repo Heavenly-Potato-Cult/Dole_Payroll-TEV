@@ -1,5 +1,5 @@
 {{-- resources/views/tev/create.blade.php --}}
-@extends('layouts.tev')
+@extends(isset($isEmployee) && $isEmployee ? 'layouts.top-nav' : 'layouts.tev')
 
 @section('title', 'New TEV Request')
 @section('page-title', 'Travel (TEV)')
@@ -11,6 +11,123 @@
 
 /* ── Helpers ── */
 .field-hint { font-size: 0.74rem; color: var(--text-light); margin-top: 4px; line-height: 1.4; }
+
+/* ── Form fields ── */
+#tevForm .form-group { margin-bottom: 16px; }
+#tevForm .form-group:last-child { margin-bottom: 0; }
+#tevForm .form-group label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 6px;
+    letter-spacing: 0.02em;
+}
+#tevForm .form-group label span { color: var(--red); }
+
+/* Select with chevron */
+#tevForm .form-group select {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    padding: 10px 36px 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%234A4A6A' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    font-size: 0.85rem;
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    height: 42px;
+}
+#tevForm .form-group select:focus {
+    outline: none;
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(15,27,76,0.10);
+}
+#tevForm .form-group select.is-invalid {
+    border-color: var(--red);
+    background-color: #fff5f5;
+}
+
+/* Text inputs, date inputs, textarea */
+#tevForm .form-group input[type="text"],
+#tevForm .form-group input[type="date"],
+#tevForm .form-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 0.85rem;
+    color: var(--text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    font-family: var(--font);
+    min-height: 42px;
+}
+#tevForm .form-group input[type="text"]::placeholder,
+#tevForm .form-group textarea::placeholder {
+    color: #b0b5cc;
+    font-size: 0.82rem;
+}
+#tevForm .form-group input:focus,
+#tevForm .form-group textarea:focus {
+    outline: none;
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(15,27,76,0.10);
+}
+#tevForm .form-group input.is-invalid,
+#tevForm .form-group textarea.is-invalid {
+    border-color: var(--red);
+    background-color: #fff5f5;
+}
+
+/* OO Preview panel */
+#oo-preview {
+    display: none;
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #f5f7ff 0%, #eef1fa 100%);
+    border: 1px solid #c8d0f0;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    overflow-wrap: break-word;
+}
+#oo-preview .oo-preview-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(200,208,240,0.5);
+}
+#oo-preview .oo-preview-row:last-child { border-bottom: none; }
+#oo-preview .oo-preview-label {
+    font-weight: 700;
+    color: var(--navy);
+    flex-shrink: 0;
+    min-width: 90px;
+}
+#oo-preview .oo-preview-value { color: var(--text-mid); }
+#oo-preview #oo-perdiem-hint {
+    margin-left: 6px;
+    font-size: 0.74rem;
+    color: #1B5E20;
+    font-weight: 600;
+    background: #E8F5E9;
+    padding: 1px 7px;
+    border-radius: 12px;
+}
+
+/* Invalid feedback */
+#tevForm .invalid-feedback {
+    color: var(--red);
+    font-size: 0.76rem;
+    margin-top: 5px;
+    font-weight: 500;
+}
 
 /* ── Track radio cards ── */
 .track-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
@@ -176,15 +293,6 @@
     <a href="{{ route('tev.requests.index') }}" class="btn btn-outline btn-sm">← Back to List</a>
 </div>
 
-@if ($errors->any())
-<div class="alert alert-error" style="margin-bottom:16px;">
-    <strong>Please fix the following before saving:</strong>
-    <ul style="margin:6px 0 0; padding-left:18px;">
-        @foreach ($errors->all() as $err)<li>{{ $err }}</li>@endforeach
-    </ul>
-</div>
-@endif
-
 {{-- Auto-submit notice ── --}}
 <div class="autosubmit-notice">
     <span class="an-icon">📬</span>
@@ -242,11 +350,34 @@
             <div class="card-body">
                 @if ($isEmployee)
                     <p class="field-hint" style="margin-bottom:14px;">
-                        As an employee, you can file a TEV directly without an Office Order.
-                        Fill in your travel details manually in the next steps.
+                        Select the <strong>approved Office Order</strong> that authorises this travel.
+                        The destination, travel type, and dates will be filled in automatically.
                     </p>
-                    <div class="form-group" style="display:none;">
-                        <input type="hidden" name="office_order_id" value="">
+                    <div class="form-group">
+                        <label for="office_order_id">Office Order <span style="color:var(--red);">*</span></label>
+                        <select name="office_order_id" id="office_order_id"
+                                class="{{ $errors->has('office_order_id') ? 'is-invalid' : '' }}" required>
+                            <option value="">— Select an approved Office Order —</option>
+                            @if ($approvedOrders)
+                                @foreach ($approvedOrders as $oo)
+                                    @php
+                                        $ooEmp   = $oo->employee;
+                                        $empName = optional($ooEmp)->last_name . ', ' . optional($ooEmp)->first_name;
+                                    @endphp
+                                    <option value="{{ $oo->id }}"
+                                        data-destination="{{ $oo->destination }}"
+                                        data-travel-type="{{ $oo->travel_type }}"
+                                        data-purpose="{{ $oo->purpose }}"
+                                        data-date-start="{{ $oo->travel_date_start->toDateString() }}"
+                                        data-date-end="{{ $oo->travel_date_end->toDateString() }}"
+                                        {{ old('office_order_id') == $oo->id ? 'selected' : '' }}>
+                                        {{ $oo->office_order_no }} — {{ $empName }}
+                                        ({{ $oo->travel_date_start->format('M d') }}–{{ $oo->travel_date_end->format('M d, Y') }})
+                                    </option>
+                                @endforeach
+                            @endif
+                        </select>
+                        @error('office_order_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                 @else
                     <p class="field-hint" style="margin-bottom:14px;">
@@ -280,15 +411,26 @@
                         @error('office_order_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                 @endif
-                <div id="oo-preview" style="display:none; margin-top:10px; padding:10px 14px;
-                     background:#f0f2ff; border-radius:6px; font-size:0.82rem;
-                     border-left:3px solid var(--navy); overflow-wrap:break-word;">
-                    <div><strong>Destination:</strong> <span id="oo-destination"></span></div>
-                    <div><strong>Travel Type:</strong> <span id="oo-travel-type"></span>
-                        <span id="oo-perdiem-hint" style="margin-left:6px; font-size:0.76rem; color:#1B5E20; font-weight:600;"></span>
+                <div id="oo-preview">
+                    <div class="oo-preview-row">
+                        <span class="oo-preview-label">Destination</span>
+                        <span class="oo-preview-value" id="oo-destination"></span>
                     </div>
-                    <div><strong>Purpose:</strong> <span id="oo-purpose"></span></div>
-                    <div><strong>Travel Period:</strong> <span id="oo-dates"></span></div>
+                    <div class="oo-preview-row">
+                        <span class="oo-preview-label">Travel Type</span>
+                        <span class="oo-preview-value">
+                            <span id="oo-travel-type"></span>
+                            <span id="oo-perdiem-hint"></span>
+                        </span>
+                    </div>
+                    <div class="oo-preview-row">
+                        <span class="oo-preview-label">Purpose</span>
+                        <span class="oo-preview-value" id="oo-purpose"></span>
+                    </div>
+                    <div class="oo-preview-row">
+                        <span class="oo-preview-label">Travel Period</span>
+                        <span class="oo-preview-value" id="oo-dates"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -486,7 +628,7 @@
                     Review all sections before submitting.<br>
                     This TEV will go <strong>directly to the Accountant</strong> — no extra step required.
                 </div>
-                <button type="submit" class="btn btn-primary" style="width:100%;">📤 Submit TEV Request</button>
+                <button type="button" id="submitTevBtn" class="btn btn-primary" style="width:100%;">Submit TEV Request</button>
                 <a href="{{ route('tev.requests.index') }}" class="btn btn-outline" style="width:100%; margin-top:8px; display:block; text-align:center;">Cancel</a>
             </div>
         </div>
@@ -576,9 +718,22 @@
             document.getElementById('perdiem-info').style.display = 'block';
         }
 
-        // ── Auto-fill travel_date on the FIRST itinerary row from OO start date ──
-        if (dS && rowsData.length > 0) {
+        // ── Auto-fill travel_date and other fields on the FIRST itinerary row from OO data ──
+        if (dS) {
+            // Ensure we have at least one row
+            if (rowsData.length === 0) {
+                addRow({});
+            }
             rowsData[0].travel_date = dS;
+            rowsData[0].destination = dest;
+            // Set default origin to office location if empty
+            if (!rowsData[0].origin) {
+                rowsData[0].origin = 'DOLE Office';
+            }
+            // Set default mode of transport if empty
+            if (!rowsData[0].mode_of_transport) {
+                rowsData[0].mode_of_transport = 'vehicle';
+            }
             renderAllRows();
         }
 
@@ -829,7 +984,48 @@
         addRow({});
     @endif
 
+    // Sync hidden inputs after all rows are rendered
+    syncHiddenInputs();
     updateTotals();
+
+    // ── SweetAlert for validation errors ────────────────────────────────
+    @if ($errors->any())
+    Swal.fire({
+        icon: 'error',
+        title: 'Please fix the following:',
+        html: '<ul style="text-align:left;margin:0;padding-left:18px;line-height:1.8;">' +
+              @json($errors->all()).map(function(e) {
+                  return '<li style="margin-bottom:4px;">' + e + '</li>';
+              }).join('') +
+              '</ul>',
+        confirmButtonColor: '#0F1B4C',
+        confirmButtonText: 'OK',
+        customClass: { popup: 'swal-wide' }
+    });
+    @endif
+
+    // ── Submit confirmation ──────────────────────────────────────────────
+    document.getElementById('submitTevBtn').addEventListener('click', function () {
+        if (rowsData.length === 0) {
+            Swal.fire({ icon: 'warning', title: 'No itinerary lines', text: 'Please add at least one itinerary row before submitting.', confirmButtonColor: '#0F1B4C' });
+            return;
+        }
+        Swal.fire({
+            title: 'Submit TEV Request?',
+            text: 'This will be sent directly to the Accountant for review. Make sure all details are correct.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#0F1B4C',
+            cancelButtonColor: '#6B7280',
+            confirmButtonText: 'Yes, submit',
+            cancelButtonText: 'Review again',
+            reverseButtons: true
+        }).then(function (result) {
+            if (result.isConfirmed) {
+                document.getElementById('tevForm').submit();
+            }
+        });
+    });
 })();
 </script>
 @endsection

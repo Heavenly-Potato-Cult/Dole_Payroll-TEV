@@ -45,6 +45,6 @@ class OfficeOrder extends Model
 
     public function tevRequests()
     {
-        return $this->hasMany(TevRequest::class, 'office_order_id');
+        return $this->hasMany(\Modules\Tev\Models\TevRequest::class, 'office_order_id');
     }
 }

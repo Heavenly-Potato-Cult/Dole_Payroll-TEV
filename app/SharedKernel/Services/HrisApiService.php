@@ -206,4 +206,34 @@ class HrisApiService
 
         return [];
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Office Orders
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Fetch all approved Office Orders from Employee API.
+     * Employee API: GET /office-orders → { total: 164, data: [...] }
+     */
+    public function fetchOfficeOrders(): array
+    {
+        try {
+            $response = Http::timeout(30)
+                ->get("{$this->baseUrl}/office-orders");
+
+            if ($response->successful()) {
+                $data = $response->json();
+                return $data['data'] ?? [];
+            }
+
+            Log::warning('Employee API office-orders non-200', [
+                'status' => $response->status(),
+                'body'   => $response->body(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Employee API office-orders error', ['error' => $e->getMessage()]);
+        }
+
+        return [];
+    }
 }

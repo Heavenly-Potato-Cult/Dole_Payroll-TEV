@@ -7,6 +7,25 @@
     <title>@yield('title', 'TEV Dashboard') — DOLE RO9 Payroll</title>
     <link rel="stylesheet" href="{{ asset('css/app.css') }}">
     <style>
+    /* ── Layout fixes ───────────────────────────────────────────────────── */
+    .main-content {
+        margin-left: 260px;
+        padding-top: 60px;
+        transition: margin-left 0.3s ease;
+        position: relative;
+        z-index: 101;
+    }
+    
+    .main-content.no-sidebar {
+        margin-left: 0 !important;
+    }
+    
+    @media (max-width: 768px) {
+        .main-content {
+            margin-left: 0;
+        }
+    }
+    
     /* ── Topbar User Pill Container (replicated from main dashboard) ─────────────────────────────────── */
     .topbar-user-pill {
         display: flex;
@@ -132,6 +151,7 @@
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
     {{-- ═══ SIDEBAR ═══ --}}
+    @if(!isset($isEmployee) || !$isEmployee)
     <aside class="sidebar" id="sidebar">
 
         <div class="sidebar-brand">
@@ -186,20 +206,22 @@
                 Go to Payroll
             </a>
         </div>
-        @endunless
-
+        @endif
     </aside>
+    @endif
 
     {{-- ═══ MAIN AREA ═══ --}}
-    <div class="main-content">
+    <div class="main-content @if(isset($isEmployee) && $isEmployee) no-sidebar @endif">
 
         <header class="topbar">
             <div class="topbar-left">
+                @if(!isset($isEmployee) || !$isEmployee)
                 <button class="burger-btn" onclick="openSidebar()" aria-label="Open menu">
                     <span></span>
                     <span></span>
                     <span></span>
                 </button>
+                @endif
                 <span class="topbar-title">@yield('page-title', 'TEV Dashboard')</span>
             </div>
             <div class="topbar-right">
@@ -235,29 +257,16 @@
 
         <main class="page-body">
 
-            @if (session('success'))
-                <div class="alert alert-success">✓ {{ session('success') }}</div>
-            @endif
+            @yield('content')
+
+            <script>
             @if (session('error'))
-                <div class="alert alert-error">⚠ {{ session('error') }}</div>
+                Swal.fire({ icon: 'error', title: 'Error', text: '{{ addslashes(session('error')) }}', confirmButtonColor: '#0F1B4C' });
             @endif
             @if (session('warning'))
-                <div class="alert alert-warning">⚠ {{ session('warning') }}</div>
+                Swal.fire({ icon: 'warning', title: 'Warning', text: '{{ addslashes(session('warning')) }}', confirmButtonColor: '#0F1B4C' });
             @endif
-            @if ($errors->any())
-                <div class="alert alert-error">
-                    <div>
-                        <strong>Please fix the following errors:</strong>
-                        <ul style="margin-top:6px; padding-left:16px;">
-                            @foreach ($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                </div>
-            @endif
-
-            @yield('content')
+            </script>
 
         </main>
     </div>
@@ -265,6 +274,7 @@
 </div>
 
 <script src="{{ asset('js/app.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 function openSidebar() {
     document.getElementById('sidebar').classList.add('open');

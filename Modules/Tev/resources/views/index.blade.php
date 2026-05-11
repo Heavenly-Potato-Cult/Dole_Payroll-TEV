@@ -10,6 +10,8 @@
 @section('title', 'TEV Requests')
 @section('page-title', 'Travel (TEV)')
 
+@section('content')
+
 @section('styles')
 <style>
 /* ─────────────────────────────────────────────────────
@@ -63,6 +65,10 @@
 ───────────────────────────────────────────────────── */
 .sd-detail-row  { display: none !important; }
 .sd-expand-btn  { display: none !important; }
+
+/* Fix pagination to prevent oversized angle brackets */
+.pagination { font-size: 0.875rem !important; }
+.pagination .page-link { font-size: 0.85rem !important; }
 
 /* ── DESKTOP (≥ 769px) ── */
 @media (min-width: 769px) {
@@ -448,7 +454,11 @@
     </div>
 </div>
 
-<div style="margin-top:12px;">{{ $tevRequests->links() }}</div>
+@if ($tevRequests->hasPages())
+<div style="padding:4px 20px 8px;">
+    {{ $tevRequests->links('pagination::custom') }}
+</div>
+@endif
 
 @endsection
 

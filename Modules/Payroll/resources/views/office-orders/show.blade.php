@@ -74,7 +74,7 @@
     };
 
     $hasTev     = $order->tevRequests->count() > 0;
-    $canApprove = auth()->user()->hasAnyRole(['ard', 'chief_admin_officer'])
+    $canApprove = auth()->user()->hasAnyRole(['hrmo', 'ard', 'chief_admin_officer'])
                   && $order->status === 'draft';
     $canEdit    = auth()->user()->hasAnyRole(['payroll_officer', 'hrmo'])
                   && $order->status === 'draft';
@@ -209,8 +209,8 @@
                         <textarea id="approve_remarks" name="remarks" rows="2"
                                   placeholder="Add approval remarks..."></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary"
-                            onclick="return confirm('Approve this Office Order?')">
+                    <button type="button" class="btn btn-primary"
+                            onclick="confirmApproveOfficeOrder()">
                         ✓ Approve Office Order
                     </button>
                 </form>
@@ -342,5 +342,33 @@
     </div>
 </div>
 @endif
+@endsection
 
+@section('scripts')
+<script>
+function confirmApproveOfficeOrder() {
+    const officeOrderNo = '{{ $order->office_order_no }}';
+    const employeeName = '{{ optional($order->employee)->last_name ?? 'Unknown' }}, {{ optional($order->employee)->first_name ?? '' }}';
+
+    Swal.fire({
+        title: 'Approve Office Order?',
+        html: `<div style="text-align:center;">
+            <div style="font-size:1.2rem;font-weight:600;color:#0F1B4C;margin-bottom:8px;">${officeOrderNo}</div>
+            <p style="color:#6b7280;font-size:0.95rem;">Approve this travel authority for <strong>${employeeName}</strong>?</p>
+        </div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '✓ Approve',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#10B981',
+        cancelButtonColor: '#6b7280',
+        reverseButtons: true,
+        focusCancel: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.querySelector('form[action*="approve"]').submit();
+        }
+    });
+}
+</script>
 @endsection

@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use Modules\Payroll\Http\Requests\StoreOfficeOrderRequest;
 use App\SharedKernel\Models\Employee;
 use App\SharedKernel\Models\OfficeOrder;
+use App\SharedKernel\Services\HrisApiService;
 use Modules\Payroll\Models\PayrollAuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class OfficeOrderController extends Controller
 {
@@ -55,7 +57,7 @@ class OfficeOrderController extends Controller
 
         $this->auditLog($request, 'Created Office Order: ' . $order->office_order_no, null, 'draft');
 
-        return redirect()->route('office-orders.show', $order->id)
+        return redirect()->route('tev.office-orders.show', $order->id)
             ->with('success', 'Office Order ' . $order->office_order_no . ' created successfully.');
     }
 
@@ -66,44 +68,6 @@ class OfficeOrderController extends Controller
         $order = OfficeOrder::with(['employee', 'approver', 'tevRequests.employee'])->findOrFail($id);
 
         return view('payroll::office-orders.show', compact('order'));
-    }
-
-    public function edit(int $id)
-    {
-        $this->authorizeRole(['hrmo']);
-
-        // Only draft orders are editable — approved/cancelled orders are immutable
-        $order = OfficeOrder::where('status', 'draft')->findOrFail($id);
-
-        $employees = Employee::where('status', 'active')
-            ->orderBy('last_name')
-            ->orderBy('first_name')
-            ->get(['id', 'last_name', 'first_name', 'middle_name', 'position_title']);
-
-        return view('payroll::office-orders.edit', compact('order', 'employees'));
-    }
-
-    public function update(StoreOfficeOrderRequest $request, int $id)
-    {
-        $this->authorizeRole(['hrmo']);
-
-        $order = OfficeOrder::where('status', 'draft')->findOrFail($id);
-
-        // The form request enforces uniqueness on create; on update we re-validate
-        // with an ignore clause so the order's own number doesn't trigger a conflict
-        $request->validate([
-            'office_order_no' => [
-                'required', 'string', 'max:50',
-                \Illuminate\Validation\Rule::unique('office_orders', 'office_order_no')->ignore($order->id),
-            ],
-        ]);
-
-        $order->update($request->validated());
-
-        $this->auditLog($request, 'Updated Office Order: ' . $order->office_order_no, null, 'draft');
-
-        return redirect()->route('office-orders.show', $order->id)
-            ->with('success', 'Office Order updated successfully.');
     }
 
     public function approve(Request $request, int $id)
@@ -129,7 +93,7 @@ class OfficeOrderController extends Controller
 
         $this->auditLog($request, 'Approved Office Order: ' . $order->office_order_no, $old, 'approved');
 
-        return redirect()->route('office-orders.show', $order->id)
+        return redirect()->route('tev.office-orders.show', $order->id)
             ->with('success', 'Office Order approved successfully.');
     }
 
@@ -164,7 +128,7 @@ class OfficeOrderController extends Controller
 
         $this->auditLog($request, 'Cancelled Office Order: ' . $order->office_order_no, $old, 'cancelled');
 
-        return redirect()->route('office-orders.show', $order->id)
+        return redirect()->route('tev.office-orders.show', $order->id)
             ->with('success', 'Office Order cancelled.');
     }
 
@@ -174,6 +138,107 @@ class OfficeOrderController extends Controller
     public function destroy(int $id)
     {
         abort(405);
+    }
+
+    /**
+     * Pull approved Office Orders from Employee API.
+     * Matches employees by employee_no and creates local Office Order records.
+     */
+    public function pullFromApi(Request $request)
+    {
+        $this->authorizeRole(['hrmo']);
+
+        try {
+            $orders = app(HrisApiService::class)->fetchOfficeOrders();
+
+            Log::info('Office Orders sync starting', [
+                'total_from_api' => count($orders),
+                'current_db_count' => OfficeOrder::withTrashed()->count(),
+            ]);
+
+            $synced   = 0;
+            $updated  = 0;
+            $skipped  = 0;
+            $processed = 0;
+
+            foreach ($orders as $orderData) {
+                $processed++;
+
+                // Match employee by employee_no
+                // API returns "EMP-0001", local has "EMP001" - normalize by extracting number and reformatting
+                preg_match('/([A-Z]+)-0*(\d+)/', $orderData['employee_no'], $matches);
+                $normalizedEmployeeNo = $matches[1] . str_pad($matches[2], 3, '0', STR_PAD_LEFT);
+                $employee = Employee::where('employee_no', $normalizedEmployeeNo)->first();
+
+                if (! $employee) {
+                    Log::warning('Skipping Office Order: employee not found', [
+                        'employee_no' => $orderData['employee_no'],
+                        'office_order_no' => $orderData['office_order_no'],
+                    ]);
+                    $skipped++;
+                    continue;
+                }
+
+                // Create or update Office Order
+                $existing = OfficeOrder::where('office_order_no', $orderData['office_order_no'])->first();
+
+                if ($existing) {
+                    Log::info('Updating existing Office Order', [
+                        'office_order_no' => $orderData['office_order_no'],
+                        'existing_id' => $existing->id,
+                    ]);
+
+                    $existing->update([
+                        'employee_id' => $employee->id,
+                        'purpose' => $orderData['purpose'],
+                        'destination' => $orderData['destination'],
+                        'travel_type' => $orderData['travel_type'],
+                        'travel_date_start' => $orderData['travel_date_start'],
+                        'travel_date_end' => $orderData['travel_date_end'],
+                        'status' => 'approved',
+                        'approved_at' => $orderData['approved_at'],
+                        'remarks' => $orderData['remarks'] ?? null,
+                    ]);
+                    $updated++;
+                } else {
+                    Log::info('Creating new Office Order', [
+                        'office_order_no' => $orderData['office_order_no'],
+                        'employee_no' => $orderData['employee_no'],
+                    ]);
+
+                    OfficeOrder::create([
+                        'office_order_no' => $orderData['office_order_no'],
+                        'employee_id' => $employee->id,
+                        'purpose' => $orderData['purpose'],
+                        'destination' => $orderData['destination'],
+                        'travel_type' => $orderData['travel_type'],
+                        'travel_date_start' => $orderData['travel_date_start'],
+                        'travel_date_end' => $orderData['travel_date_end'],
+                        'status' => 'approved',
+                        'approved_at' => $orderData['approved_at'],
+                        'remarks' => $orderData['remarks'] ?? null,
+                    ]);
+                    $synced++;
+                }
+            }
+
+            Log::info('Office Orders sync completed', [
+                'processed' => $processed,
+                'synced' => $synced,
+                'updated' => $updated,
+                'skipped' => $skipped,
+                'final_db_count' => OfficeOrder::withTrashed()->count(),
+            ]);
+
+            return redirect()->route('tev.office-orders.index')
+                ->with('success', "Synced {$synced} new and updated {$updated} Office Orders from Employee API ({$skipped} skipped).");
+
+        } catch (\Exception $e) {
+            Log::error('Office Orders sync failed', ['error' => $e->getMessage()]);
+
+            return redirect()->route('tev.office-orders.index')
+                ->with('error', 'Failed to sync Office Orders: ' . $e->getMessage());
+        }
     }
 
     // ----------------------------------------------------------------
