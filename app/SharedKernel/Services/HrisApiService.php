@@ -218,7 +218,8 @@ class HrisApiService
     public function fetchOfficeOrders(): array
     {
         try {
-            $response = Http::timeout(30)
+            $response = Http::withToken($this->apiKey)
+                ->timeout(30)
                 ->get("{$this->baseUrl}/office-orders");
 
             if ($response->successful()) {

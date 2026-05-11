@@ -233,11 +233,33 @@ class OfficeOrderController extends Controller
                 'final_db_count' => OfficeOrder::withTrashed()->count(),
             ]);
 
+            // Check if this is an AJAX request
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Synced {$synced} new and updated {$updated} Office Orders from Employee API ({$skipped} skipped).",
+                    'data' => [
+                        'synced' => $synced,
+                        'updated' => $updated,
+                        'skipped' => $skipped,
+                        'processed' => $processed
+                    ]
+                ]);
+            }
+
             return redirect()->route('tev.office-orders.index')
                 ->with('success', "Synced {$synced} new and updated {$updated} Office Orders from Employee API ({$skipped} skipped).");
 
         } catch (\Exception $e) {
             Log::error('Office Orders sync failed', ['error' => $e->getMessage()]);
+
+            // Check if this is an AJAX request
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to sync Office Orders: ' . $e->getMessage()
+                ], 500);
+            }
 
             return redirect()->route('tev.office-orders.index')
                 ->with('error', 'Failed to sync Office Orders: ' . $e->getMessage());

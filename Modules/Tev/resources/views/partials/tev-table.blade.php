@@ -49,16 +49,20 @@
                     </td>
 
                     <td class="col-employee">
-                        <span class="sd-name-label">
-                            {{ optional($emp)->last_name }},
-                            {{ optional($emp)->first_name }}
-                            @if (optional($emp)->middle_name)
-                                {{ substr($emp->middle_name, 0, 1) }}.
+                        <div>
+                            <span class="sd-name-label">
+                                {{ optional($emp)->last_name }},
+                                {{ optional($emp)->first_name }}
+                                @if (optional($emp)->middle_name)
+                                    {{ substr($emp->middle_name, 0, 1) }}.
+                                @endif
+                            </span>
+                            @if(optional($emp)->position_title)
+                                <div class="sd-name-sub">
+                                    {{ optional($emp)->position_title }}
+                                </div>
                             @endif
-                        </span>
-                        <span class="sd-name-sub">
-                            {{ optional($tev->officeOrder)->office_order_no ?? '—' }}
-                        </span>
+                        </div>
                     </td>
 
                     <td class="col-track">

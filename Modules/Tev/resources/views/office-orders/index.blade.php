@@ -236,10 +236,10 @@
         <p>Manage travel authority documents for DOLE RO9 employees.</p>
     </div>
     @if (auth()->user()->hasAnyRole(['payroll_officer', 'hrmo', 'super_admin']))
-        <form method="POST" action="{{ route('tev.office-orders.pullFromApi') }}" style="display:inline;">
+        <form id="pullOfficeOrdersForm" method="POST" action="{{ route('tev.office-orders.pullFromApi') }}" style="display:inline;">
             @csrf
-            <button type="submit" class="btn btn-primary" onclick="return confirm('Pull approved Office Orders from Employee API? This will sync 164 orders (2 per employee).');">
-                📥 Pull Office Orders
+            <button type="submit" class="btn btn-primary" onclick="event.preventDefault(); pullOfficeOrders();">
+                 Pull Office Orders
             </button>
         </form>
     @endif
@@ -517,6 +517,148 @@ function toggleSdRow(mainRow) {
     if (!isOpen) {
         mainRow.classList.add('open');
         detail.classList.add('open');
+    }
+}
+
+function pullOfficeOrders() {
+    Swal.fire({
+        title: 'Pull Office Orders',
+        text: 'Pull approved Office Orders from Employee API? This will sync 164 orders (2 per employee).',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0F1B4C',
+        confirmButtonText: 'Pull Office Orders',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            executePullOfficeOrders();
+        }
+    });
+}
+
+async function executePullOfficeOrders() {
+    // Show loading modal with progress bar
+    let progress = 0;
+    let progressInterval;
+    let timeoutId;
+    
+    progressInterval = setInterval(() => {
+        if (progress < 90) {
+            progress += Math.random() * 15;
+            if (progress > 90) progress = 90;
+            Swal.update({
+                html: `<div style="margin-top:10px;">
+                    <div style="background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden;">
+                        <div style="background:#0F1B4C;height:100%;width:${progress}%;transition:width 0.3s;"></div>
+                    </div>
+                    <p style="margin-top:8px;font-size:0.9rem;color:#6b7280;">${Math.round(progress)}%</p>
+                </div>`
+            });
+        }
+    }, 800);
+
+    Swal.fire({
+        title: '<span style="color:#0F1B4C;">Pulling Office Orders...</span>',
+        html: `<div style="margin-top:10px;">
+            <div style="background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden;">
+                <div style="background:#0F1B4C;height:100%;width:0%;transition:width 0.3s;"></div>
+            </div>
+            <p style="margin-top:8px;font-size:0.9rem;color:#6b7280;">0%</p>
+        </div>`,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    try {
+        const form = document.getElementById('pullOfficeOrdersForm');
+        const formData = new FormData(form);
+        const csrfToken = formData.get('_token');
+
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
+        const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData,
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        clearInterval(progressInterval);
+
+        // Clone the response before attempting to parse JSON
+        const responseClone = response.clone();
+        let data;
+        try {
+            data = await responseClone.json();
+        } catch (jsonError) {
+            // Handle JSON parsing errors (e.g., when API returns HTML instead of JSON)
+            console.error('JSON Parsing Error:', jsonError);
+            console.error('Response Text:', await response.text());
+            Swal.fire({
+                icon: 'error',
+                title: 'API Response Error',
+                text: 'Server returned invalid response format. Please contact administrator.',
+                confirmButtonColor: '#0F1B4C'
+            });
+            return; // Stop further execution
+        }
+        
+        // Complete progress to 100% immediately when response is received
+        Swal.update({
+            html: `<div style="margin-top:10px;">
+                <div style="background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden;">
+                    <div style="background:#0F1B4C;height:100%;width:100%;transition:width 0.3s;"></div>
+                </div>
+                <p style="margin-top:8px;font-size:0.9rem;color:#6b7280;">100%</p>
+            </div>`
+        });
+        
+        if (data && data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Success!',
+                text: 'Office orders pulled successfully!',
+                confirmButtonColor: '#0F1B4C'
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error!',
+                text: data.message || 'Failed to pull office orders.',
+                confirmButtonColor: '#0F1B4C'
+            });
+        }
+    } catch (error) {
+        clearTimeout(timeoutId);
+        clearInterval(progressInterval);
+        
+        console.error('Pull Office Orders Error:', error);
+        
+        let errorMessage = 'Network error occurred while pulling office orders.';
+        if (error.name === 'AbortError') {
+            errorMessage = 'Request was cancelled or timed out.';
+        } else if (error.message) {
+            errorMessage = `Error: ${error.message}`;
+        } else if (error.status) {
+            errorMessage = `Server error: ${error.status} ${error.statusText}`;
+        }
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'Error!',
+            text: errorMessage,
+            confirmButtonColor: '#0F1B4C'
+        });
     }
 }
 </script>

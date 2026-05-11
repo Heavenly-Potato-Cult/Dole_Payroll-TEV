@@ -896,7 +896,12 @@
     <div class="db-stat purple">
         <div class="db-stat-left">
             <div>
-                @php $totalUsers = \App\Models\User::count(); @endphp
+                @php 
+                $officerRoles = ['super_admin', 'payroll_officer', 'hrmo', 'cashier', 'accountant', 'ard', 'budget_officer', 'chief_admin_officer'];
+                $totalUsers = \App\Models\User::whereHas('roles', function($query) use ($officerRoles) {
+                    $query->whereIn('name', $officerRoles);
+                })->count();
+                @endphp
                 <div class="db-stat-title">System Users</div>
                 <div class="db-stat-subtitle">Registered accounts</div>
             </div>
