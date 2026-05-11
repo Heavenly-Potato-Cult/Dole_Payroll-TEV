@@ -32,7 +32,7 @@ class TevController extends Controller
     public function dashboard()
     {
         $user = Auth::user();
-        
+
         // Officers get the comprehensive dashboard
         if ($user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin'])) {
             return $this->officerDashboard();
@@ -183,9 +183,13 @@ class TevController extends Controller
         $query = TevRequest::with(['employee', 'officeOrder'])->orderByDesc('id');
 
         // Employees can only see their own requests
-        if (!$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin'])) {
-            $query->where('employee_id', session('hris_employee_id'));
-        }
+if (!$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin'])) {
+    $hrisId = session('hris_employee_id');
+    $emp = \App\SharedKernel\Models\Employee::where('employee_no', $hrisId)
+        ->orWhere('id', $hrisId)
+        ->first();
+    $query->where('employee_id', $emp?->id ?? 0);
+}
 
         if ($request->filled('track'))  $query->where('track', $request->track);
         if ($request->filled('status')) $query->where('status', $request->status);
@@ -247,12 +251,23 @@ class TevController extends Controller
 
         DB::transaction(function () use ($validated, $request, $user, $isEmployee) {
             // Determine employee_id
-            $employeeId = $isEmployee
-                ? session('hris_employee_id') // Employee filing for themselves
-                : OfficeOrder::findOrFail($validated['office_order_id'])->employee_id; // HRMO filing for employee
+if ($isEmployee) {
+    $hrisId = session('hris_employee_id');
+$emp = \App\SharedKernel\Models\Employee::where('employee_no', $hrisId)
+    ->orWhere('id', $hrisId)
+    ->first();
+    $employeeId = $emp?->id;
+} else {
+    $employeeId = OfficeOrder::findOrFail($validated['office_order_id'])->employee_id;
+}
 
-            // For employees, office_order_id is optional (can be null)
-            $officeOrderId = $isEmployee ? null : $validated['office_order_id'];
+if ($isEmployee && !$employeeId) {
+    throw new \RuntimeException('Employee session not found. Please log in again.');
+}
+
+$officeOrderId = ($isEmployee || empty($validated['office_order_id']))
+    ? null
+    : $validated['office_order_id'];
 
             $tev = TevRequest::create([
                 'tev_no'               => $this->tevService->generateTevNo(),
@@ -311,7 +326,7 @@ class TevController extends Controller
             $this->lastCreatedId = $tev->id;
         });
 
-        return redirect()->route('tev.show', $this->lastCreatedId)
+        return redirect()->route('tev.requests.show', $this->lastCreatedId)
             ->with('success', 'TEV created and submitted to the Accountant for review.');
     }
 
@@ -343,9 +358,15 @@ class TevController extends Controller
         ])->findOrFail($id);
 
         // Employees can only view their own requests
-        if ($isEmployee && $tev->employee_id !== session('hris_employee_id')) {
-            abort(403, 'You can only view your own TEV requests.');
-        }
+if ($isEmployee) {
+    $hrisId = session('hris_employee_id');
+    $emp = \App\SharedKernel\Models\Employee::where('employee_no', $hrisId)
+        ->orWhere('id', $hrisId)
+        ->first();
+    if (!$emp || $tev->employee_id !== $emp->id) {
+        abort(403, 'You can only view your own TEV requests.');
+    }
+}
 
         [$canApprove, $nextAction] = $this->resolveApproval($tev);
 
@@ -415,7 +436,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('success', 'TEV ' . $stepLabel . ' successfully.');
     }
 
@@ -470,7 +491,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('error', 'TEV has been rejected.');
     }
 
@@ -527,7 +548,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('success', 'TEV certification saved.');
     }
 
@@ -560,8 +581,11 @@ class TevController extends Controller
         // Check if user is the employee who owns this TEV (for HRIS users, check session)
         $isOwner = false;
         if ($tev->employee) {
-            $isOwner = ($tev->employee->user_id === $user->id) ||
-                       ($tev->employee_id === session('hris_employee_id'));
+$hrisId  = session('hris_employee_id');
+$emp     = \App\SharedKernel\Models\Employee::where('employee_no', $hrisId)
+               ->orWhere('id', $hrisId)->first();
+$isOwner = ($tev->employee->user_id === $user->id) ||
+           ($emp && $tev->employee_id === $emp->id);
         }
         $isStaff = $user->hasAnyRole(['hrmo']);
 
@@ -610,7 +634,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('success', 'Liquidation filed successfully. Awaiting cashier approval.');
     }
 
@@ -655,7 +679,7 @@ class TevController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return redirect()->route('tev.show', $tev->id)
+        return redirect()->route('tev.requests.show', $tev->id)
             ->with('success', 'Liquidation approved. TEV is now fully liquidated.');
     }
 

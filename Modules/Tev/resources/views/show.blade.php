@@ -397,11 +397,15 @@
                     </div>
                     <div class="detail-item">
                         <span class="label">Office Order</span>
-                        <span class="value">
-                            <a href="{{ route('tev.office-orders.show', $tev->office_order_id) }}" style="color:var(--navy);">
-                                {{ optional($tev->officeOrder)->office_order_no ?? '—' }}
-                            </a>
-                        </span>
+<span class="value">
+    @if ($tev->office_order_id && $tev->officeOrder)
+        <a href="{{ route('tev.office-orders.show', $tev->office_order_id) }}" style="color:var(--navy);">
+            {{ $tev->officeOrder->office_order_no }}
+        </a>
+    @else
+        —
+    @endif
+</span>
                     </div>
                     <div class="detail-item">
                         <span class="label">Employee</span>
