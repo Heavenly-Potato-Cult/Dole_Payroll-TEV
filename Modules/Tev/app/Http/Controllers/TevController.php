@@ -224,7 +224,7 @@ class TevController extends Controller
 
         // Use employee-specific view for employees, regular view for officers
         if ($isEmployee) {
-            return view('tev::my-requests', compact('liquidatedRequests', 'inProcessRequests', 'currentYear', 'isEmployee', 'activeTab'));
+            return view('tev::employee-requests', compact('liquidatedRequests', 'inProcessRequests', 'currentYear', 'isEmployee', 'activeTab'));
         }
 
         return view('tev::index', compact('liquidatedRequests', 'inProcessRequests', 'currentYear', 'isEmployee', 'activeTab'));

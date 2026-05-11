@@ -3,7 +3,6 @@
 namespace Modules\Tev\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Modules\Payroll\Http\Requests\StoreOfficeOrderRequest;  // ← stays in Payroll (shared)
 use App\SharedKernel\Models\Employee;
 use App\SharedKernel\Models\OfficeOrder;

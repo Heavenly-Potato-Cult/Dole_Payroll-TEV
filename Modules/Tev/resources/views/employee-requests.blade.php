@@ -1,4 +1,4 @@
-{{-- resources/views/tev/index.blade.php --}}
+{{-- resources/views/tev/employee-requests.blade.php --}}
 {{--
     Expects from TevController@index:
       $inProcessRequests  — paginated TevRequest (in-process)
@@ -127,33 +127,14 @@
     font-weight: 700;
     line-height: 1;
 }
-.tev-tab-btn.active .tev-tab-badge-process {
-    background: #FEF3C7;
-    color: #92400E;
-}
-.tev-tab-btn:not(.active) .tev-tab-badge-process {
-    background: var(--bg, #f1f5f9);
-    color: var(--text-mid, #64748b);
-}
-.tev-tab-btn.active .tev-tab-badge-liquidated {
-    background: #D1FAE5;
-    color: #065F46;
-}
-.tev-tab-btn:not(.active) .tev-tab-badge-liquidated {
-    background: var(--bg, #f1f5f9);
-    color: var(--text-mid, #64748b);
-}
-
-/* Tab icon colors */
 .tev-tab-icon-process  { color: #F59E0B; }
 .tev-tab-icon-liquidated { color: #10B981; }
 
 /* ─────────────────────────────────────────────────────
    TAB PANELS
 ───────────────────────────────────────────────────── */
-.tev-tab-panel { display: none !important; visibility: hidden !important; }
-.tev-tab-panel.active { display: block !important; visibility: visible !important; }
-
+.tev-tab-panel { display: none; }
+.tev-tab-panel.active { display: block; }
 
 /* ─────────────────────────────────────────────────────
    EXPANDABLE TABLE — mobile card pattern
@@ -163,12 +144,43 @@
 
 /* ── DESKTOP (≥ 769px) ── */
 @media (min-width: 769px) {
+    .sd-detail-row  { display: none !important; }
     .sd-table              { display: table; width: 100%; border-collapse: collapse; }
     .sd-table thead        { display: table-header-group; }
     .sd-table tbody        { display: table-row-group; }
     .sd-table tr           { display: table-row; }
     .sd-table th,
     .sd-table td           { display: table-cell; }
+    
+    /* Override global badge styles for TEV status indicators */
+    .badge-warning {
+        background-color: #F59E0B !important;
+        color: white !important;
+    }
+    .badge-info {
+        background-color: #3B82F6 !important;
+        color: white !important;
+    }
+    .badge-success {
+        background-color: #10B981 !important;
+        color: white !important;
+    }
+    .badge-primary {
+        background-color: #0F1B4C !important;
+        color: white !important;
+    }
+    .badge-danger {
+        background-color: #B71C1C !important;
+        color: white !important;
+    }
+    .badge-dark {
+        background-color: #343A40 !important;
+        color: white !important;
+    }
+    .badge-secondary {
+        background-color: #6C757D !important;
+        color: white !important;
+    }
     
     /* Override global table styles for this specific table */
     .sd-table {
@@ -223,7 +235,7 @@
     .filter-form .ff-group,
     .filter-form .ff-btns    { width: 100%; }
     .filter-form .ff-btns    { height: auto; }
-    .filter-form .ff-btns .btn { flex: 1; }
+    .filter-form .ff-btns .btn { flex: 1; justify-content: center; text-align: center; }
 
     .tev-tabs { overflow-x: auto; }
     .tev-tab-btn { white-space: nowrap; padding: 10px 14px; font-size: 0.82rem; }
@@ -233,6 +245,7 @@
     .sd-table        { display: block; }
     .sd-table thead  { display: none; }
     .sd-table tbody  { display: block; }
+    .sd-table tr       { display: flex; }
 
     .sd-table tr.sd-main-row {
         display: flex;
@@ -245,7 +258,6 @@
         min-height: 64px;
     }
     .sd-table tr.sd-main-row:active { background: var(--bg); }
-
     .sd-table tr.sd-main-row td.col-track,
     .sd-table tr.sd-main-row td.col-dates,
     .sd-table tr.sd-main-row td.col-total,
@@ -397,35 +409,35 @@
     </div>
 </div>
 
-    {{-- ══════════════ IN-PROCESS PANEL ══════════════ --}}
-    <div class="tev-tab-panel active" id="tab-panel-process">
+{{-- ══════════════ IN-PROCESS PANEL ══════════════ --}}
+<div class="tev-tab-panel active" id="tab-panel-process">
 
-        {{-- Filter Card --}}
-        <div class="card" style="margin-bottom: 24px;">
-            <div style="padding: 20px;">
-                <form method="GET" action="{{ route('tev.requests.index') }}" class="filter-form">
-                    <input type="hidden" name="tab" value="process">
+    {{-- Filter Card --}}
+    <div class="card" style="margin-bottom: 24px;">
+        <div style="padding: 20px;">
+            <form method="GET" action="{{ route('tev.requests.index') }}" class="filter-form">
+                <input type="hidden" name="tab" value="process">
 
-                    <div class="ff-group" style="min-width:180px;">
-                        <label for="track_process">Track</label>
-                        <select name="track" id="track_process">
-                            <option value="">All Tracks</option>
-                            <option value="cash_advance"  {{ request('track') === 'cash_advance'  && request('tab','process') === 'process' ? 'selected' : '' }}>Cash Advance</option>
-                            <option value="reimbursement" {{ request('track') === 'reimbursement' && request('tab','process') === 'process' ? 'selected' : '' }}>Reimbursement</option>
-                        </select>
-                    </div>
+                <div class="ff-group" style="min-width:180px;">
+                    <label for="track_process">Track</label>
+                    <select name="track" id="track_process">
+                        <option value="">All Tracks</option>
+                        <option value="cash_advance"  {{ request('track') === 'cash_advance'  && request('tab','process') === 'process' ? 'selected' : '' }}>Cash Advance</option>
+                        <option value="reimbursement" {{ request('track') === 'reimbursement' && request('tab','process') === 'process' ? 'selected' : '' }}>Reimbursement</option>
+                    </select>
+                </div>
 
-                    <div class="ff-btns">
-                        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                        <a href="{{ route('tev.requests.index') }}?tab=process" class="btn btn-outline btn-sm">Reset</a>
-                    </div>
-                </form>
-            </div>
+                <div class="ff-btns">
+                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                    <a href="{{ route('tev.requests.index') }}?tab=process" class="btn btn-outline btn-sm">Reset</a>
+                </div>
+            </form>
         </div>
+    </div>
 
-        {{-- Table Card --}}
-        <div class="card" style="margin-bottom: 48px;">
-            <div class="table-wrap">
+    {{-- Table Card --}}
+    <div class="card" style="margin-bottom: 48px;">
+        <div class="table-wrap">
             <table class="sd-table">
                 <thead>
                     <tr>
@@ -447,14 +459,15 @@
                                 ? 'background:#E8F5E9; color:#1B5E20; border:1px solid #43A047;'
                                 : 'background:#E8EAF6; color:#1A237E; border:1px solid #3949AB;';
                             $statusClass = match ($tev->status) {
-                                'submitted'            => 'badge-pending',
-                                'hr_approved'          => 'badge-computed',
-                                'accountant_certified' => 'badge-computed',
-                                'rd_approved'          => 'badge-released',
-                                'cashier_released'     => 'badge-locked',
-                                'reimbursed'           => 'badge-locked',
-                                'rejected'             => 'badge-inactive',
-                                default                => 'badge-draft',
+                                'submitted'            => 'badge-warning',
+                                'hr_approved'          => 'badge-info',
+                                'accountant_certified' => 'badge-info',
+                                'rd_approved'          => 'badge-success',
+                                'cashier_released'     => 'badge-primary',
+                                'reimbursed'           => 'badge-primary',
+                                'rejected'             => 'badge-danger',
+                                'liquidated'           => 'badge-success',
+                                default                => 'badge-secondary',
                             };
                             $statusLabel = ucwords(str_replace('_', ' ', $tev->status));
                             $isOwner  = $emp && ($emp->user_id === auth()->id() || $emp->employee_id === session('hris_employee_id'));
@@ -539,7 +552,7 @@
                                 </div>
                                 <div class="sd-detail-actions">
                                     <a href="{{ route('tev.requests.show', $tev->id) }}"
-                                       class="btn btn-outline btn-sm">View</a>
+                                       class="btn btn-primary btn-sm">View</a>
                                     @if ($canSubmit)
                                         <form method="POST"
                                               action="{{ route('tev.requests.submit', $tev->id) }}"
@@ -563,45 +576,46 @@
                 </tbody>
             </table>
         </div>
+    </div>
 
-        {{-- Pagination --}}
-        @if ($inProcessRequests->hasPages())
-            <div style="padding: 16px 20px;">
-                {{ $inProcessRequests->appends(['tab' => 'process', 'track' => request('track')])->links() }}
-            </div>
-        @endif
-
-    </div>{{-- end #tab-panel-process --}}
-
-    {{-- ══════════════ LIQUIDATED PANEL ══════════════ --}}
-    <div class="tev-tab-panel" id="tab-panel-liquidated">
-
-        {{-- Filter Card --}}
-        <div class="card" style="margin-bottom: 24px;">
-            <div style="padding: 20px;">
-                <form method="GET" action="{{ route('tev.requests.index') }}" class="filter-form">
-                    <input type="hidden" name="tab" value="liquidated">
-
-                    <div class="ff-group" style="min-width:180px;">
-                        <label for="track_liquidated">Track</label>
-                        <select name="track" id="track_liquidated">
-                            <option value="">All Tracks</option>
-                            <option value="cash_advance"  {{ request('track') === 'cash_advance'  && request('tab') === 'liquidated' ? 'selected' : '' }}>Cash Advance</option>
-                            <option value="reimbursement" {{ request('track') === 'reimbursement' && request('tab') === 'liquidated' ? 'selected' : '' }}>Reimbursement</option>
-                        </select>
-                    </div>
-
-                    <div class="ff-btns">
-                        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                        <a href="{{ route('tev.requests.index') }}?tab=liquidated" class="btn btn-outline btn-sm">Reset</a>
-                    </div>
-                </form>
-            </div>
+    {{-- Pagination --}}
+    @if ($inProcessRequests->hasPages())
+        <div style="padding: 16px 20px;">
+            {{ $inProcessRequests->appends(['tab' => 'process', 'track' => request('track')])->links() }}
         </div>
+    @endif
 
-        {{-- Table Card --}}
-        <div class="card" style="margin-bottom: 48px;">
-            <div class="table-wrap">
+</div>{{-- end #tab-panel-process --}}
+
+{{-- ══════════════ LIQUIDATED PANEL ══════════════ --}}
+<div class="tev-tab-panel" id="tab-panel-liquidated">
+
+    {{-- Filter Card --}}
+    <div class="card" style="margin-bottom: 24px;">
+        <div style="padding: 20px;">
+            <form method="GET" action="{{ route('tev.requests.index') }}" class="filter-form">
+                <input type="hidden" name="tab" value="liquidated">
+
+                <div class="ff-group" style="min-width:180px;">
+                    <label for="track_liquidated">Track</label>
+                    <select name="track" id="track_liquidated">
+                        <option value="">All Tracks</option>
+                        <option value="cash_advance"  {{ request('track') === 'cash_advance'  && request('tab') === 'liquidated' ? 'selected' : '' }}>Cash Advance</option>
+                        <option value="reimbursement" {{ request('track') === 'reimbursement' && request('tab') === 'liquidated' ? 'selected' : '' }}>Reimbursement</option>
+                    </select>
+                </div>
+
+                <div class="ff-btns">
+                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                    <a href="{{ route('tev.requests.index') }}?tab=liquidated" class="btn btn-outline btn-sm">Reset</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- Table Card --}}
+    <div class="card" style="margin-bottom: 48px;">
+        <div class="table-wrap">
             <table class="sd-table">
                 <thead>
                     <tr>
@@ -615,7 +629,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                                        @forelse ($liquidatedRequests as $tev)
+                    @forelse ($liquidatedRequests as $tev)
                         @php
                             $emp = $tev->employee;
                             $trackLabel = $tev->track === 'cash_advance' ? 'Cash Advance' : 'Reimbursement';
@@ -719,17 +733,16 @@
                 </tbody>
             </table>
         </div>
+    </div>
 
-        {{-- Pagination --}}
-        @if ($liquidatedRequests->hasPages())
-            <div style="padding: 16px 20px;">
-                {{ $liquidatedRequests->appends(['tab' => 'liquidated', 'track' => request('track')])->links() }}
-            </div>
-        @endif
+    {{-- Pagination --}}
+    @if ($liquidatedRequests->hasPages())
+        <div style="padding: 16px 20px;">
+            {{ $liquidatedRequests->appends(['tab' => 'liquidated', 'track' => request('track')])->links() }}
+        </div>
+    @endif
 
-    </div>{{-- end #tab-panel-liquidated --}}
-
-</div>{{-- end .card --}}
+</div>{{-- end #tab-panel-liquidated --}}
 
 @endsection
 
@@ -737,8 +750,6 @@
 <script>
 /* ── Tab switching ── */
 function switchTab(tab) {
-    console.log('Switching to tab:', tab);
-    
     // Hide ALL panels first
     document.querySelectorAll('.tev-tab-panel').forEach(panel => {
         panel.classList.remove('active');
@@ -756,11 +767,6 @@ function switchTab(tab) {
         tabBtn.classList.add('active');
         tabPanel.classList.add('active');
         tabPanel.style.display = 'block';
-        console.log('Tab switched successfully to:', tab);
-        console.log('Panel element:', tabPanel);
-        console.log('Panel display style:', window.getComputedStyle(tabPanel).display);
-    } else {
-        console.error('Tab elements not found:', { tabBtn, tabPanel });
     }
 }
 
@@ -770,22 +776,5 @@ function switchTab(tab) {
     const tab = params.get('tab');
     if (tab === 'liquidated') switchTab('liquidated');
 })();
-
-/* ── Mobile expand/collapse ── */
-function toggleSdRow(mainRow) {
-    if (window.innerWidth > 768) return;
-
-    const id     = mainRow.dataset.id;
-    const detail = document.getElementById('sd-detail-' + id);
-    const isOpen = mainRow.classList.contains('open');
-
-    document.querySelectorAll('.sd-main-row.open').forEach(r => r.classList.remove('open'));
-    document.querySelectorAll('.sd-detail-row.open').forEach(r => r.classList.remove('open'));
-
-    if (!isOpen) {
-        mainRow.classList.add('open');
-        detail.classList.add('open');
-    }
-}
 </script>
 @endsection
