@@ -57,14 +57,21 @@ class SpecialPayrollController extends Controller
     /**
      * Show the form for creating a new pro-rated payroll entry.
      *
-     * Only active employees are listed — inactive or separated employees
-     * are not eligible for newly hired payroll processing.
+     * Only active employees with less than 6 months tenure are listed — 
+     * inactive or separated employees are not eligible for newly hired 
+     * payroll processing.
      */
     public function newHireCreate()
     {
         $this->authorizeRole(['payroll_officer', 'hrmo']);
 
+        $sixMonthsAgo = now()->subMonths(6);
+
         $employees = Employee::where('status', 'active')
+            ->where(function($query) use ($sixMonthsAgo) {
+                $query->where('hire_date', '>=', $sixMonthsAgo)
+                      ->orWhereNull('hire_date');
+            })
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get(['id', 'last_name', 'first_name', 'middle_name',
@@ -99,13 +106,15 @@ class SpecialPayrollController extends Controller
 
         $cutoffStart = Carbon::parse($request->cutoff_start);
         $effectivity = Carbon::parse($request->effectivity_date);
+        $payrollType = $request->payroll_type;
 
-        $title = 'Pro-Rated Payroll — '
+        $typeLabel = $payrollType === 'transferee' ? 'Transferee' : 'Newly Hired';
+        $title = 'Pro-Rated Payroll — ' . $typeLabel . ' — '
             . $employee->last_name . ', ' . $employee->first_name
             . ' (' . $effectivity->format('M d, Y') . ')';
 
         $batch = SpecialPayrollBatch::create([
-            'type'              => 'newly_hired',
+            'type'              => $payrollType,
             'title'             => $title,
             'year'              => $cutoffStart->year,
             'month'             => $cutoffStart->month,
@@ -124,9 +133,11 @@ class SpecialPayrollController extends Controller
         // Stash result in session to avoid re-computing on the redirect
         session(['newly_hired_result_' . $batch->id => $result]);
 
+        $action = 'Created ' . $typeLabel . ' Pro-Rated Payroll: ' . $employee->last_name . ', ' . $employee->first_name;
+        
         PayrollAuditLog::create([
             'user_id'    => Auth::id(),
-            'action'     => 'Created Newly Hired Pro-Rated Payroll: ' . $employee->last_name . ', ' . $employee->first_name,
+            'action'     => $action,
             'old_value'  => null,
             'new_value'  => 'draft',
             'ip_address' => $request->ip(),

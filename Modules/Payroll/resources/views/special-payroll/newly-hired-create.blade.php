@@ -58,8 +58,8 @@
 
 <div class="page-header">
     <div class="page-header-left">
-        <h1>Pro-Rated Payroll — Newly Hired / Transferee</h1>
-        <p>Compute pro-rated salary for an employee who started mid-period.</p>
+        <h1 id="pageTitle">Pro-Rated Payroll — Newly Hired / Transferee</h1>
+        <p id="pageDescription">Compute pro-rated salary for an employee who started mid-period.</p>
     </div>
     <a href="{{ route('special-payroll.newly-hired.index') }}" class="btn btn-outline btn-sm">
         ← Back to Records
@@ -86,6 +86,27 @@
         <div class="card-body">
             <form method="POST" action="{{ route('special-payroll.newly-hired.store') }}" id="newHireForm">
                 @csrf
+
+                {{-- Type Selection --}}
+                <div class="form-group">
+                    <label for="payroll_type">
+                        Payroll Type <span style="color:var(--red);">*</span>
+                    </label>
+                    <select name="payroll_type" id="payroll_type"
+                            class="{{ $errors->has('payroll_type') ? 'is-invalid' : '' }}"
+                            onchange="updateFormLabels()" required>
+                        <option value="">— Select Type —</option>
+                        <option value="newly_hired" {{ old('payroll_type') == 'newly_hired' ? 'selected' : '' }}>
+                            Newly Hired
+                        </option>
+                        <option value="transferee" {{ old('payroll_type') == 'transferee' ? 'selected' : '' }}>
+                            Transferee
+                        </option>
+                    </select>
+                    @error('payroll_type')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
 
                 {{-- Employee --}}
                 <div class="form-group">
@@ -115,7 +136,7 @@
 
                 {{-- Effectivity Date --}}
                 <div class="form-group">
-                    <label for="effectivity_date">
+                    <label for="effectivity_date" id="effectivityLabel">
                         Effectivity Date (First Day of Work) <span style="color:var(--red);">*</span>
                     </label>
                     <input type="date" id="effectivity_date" name="effectivity_date"
@@ -366,7 +387,29 @@ function updatePreview() {
     }
 }
 
+function updateFormLabels() {
+    const type = document.getElementById('payroll_type').value;
+    const pageTitle = document.getElementById('pageTitle');
+    const pageDescription = document.getElementById('pageDescription');
+    const effectivityLabel = document.getElementById('effectivityLabel');
+    
+    if (type === 'transferee') {
+        pageTitle.textContent = 'Pro-Rated Payroll — Transferee';
+        pageDescription.textContent = 'Compute pro-rated salary for an employee who transferred mid-period.';
+        effectivityLabel.innerHTML = 'Transfer Date (First Day in New Office) <span style="color:var(--red);">*</span>';
+    } else if (type === 'newly_hired') {
+        pageTitle.textContent = 'Pro-Rated Payroll — Newly Hired';
+        pageDescription.textContent = 'Compute pro-rated salary for an employee who started mid-period.';
+        effectivityLabel.innerHTML = 'Effectivity Date (First Day of Work) <span style="color:var(--red);">*</span>';
+    } else {
+        pageTitle.textContent = 'Pro-Rated Payroll — Newly Hired / Transferee';
+        pageDescription.textContent = 'Compute pro-rated salary for an employee who started mid-period.';
+        effectivityLabel.innerHTML = 'Effectivity Date (First Day of Work) <span style="color:var(--red);">*</span>';
+    }
+}
+
 // Init on page load in case old() repopulates fields
 updatePreview();
+updateFormLabels();
 </script>
 @endsection
