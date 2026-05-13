@@ -62,7 +62,7 @@
             <option value="2nd">2nd</option>
         </select>
     </div>
-    <div class="filter-group">
+    {{-- <div class="filter-group">
         <label>Status</label>
         <select id="filterStatus" class="filter-select">
             <option value="">All</option>
@@ -70,7 +70,7 @@
             <option value="locked">Locked</option>
             <option value="pending">Pending</option>
         </select>
-    </div>
+    </div> --}}
     <div class="filter-group filter-search">
         <label>Search</label>
         <input type="text" id="filterSearch" class="filter-input" placeholder="Period or amount...">
@@ -516,7 +516,6 @@ function setupEventListeners() {
     document.getElementById('filterYear').addEventListener('change', applyFilters);
     document.getElementById('filterMonth').addEventListener('change', applyFilters);
     document.getElementById('filterCutoff').addEventListener('change', applyFilters);
-    document.getElementById('filterStatus').addEventListener('change', applyFilters);
     document.getElementById('filterSearch').addEventListener('input', applyFilters);
     document.getElementById('clearFilters').addEventListener('click', clearFilters);
     document.getElementById('clearFiltersLink').addEventListener('click', clearFilters);
@@ -574,14 +573,12 @@ function applyFilters() {
     const year = document.getElementById('filterYear').value;
     const month = document.getElementById('filterMonth').value;
     const cutoff = document.getElementById('filterCutoff').value;
-    const status = document.getElementById('filterStatus').value;
     const search = document.getElementById('filterSearch').value.toLowerCase();
 
     filteredData = payslipsData.filter(p => {
         if (year && p.year !== parseInt(year)) return false;
         if (month && p.month !== parseInt(month)) return false;
         if (cutoff && p.cutoff !== cutoff) return false;
-        if (status && !p.status.toLowerCase().includes(status.toLowerCase())) return false;
         if (search) {
             const searchStr = `${p.year} ${p.monthName} ${p.gross} ${p.net}`.toLowerCase();
             if (!searchStr.includes(search)) return false;
@@ -627,7 +624,6 @@ function clearFilters(e) {
     document.getElementById('filterYear').value = '';
     document.getElementById('filterMonth').value = '';
     document.getElementById('filterCutoff').value = '';
-    document.getElementById('filterStatus').value = '';
     document.getElementById('filterSearch').value = '';
     sortColumn = null;
     sortDirection = 'asc';

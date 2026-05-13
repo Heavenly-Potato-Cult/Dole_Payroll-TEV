@@ -72,7 +72,7 @@ class PayrollController extends Controller
     // ═══════════════════════════════════════════════════════════════════
     //  My Payslip — Employee self-service
     //  Shows the logged-in employee's own entries from
-    //  released / locked batches only.
+    //  locked batches only.
     // ═══════════════════════════════════════════════════════════════════
 
     public function myPayslip(Request $request)
@@ -95,7 +95,7 @@ class PayrollController extends Controller
         }
 
         $entries = PayrollEntry::with(['batch'])
-            ->whereHas('batch', fn ($q) => $q->whereIn('status', ['released', 'locked']))
+            ->whereHas('batch', fn ($q) => $q->where('status', 'locked'))
             ->where('employee_id', $employeeId)
             ->orderByDesc('id')
             ->paginate(10)
