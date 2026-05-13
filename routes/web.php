@@ -198,23 +198,23 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/reports/mass',            [PayrollReportController::class, 'mass'])->name('reports.mass');
             Route::get('/reports/provident-fund',  [PayrollReportController::class, 'providentFund'])->name('reports.provident-fund');
             Route::get('/reports/btr-refund',      [PayrollReportController::class, 'btrRefund'])->name('reports.btr-refund');
-
-            // TEV PDF reports
-            Route::get('/reports/tev/{tevRequest}/itinerary',
-                       [TevReportController::class, 'tevItinerary'])->name('reports.tev-itinerary');
-            Route::get('/reports/tev/{tevRequest}/travel-completed',
-                       [TevReportController::class, 'tevTravelCompleted'])->name('reports.tev-travel-completed');
-            Route::get('/reports/tev/{tevRequest}/annex-a',
-                       [TevReportController::class, 'tevAnnexA'])->name('reports.tev-annex-a');
-            Route::get('/reports/tev/{tevRequest}/liquidation-dv',
-                       [TevReportController::class, 'tevLiquidationDv'])->name('reports.tev-liquidation-dv');
-
-            // TEV Register report + export
-            Route::get('/reports/tev-register/export',
-                       [TevReportController::class, 'tevRegisterExport'])->name('reports.tev-register.export');
-            Route::get('/reports/tev-register',
-                       [TevReportController::class, 'tevRegister'])->name('reports.tev-register');
         });
+
+    // ── TEV reports (HRMO, cashier, etc.) — not payroll_officer–only; access
+    //    is enforced in TevReportController (roles + traveler ownership).
+    Route::get('/reports/tev/{tevRequest}/itinerary',
+               [TevReportController::class, 'tevItinerary'])->name('reports.tev-itinerary');
+    Route::get('/reports/tev/{tevRequest}/travel-completed',
+               [TevReportController::class, 'tevTravelCompleted'])->name('reports.tev-travel-completed');
+    Route::get('/reports/tev/{tevRequest}/annex-a',
+               [TevReportController::class, 'tevAnnexA'])->name('reports.tev-annex-a');
+    Route::get('/reports/tev/{tevRequest}/liquidation-dv',
+               [TevReportController::class, 'tevLiquidationDv'])->name('reports.tev-liquidation-dv');
+
+    Route::get('/reports/tev-register/export',
+               [TevReportController::class, 'tevRegisterExport'])->name('reports.tev-register.export');
+    Route::get('/reports/tev-register',
+               [TevReportController::class, 'tevRegister'])->name('reports.tev-register');
 
     // ── Users ────────────────────────────────────────────────────
     Route::middleware(['role:super_admin'])

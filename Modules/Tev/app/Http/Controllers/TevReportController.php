@@ -22,14 +22,14 @@ class TevReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function tevItinerary(int $tevRequest)
     {
-        $this->authorizeRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'cashier', 'chief_admin_officer']);
-
         $tev = TevRequest::with([
             'itineraryLines',
             'employee.division',
             'officeOrder',
             'certification',
         ])->findOrFail($tevRequest);
+
+        $this->assertCanViewTevDocument($tev, ['hrmo', 'accountant', 'budget_officer', 'ard', 'cashier', 'chief_admin_officer']);
 
         return view('tev::reports.tev-itinerary', compact('tev'));
     }
@@ -40,14 +40,14 @@ class TevReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function tevTravelCompleted(int $tevRequest)
     {
-        $this->authorizeRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'cashier', 'chief_admin_officer']);
-
         $tev = TevRequest::with([
             'itineraryLines',
             'employee.division',
             'officeOrder',
             'certification',
         ])->findOrFail($tevRequest);
+
+        $this->assertCanViewTevDocument($tev, ['hrmo', 'accountant', 'budget_officer', 'ard', 'cashier', 'chief_admin_officer']);
 
         return view('tev::reports.tev-travel-completed', compact('tev'));
     }
@@ -58,14 +58,14 @@ class TevReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function tevAnnexA(int $tevRequest)
     {
-        $this->authorizeRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'cashier', 'chief_admin_officer']);
-
         $tev = TevRequest::with([
             'itineraryLines',
             'employee.division',
             'officeOrder',
             'certification',
         ])->findOrFail($tevRequest);
+
+        $this->assertCanViewTevDocument($tev, ['hrmo', 'accountant', 'budget_officer', 'ard', 'cashier', 'chief_admin_officer']);
 
         return view('tev::reports.tev-annex-a', compact('tev'));
     }
@@ -76,8 +76,6 @@ class TevReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function tevLiquidationDv(int $tevRequest)
     {
-        $this->authorizeRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'cashier', 'chief_admin_officer']);
-
         $tev = TevRequest::with([
             'itineraryLines',
             'employee.division',
@@ -85,6 +83,8 @@ class TevReportController extends Controller
             'certification',
             'approvalLogs' => fn($q) => $q->with('user')->orderBy('performed_at'),
         ])->findOrFail($tevRequest);
+
+        $this->assertCanViewTevDocument($tev, ['hrmo', 'accountant', 'budget_officer', 'ard', 'cashier', 'chief_admin_officer']);
 
         if ($tev->track !== 'cash_advance') {
             abort(404, 'Liquidation DV is only available for Cash Advance TEVs.');
@@ -185,5 +185,43 @@ class TevReportController extends Controller
         if (!$user->hasAnyRole($roles)) {
             abort(403);
         }
+    }
+
+    /**
+     * Officers may view any TEV document; the employee who owns the TEV may view
+     * their own (same rule as TevController@show).
+     */
+    private function assertCanViewTevDocument(TevRequest $tev, array $officerRoles): void
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        if ($user->hasRole('super_admin')) {
+            return;
+        }
+        if ($user->hasAnyRole($officerRoles)) {
+            return;
+        }
+        $employeeId = $this->resolveHrisEmployeeId();
+        if ($employeeId !== null && (int) $tev->employee_id === $employeeId) {
+            return;
+        }
+        abort(403, 'You are not authorized to view this document.');
+    }
+
+    private function resolveHrisEmployeeId(): ?int
+    {
+        $raw = session('hris_employee_id');
+
+        if (! $raw) {
+            return null;
+        }
+
+        if (is_numeric($raw)) {
+            return (int) $raw;
+        }
+
+        $employee = Employee::where('employee_no', $raw)->first();
+
+        return $employee?->id;
     }
 }
