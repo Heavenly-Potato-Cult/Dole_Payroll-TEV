@@ -580,6 +580,39 @@
                     <li><strong>Dedicated TEV Layout:</strong> Separate TEV layout (`layouts/tev.blade.php`) for better UI separation</li>
                 </ul>
 
+                <h2>Office Orders</h2>
+                <p><strong>Purpose:</strong> Authorization documents for official travel, required before creating TEV requests</p>
+                <p><strong>Flow:</strong></p>
+                <ol>
+                    <li>HRMO creates Office Order manually OR pulls from Employee API</li>
+                    <li>Office Order created in <code>draft</code> status (manual) or <code>approved</code> status (pulled from API)</li>
+                    <li>RD/ARD approves draft Office Orders → <code>approved</code></li>
+                    <li>HRMO creates TEV linked to approved Office Order</li>
+                    <li>Office Orders can be cancelled if no TEV requests are linked</li>
+                </ol>
+
+                <h3>Pull Office Orders from API</h3>
+                <p><strong>Feature:</strong> HRMO can pull approved Office Orders directly from the dummy HRIS Employee API to sync with the local system</p>
+                <p><strong>Access:</strong> Available to users with roles: <code>payroll_officer</code>, <code>hrmo</code>, <code>super_admin</code></p>
+                <p><strong>Process:</strong></p>
+                <ul>
+                    <li>HRMO clicks "Pull Office Orders" button on Office Orders index page</li>
+                    <li>System calls <code>HrisApiService@fetchOfficeOrders()</code> to fetch 164 approved orders from dummy HRIS Employee API</li>
+                    <li>API endpoint: <code>GET /office-orders</code> (returns { total: 164, data: [...] })</li>
+                    <li>System matches employees by <code>employee_no</code> (normalizes format from "EMP-0001" to "EMP001")</li>
+                    <li>Creates new Office Order records or updates existing ones based on <code>office_order_no</code></li>
+                    <li>All pulled orders are set to <code>approved</code> status with <code>approved_at</code> timestamp from API</li>
+                    <li>Progress bar shows sync status with real-time feedback</li>
+                    <li>System logs sync statistics: synced count, updated count, skipped count (employee not found)</li>
+                    <li>Returns JSON response with success/error message for AJAX handling</li>
+                </ul>
+                <p><strong>Error Handling:</strong></p>
+                <ul>
+                    <li>Orders are skipped if matching employee is not found in local system</li>
+                    <li>60-second timeout for API request</li>
+                    <li>JSON parsing errors handled gracefully with user-friendly error messages</li>
+                    <li>All sync operations logged for audit trail</li>
+                </ul>
 
                 <h2>Employee Management</h2>
                 <p><strong>Flow:</strong></p>
@@ -755,6 +788,11 @@
                         <td><code>/attendance</code></td>
                         <td>All attendance records</td>
                     </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td><code>/office-orders</code></td>
+                        <td>All approved Office Orders (164 orders, 2 per employee)</td>
+                    </tr>
                 </table>
 
                 <h3>Query Parameters</h3>
@@ -831,6 +869,35 @@
                     <li><code>undertime_minutes</code> - Total undertime minutes (integer)</li>
                 </ul>
                 <p><strong>Note for Official HRIS Integration:</strong> The official HRIS API should follow a similar data structure. The <code>AttendanceService@pullForBatch()</code> method expects attendance data in this format and maps it to the <code>attendance_snapshots</code> table.</p>
+
+                <h3>Office Order Data Format</h3>
+                <p>The dummy HRIS Employee API returns Office Order data in the following format:</p>
+                <pre><code>{
+  "office_order_no": "OO-2025-001-1",
+  "employee_no": "EMP-0001",
+  "purpose": "Attend regional planning workshop",
+  "destination": "Davao City",
+  "travel_type": "regional",
+  "travel_date_start": "2025-03-15",
+  "travel_date_end": "2025-03-17",
+  "status": "approved",
+  "approved_at": "2025-03-01T08:00:00.000Z",
+  "remarks": "Urgent"
+}</code></pre>
+                <p><strong>Field Descriptions:</strong></p>
+                <ul>
+                    <li><code>office_order_no</code> - Office Order identifier (format: OO-YYYY-{emp_id}-{order_num})</li>
+                    <li><code>employee_no</code> - Employee number (format: EMP-####)</li>
+                    <li><code>purpose</code> - Purpose of travel (e.g., "Attend regional planning workshop", "Participate in training seminar")</li>
+                    <li><code>destination</code> - Travel destination city</li>
+                    <li><code>travel_type</code> - Type of travel: "local", "regional", or "national"</li>
+                    <li><code>travel_date_start</code> - Travel start date (YYYY-MM-DD)</li>
+                    <li><code>travel_date_end</code> - Travel end date (YYYY-MM-DD)</li>
+                    <li><code>status</code> - Order status (always "approved" for pulled orders)</li>
+                    <li><code>approved_at</code> - Approval timestamp (ISO 8601 datetime)</li>
+                    <li><code>remarks</code> - Optional remarks (e.g., "Urgent", "Regular", "With funding") or null</li>
+                </ul>
+                <p><strong>Note for Official HRIS Integration:</strong> The official HRIS API should follow a similar data structure. The <code>OfficeOrderController@pullFromApi()</code> method expects office order data in this format and maps it to the <code>office_orders</code> table.</p>
             </section>
 
             <section id="business-processes" class="section">
