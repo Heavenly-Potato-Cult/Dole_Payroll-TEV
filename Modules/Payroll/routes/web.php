@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Payroll\Http\Controllers\DashboardController;
 use Modules\Payroll\Http\Controllers\PayrollController;
+use Modules\Payroll\Http\Controllers\SpecialPayrollController;
 
 /*
 |--------------------------------------------------------------------------
@@ -62,5 +63,54 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/{payroll}/payslips/generate',
                        [PayrollController::class, 'generatePayslips'])
                 ->name('payslips.generate');
+        });
+
+    // ── Special Payroll ─────────────────────────────────────────────
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getRoleGroup('payroll'))])
+        ->prefix('special-payroll')
+        ->name('special-payroll.')
+        ->group(function () {
+
+            // Newly Hired
+            Route::get('/newly-hired', [SpecialPayrollController::class, 'newHireIndex'])
+                ->name('newly-hired.index');
+            Route::get('/newly-hired/create', [SpecialPayrollController::class, 'newHireCreate'])
+                ->name('newly-hired.create');
+            Route::post('/newly-hired', [SpecialPayrollController::class, 'newHireStore'])
+                ->name('newly-hired.store');
+            Route::get('/newly-hired/{id}', [SpecialPayrollController::class, 'newHireShow'])
+                ->name('newly-hired.show');
+            Route::post('/newly-hired/{id}/approve', [SpecialPayrollController::class, 'newHireApprove'])
+                ->name('newly-hired.approve');
+            Route::delete('/newly-hired/{id}', [SpecialPayrollController::class, 'newHireDestroy'])
+                ->name('newly-hired.destroy');
+
+            // Salary Differential
+            Route::get('/differential', [SpecialPayrollController::class, 'differentialIndex'])
+                ->name('differential.index');
+            Route::get('/differential/create', [SpecialPayrollController::class, 'differentialCreate'])
+                ->name('differential.create');
+            Route::post('/differential', [SpecialPayrollController::class, 'differentialStore'])
+                ->name('differential.store');
+            Route::get('/differential/{id}', [SpecialPayrollController::class, 'differentialShow'])
+                ->name('differential.show');
+            Route::post('/differential/{id}/approve', [SpecialPayrollController::class, 'differentialApprove'])
+                ->name('differential.approve');
+            Route::delete('/differential/{id}', [SpecialPayrollController::class, 'differentialDestroy'])
+                ->name('differential.destroy');
+
+            // NOSI / NOSA
+            Route::get('/nosi-nosa', [SpecialPayrollController::class, 'nosiNosaIndex'])
+                ->name('nosi-nosa.index');
+            Route::get('/nosi-nosa/create', [SpecialPayrollController::class, 'nosiNosaCreate'])
+                ->name('nosi-nosa.create');
+            Route::post('/nosi-nosa', [SpecialPayrollController::class, 'nosiNosaStore'])
+                ->name('nosi-nosa.store');
+            Route::get('/nosi-nosa/{id}', [SpecialPayrollController::class, 'nosiNosaShow'])
+                ->name('nosi-nosa.show');
+            Route::post('/nosi-nosa/{id}/approve', [SpecialPayrollController::class, 'nosiNosaApprove'])
+                ->name('nosi-nosa.approve');
+            Route::delete('/nosi-nosa/{id}', [SpecialPayrollController::class, 'nosiNosaDestroy'])
+                ->name('nosi-nosa.destroy');
         });
 });
