@@ -451,7 +451,14 @@
                     if ($i < $activeStep) {
                         $stepClass = 'done';
                     } elseif ($i === $activeStep) {
-                        $stepClass = ($batch->status === 'released') ? 'locked' : 'active';
+                        // Mark as 'done' if current status matches this step's statuses
+                        if (in_array($batch->status, $step['statuses'])) {
+                            $stepClass = 'done';
+                        } elseif ($batch->status === 'released') {
+                            $stepClass = 'locked';
+                        } else {
+                            $stepClass = 'active';
+                        }
                     } else {
                         $stepClass = 'future';
                     }

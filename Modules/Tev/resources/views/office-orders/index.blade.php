@@ -235,7 +235,7 @@
         <h1>Office Orders</h1>
         <p>Manage travel authority documents for DOLE RO9 employees.</p>
     </div>
-    @if (auth()->user()->hasAnyRole(['payroll_officer', 'hrmo', 'super_admin']))
+    @if (auth()->user()->hasAnyRole(['hrmo', 'super_admin']))
         <form id="pullOfficeOrdersForm" method="POST" action="{{ route('tev.office-orders.pullFromApi') }}" style="display:inline;">
             @csrf
             <button type="submit" class="btn btn-primary" onclick="event.preventDefault(); pullOfficeOrders();">
