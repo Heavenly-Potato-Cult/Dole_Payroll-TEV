@@ -3,6 +3,7 @@
 namespace Modules\Payroll\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -16,24 +17,29 @@ class DeductionType extends Model
         'is_computed',
         'is_active',
         'notes',
+        // Enhancement #1 — override support for computed types
+        'override_amount',
+        'override_note',
     ];
 
     protected $casts = [
-        'is_computed' => 'boolean',
-        'is_active'   => 'boolean',
-        'display_order' => 'integer',
+        'is_computed'     => 'boolean',
+        'is_active'       => 'boolean',
+        'display_order'   => 'integer',
+        'override_amount' => 'decimal:2',
     ];
 
-    // ── Categories (keep your constants) ────────────────────────────────
-    const CAT_PAGIBIG   = 'pagibig';
+    // ── Category constants (kept for any code that still references them) ──
+    const CAT_PAGIBIG    = 'pagibig';
     const CAT_PHILHEALTH = 'philhealth';
-    const CAT_GSIS      = 'gsis';
-    const CAT_OTHER_GOV = 'other_gov';
-    const CAT_LOAN      = 'loan';
-    const CAT_CARESS    = 'caress';
-    const CAT_MISC      = 'misc';
+    const CAT_GSIS       = 'gsis';
+    const CAT_OTHER_GOV  = 'other_gov';
+    const CAT_LOAN       = 'loan';
+    const CAT_CARESS     = 'caress';
+    const CAT_MISC       = 'misc';
 
-    // ── Relationships ─────────────────────────────────────────────
+    // ── Relationships ─────────────────────────────────────────────────────
+
     public function enrollments(): HasMany
     {
         return $this->hasMany(EmployeeDeductionEnrollment::class);
@@ -44,36 +50,43 @@ class DeductionType extends Model
         return $this->hasMany(PayrollDeduction::class);
     }
 
-    // ── Scopes (keep both - yours and friend's) ────────────────────────────────────
-    public function scopeActive($query)
+    // ── Scopes ────────────────────────────────────────────────────────────
+
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
 
-    public function scopeOrdered($query)
+    public function scopeOrdered(Builder $query): Builder
     {
         return $query->orderBy('display_order');
     }
 
-    public function scopeComputed($query)
+    public function scopeComputed(Builder $query): Builder
     {
         return $query->where('is_computed', true);
     }
 
-    public function scopeManual($query)
+    public function scopeManual(Builder $query): Builder
     {
         return $query->where('is_computed', false);
     }
-    
-    // Add your friend's typed scope methods (they're the same, just typed)
-    // This helps with IDE autocomplete
-    public function scopeActiveTyped(Builder $query): Builder
+
+    // ── Enhancement #1 helpers ────────────────────────────────────────────
+
+    /**
+     * Returns true when a computed type has been manually overridden.
+     */
+    public function isOverridden(): bool
     {
-        return $query->where('is_active', true);
+        return $this->is_computed && $this->override_amount !== null;
     }
 
-    public function scopeOrderedTyped(Builder $query): Builder
+    /**
+     * Clears the override, restoring formula-based computation.
+     */
+    public function clearOverride(): void
     {
-        return $query->orderBy('display_order');
+        $this->update(['override_amount' => null, 'override_note' => null]);
     }
 }

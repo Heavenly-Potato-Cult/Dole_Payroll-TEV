@@ -631,8 +631,14 @@
                 <h1>Deduction Types</h1>
                 <p class="db-greeting-location">Manage all deduction and loan types used across payroll and employee enrollments.</p>
             </div>
-            <div class="dt-header-actions">
+            <div class="dt-header-actions" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                 <a href="{{ route('deduction-types.create') }}" class="btn btn-primary">+ New Deduction Type</a>
+                <a href="{{ route('deduction-categories.index') }}"
+                   style="display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 16px;border-radius:var(--radius);border:1.5px solid rgba(255,255,255,0.7);background:rgba(255,255,255,0.12);color:#fff;font-size:0.875rem;font-weight:600;text-decoration:none;transition:all 0.2s;font-family:var(--font);"
+                   onmouseover="this.style.background='rgba(255,255,255,0.25)';this.style.borderColor='#fff';"
+                   onmouseout="this.style.background='rgba(255,255,255,0.12)';this.style.borderColor='rgba(255,255,255,0.7)';">
+                    ⊞ Manage Categories
+                </a>
             </div>
         </div>
     </div>
@@ -743,19 +749,19 @@
                         <th style="width:110px;">Type</th>
                         <th style="width:80px;">Status</th>
                         <th class="dt-col-notes">Notes</th>
-                        <th style="width:100px;text-align:right;">Actions</th>
+                        <th style="width:130px;text-align:right;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($grouped[$catKey]->sortBy('display_order') as $type)
-                    <tr class="{{ $type->is_active ? '' : 'dt-inactive' }} {{ $type->is_computed ? 'dt-computed' : '' }}" 
-                        data-code="{{ strtolower($type->code) }}" 
-                        data-name="{{ strtolower($type->name) }}" 
-                        data-type="{{ $type->is_computed ? 'computed' : 'manual' }}" 
+                    <tr class="{{ $type->is_active ? '' : 'dt-inactive' }} {{ $type->is_computed ? 'dt-computed' : '' }}"
+                        data-code="{{ strtolower($type->code) }}"
+                        data-name="{{ strtolower($type->name) }}"
+                        data-type="{{ $type->is_computed ? 'computed' : 'manual' }}"
                         data-status="{{ $type->is_active ? 'active' : 'inactive' }}">
 
-                        {{-- Order --}}
-                        <td><span class="dt-order">{{ $type->display_order }}</span></td>
+                        {{-- Sequential number within this category --}}
+                        <td><span class="dt-order">{{ $loop->iteration }}</span></td>
 
                         {{-- Code (immutable) --}}
                         <td><span class="code-chip">{{ $type->code }}</span></td>
@@ -810,6 +816,22 @@
                                         {{ $type->is_active ? '⊘' : '✓' }}
                                     </button>
                                 </form>
+
+                                {{-- Delete — only shown for inactive types --}}
+                                @if (! $type->is_active)
+                                <form id="deleteForm-{{ $type->id }}" method="POST"
+                                      action="{{ route('deduction-types.destroy', $type) }}"
+                                      style="display:inline;">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="button"
+                                            class="btn-icon danger"
+                                            title="Delete permanently"
+                                            onclick="confirmDeleteDeductionType({{ $type->id }}, '{{ addslashes($type->name) }}')">
+                                        🗑
+                                    </button>
+                                </form>
+                                @endif
                             </div>
                         </td>
 
@@ -868,9 +890,9 @@ categories.forEach(cat => {
 function toggleCategory(categoryKey) {
     const content = document.getElementById(`category-${categoryKey}`);
     const toggle = document.querySelector(`[data-category="${categoryKey}"] .dt-category-toggle`);
-    
+
     categoryStates[categoryKey] = !categoryStates[categoryKey];
-    
+
     if (categoryStates[categoryKey]) {
         content.classList.remove('collapsed');
         toggle.classList.remove('collapsed');
@@ -888,9 +910,9 @@ function toggleAllCategories(expand) {
         const catKey = cat.dataset.category;
         const content = document.getElementById(`category-${catKey}`);
         const toggle = cat.querySelector('.dt-category-toggle');
-        
+
         categoryStates[catKey] = expand;
-        
+
         if (expand) {
             content.classList.remove('collapsed');
             toggle.classList.remove('collapsed');
@@ -907,7 +929,7 @@ function toggleAllCategories(expand) {
 function toggleLegend() {
     const legendBody = document.getElementById('legendBody');
     const toggleIcon = document.getElementById('legendToggleIcon');
-    
+
     if (legendBody.classList.contains('collapsed')) {
         legendBody.classList.remove('collapsed');
         toggleIcon.classList.remove('collapsed');
@@ -926,13 +948,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const content = document.getElementById(`category-${catKey}`);
         content.style.maxHeight = content.scrollHeight + 'px';
     });
-    
+
     // Initialize legend height
     const legendBody = document.getElementById('legendBody');
     if (legendBody) {
         legendBody.style.maxHeight = legendBody.scrollHeight + 'px';
     }
-    
+
     // Setup search and filter functionality
     setupSearchAndFilter();
 });
@@ -943,15 +965,15 @@ function setupSearchAndFilter() {
     const statusFilter = document.getElementById('statusFilter');
     const categoriesContainer = document.getElementById('categoriesContainer');
     const noResults = document.getElementById('noResults');
-    
+
     function applyFilters() {
         const searchTerm = searchInput.value.toLowerCase().trim();
         const typeValue = typeFilter.value;
         const statusValue = statusFilter.value;
-        
+
         let hasVisibleResults = false;
         let categoriesWithVisibleResults = new Set();
-        
+
         // Filter each row
         const rows = document.querySelectorAll('.dt-table tbody tr');
         rows.forEach(row => {
@@ -959,14 +981,14 @@ function setupSearchAndFilter() {
             const name = row.dataset.name || '';
             const type = row.dataset.type || '';
             const status = row.dataset.status || '';
-            
+
             const matchesSearch = !searchTerm || code.includes(searchTerm) || name.includes(searchTerm);
             const matchesType = !typeValue || type === typeValue;
             const matchesStatus = !statusValue || status === statusValue;
-            
+
             const isVisible = matchesSearch && matchesType && matchesStatus;
             row.style.display = isVisible ? '' : 'none';
-            
+
             if (isVisible) {
                 hasVisibleResults = true;
                 // Find which category this row belongs to
@@ -976,13 +998,13 @@ function setupSearchAndFilter() {
                 }
             }
         });
-        
+
         // Show/hide categories and expand those with results
         categories.forEach(cat => {
             const catKey = cat.dataset.category;
             const categoryRows = cat.querySelectorAll('.dt-table tbody tr');
             const hasVisibleRows = Array.from(categoryRows).some(row => row.style.display !== 'none');
-            
+
             if (hasVisibleRows) {
                 cat.style.display = '';
                 // Auto-expand category if it has visible results and search is active
@@ -1000,7 +1022,7 @@ function setupSearchAndFilter() {
                 }
             }
         });
-        
+
         // Show/hide no results message
         if (searchTerm || typeValue || statusValue) {
             categoriesContainer.style.display = hasVisibleResults ? '' : 'none';
@@ -1014,7 +1036,7 @@ function setupSearchAndFilter() {
             });
         }
     }
-    
+
     // Add event listeners
     searchInput.addEventListener('input', applyFilters);
     typeFilter.addEventListener('change', applyFilters);
@@ -1050,6 +1072,32 @@ function confirmToggleDeductionType(typeId, typeName, isActive) {
                 });
                 form.submit();
             }
+        }
+    });
+}
+
+function confirmDeleteDeductionType(typeId, typeName) {
+    Swal.fire({
+        title: 'Permanently Delete?',
+        html: `<div style="text-align:center;">
+            <div style="font-size:1.1rem;font-weight:600;color:#dc3545;margin-bottom:8px;">${typeName}</div>
+            <p style="color:#6b7280;font-size:0.9rem;">
+                This will <strong>permanently remove</strong> the record from the database.<br>
+                Only do this for test/unused entries with no payroll history.
+            </p>
+        </div>`,
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonText: '🗑 Delete Permanently',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6B7280',
+        reverseButtons: true,
+        focusCancel: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const form = document.getElementById('deleteForm-' + typeId);
+            if (form) form.submit();
         }
     });
 }

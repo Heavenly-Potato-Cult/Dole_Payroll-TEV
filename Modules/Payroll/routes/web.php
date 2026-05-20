@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\Route;
 use Modules\Payroll\Http\Controllers\DashboardController;
 use Modules\Payroll\Http\Controllers\PayrollController;
 use Modules\Payroll\Http\Controllers\SpecialPayrollController;
+use Modules\Payroll\Http\Controllers\DeductionCategoryController;
+use Modules\Payroll\Http\Controllers\DeductionTypeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -113,4 +115,32 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/nosi-nosa/{id}', [SpecialPayrollController::class, 'nosiNosaDestroy'])
                 ->name('nosi-nosa.destroy');
         });
+
+    // ── Deduction Types & Categories (Enhancements #1-4) ──────────────────
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getRoleGroup('payroll'))])
+        ->prefix('deduction-categories')
+        ->name('deduction-categories.')
+        ->group(function () {
+            Route::get('/', [DeductionCategoryController::class, 'index'])->name('index');
+            Route::get('/create', [DeductionCategoryController::class, 'create'])->name('create');
+            Route::post('/', [DeductionCategoryController::class, 'store'])->name('store');
+            Route::get('/{deductionCategory}/edit', [DeductionCategoryController::class, 'edit'])->name('edit');
+            Route::put('/{deductionCategory}', [DeductionCategoryController::class, 'update'])->name('update');
+            Route::patch('/{deductionCategory}/toggle', [DeductionCategoryController::class, 'toggle'])->name('toggle');
+            Route::delete('/{deductionCategory}', [DeductionCategoryController::class, 'destroy'])->name('destroy');
+        });
+
+Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getRoleGroup('payroll'))])
+    ->prefix('deduction-types')
+    ->name('deduction-types.')
+    ->group(function () {
+        Route::get('/', [DeductionTypeController::class, 'index'])->name('index');
+        Route::get('/create', [DeductionTypeController::class, 'create'])->name('create');
+        Route::post('/', [DeductionTypeController::class, 'store'])->name('store');
+        Route::get('/{deductionType}/edit', [DeductionTypeController::class, 'edit'])->name('edit');
+        Route::put('/{deductionType}', [DeductionTypeController::class, 'update'])->name('update');
+        Route::patch('/{deductionType}/toggle', [DeductionTypeController::class, 'toggle'])->name('toggle');
+        Route::delete('/{deductionType}', [DeductionTypeController::class, 'destroy'])->name('destroy');
+    });
+
 });
