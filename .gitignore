@@ -32,7 +32,6 @@ rclone.conf
 HRIS/node_modules/
 
 # Laravel Modules
-modules_statuses.json
 bootstrap/cache/*.php
 Modules/*/node_modules/
 Modules/*/public/
