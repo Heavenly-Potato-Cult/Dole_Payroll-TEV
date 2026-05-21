@@ -1,9 +1,20 @@
 # Dole Payroll System — Comprehensive Gap Analysis Report
 
-**Prepared:** April 9, 2026  
+**Prepared:** April 9, 2026 · **Last reviewed:** May 2026  
 **System:** DOLE Regional Office 9 — Payroll Management System  
-**Stack:** Laravel 11 · PHP 8.2 · Spatie Permission · DomPDF · Maatwebsite Excel · Spatie Backup  
-**Purpose:** Document all incomplete, stub, or structurally missing components and provide a prioritized implementation roadmap for future development.
+**Stack:** Laravel 11 · PHP 8.2 · Spatie Permission · DomPDF · Maatwebsite Excel · Laravel Modules (Payroll, Tev)  
+**Purpose:** Document incomplete, stub, or missing components and provide a prioritized implementation roadmap.
+
+### Current development workflow (May 2026)
+
+| In use | Notes |
+|--------|--------|
+| **XAMPP** + `php artisan serve` | Primary local runtime |
+| **`pull-from-gdrive.bat`** / **`push-to-gdrive.bat`** | Team database sync via rclone |
+| **`get-rclone.bat`** | One-time rclone download |
+| **`TEAM-SETUP.md`**, **`README.md`**, this file | Active documentation |
+
+**Removed from repo (no longer documented):** Docker (`docker-compose.yaml`, `Dockerfile`, `start.sh`, `initial_start.bat`, `.env.docker`), `setup-xampp.bat`, `restore-data.bat`, `gdrive-upload.bat`, `gdrive-download.bat`, `gdrive-list.bat`, `phpunit.xml`, and auxiliary markdown guides (`README-SETUP.md`, `commands.md`, etc.).
 
 ---
 
@@ -28,12 +39,13 @@
 The system follows a standard Laravel MVC architecture with a service layer:
 
 ```
-Routes (web.php)
-  └── Controllers (app/Http/Controllers/)
-        ├── FormRequests (app/Http/Requests/)     — Input validation
-        ├── Resources    (app/Http/Resources/)    — API output shaping
-        └── Services     (app/Services/)          — Business logic
-              └── Models (app/Models/)            — Eloquent ORM
+routes/web.php
+  └── Modules/Payroll/     — PayrollController, PayrollReportController, …
+  └── Modules/Tev/         — TevController, TevReportController, …
+  └── app/                 — AuthController, SharedKernel services/models
+        ├── FormRequests
+        ├── Services (module + SharedKernel)
+        └── Eloquent models
 ```
 
 ### Modules Present
@@ -50,7 +62,7 @@ Routes (web.php)
 | Special Payroll | `SpecialPayrollController` | `NewlyHiredPayrollService`, `SalaryDifferentialService` | ✅ Complete |
 | TEV | `TevController`, `TevItineraryController` | `TevComputationService` | ✅ Complete |
 | Office Orders | `OfficeOrderController` | — | ✅ Complete |
-| Reports | `ReportController` | `ReportService` | ❌ Critically incomplete |
+| Reports | `PayrollReportController`, `TevReportController` | `ReportService` (stub) | ⚠️ Largely implemented; shared `ReportService` still empty |
 | Users | `UserController` | — | ✅ Complete |
 | HRIS Integration | — | `HrisApiService`, `AttendanceService` | ❌ Stubbed/mocked |
 
@@ -64,7 +76,7 @@ Routes (web.php)
 
 | # | Gap | Tier | Impact | Type | Blocks |
 |---|---|:---:|:---:|---|---|
-| G-01 | `ReportController` missing 16 methods | 1 | **10/10** | Runtime Fatal | Nothing (self-contained) |
+| G-01 | ~~`ReportController` missing 16 methods~~ | 1 | **—** | **Resolved** | Reports modularized |
 | G-02 | HRIS Attendance not integrated | 1 | **9/10** | Business Logic | G-03 |
 | G-03 | YTD Gross = 0 → WHT miscalculated | 1 | **9/10** | Business Logic | — |
 | G-04 | 7 Government Export classes empty | 2 | **8/10** | Compliance | — |
@@ -88,62 +100,18 @@ These gaps cause **immediate runtime failures or produce structurally incorrect 
 
 ---
 
-### G-01 · Missing 16 `ReportController` Methods
+### G-01 · ~~Missing `ReportController` methods~~ — **RESOLVED (May 2026)**
 
-**Impact: 10/10** | **Type: Runtime Fatal Error**
+**Original impact: 10/10** | **Status: Closed**
 
-#### Description
+Payroll and TEV reports were moved into module controllers:
 
-`routes/web.php` defines 16 named routes pointing to `ReportController` methods that **do not exist** in the controller file. Accessing any of these URLs produces a PHP `BadMethodCallException` and a 500 Internal Server Error.
+- `Modules/Payroll/Http/Controllers/PayrollReportController.php` — GSIS, HDMF, remittances, payroll register, etc.
+- `Modules/Tev/Http/Controllers/TevReportController.php` — TEV itinerary, travel completed, Annex A, liquidation DV, TEV register
 
-#### Affected Routes and Missing Methods
+Routes are registered in `routes/web.php`. The legacy monolithic `ReportController` gap no longer applies.
 
-| Route Name | URL | Missing Method |
-|---|---|---|
-| `reports.index` | `GET /reports` | `index()` |
-| `reports.payroll-register` | `GET /reports/payroll-register` | `payrollRegister()` |
-| `reports.payslip` | `GET /reports/payslip` | `payslip()` |
-| `reports.gsis-summary` | `GET /reports/gsis-summary` | `gsisSummary()` |
-| `reports.gsis-detailed` | `GET /reports/gsis-detailed` | `gsisDetailed()` |
-| `reports.hdmf-p1` | `GET /reports/hdmf-p1` | `hdmfP1()` |
-| `reports.hdmf-p2` | `GET /reports/hdmf-p2` | `hdmfP2()` |
-| `reports.hdmf-mpl` | `GET /reports/hdmf-mpl` | `hdmfMpl()` |
-| `reports.hdmf-cal` | `GET /reports/hdmf-cal` | `hdmfCal()` |
-| `reports.hdmf-housing` | `GET /reports/hdmf-housing` | `hdmfHousing()` |
-| `reports.caress-union` | `GET /reports/caress-union` | `caressUnion()` |
-| `reports.caress-mortuary` | `GET /reports/caress-mortuary` | `caressMortuary()` |
-| `reports.lbp-loan` | `GET /reports/lbp-loan` | `lbpLoan()` |
-| `reports.mass` | `GET /reports/mass` | `mass()` |
-| `reports.provident-fund` | `GET /reports/provident-fund` | `providentFund()` |
-| `reports.btr-refund` | `GET /reports/btr-refund` | `btrRefund()` |
-
-#### Affected Files
-
-- `app/Http/Controllers/ReportController.php` — missing all 16 methods
-- `routes/web.php` — lines 214–229 reference non-existent methods
-- `resources/views/reports/` — 10 of the related views are also stub TODOs
-
-#### Root Cause
-
-The `ReportController` was only partially built — only TEV-related report methods were implemented. All standard payroll reports (`payrollRegister`, `gsisSummary`, etc.) were deferred to a future phase and never scheduled.
-
-#### Consequence
-
-- Any user navigating to `/reports` or any sub-report page receives an unhandled 500 error
-- The entire reporting module is non-functional
-- Navigation links pointing to these routes will always fail
-
-#### Implementation Path
-
-1. Add each missing method to `ReportController.php`
-2. Each method should: authorize role → query relevant data → pass to a blade view
-3. Implement the corresponding blade views in `resources/views/reports/`
-4. Where Excel exports are needed, implement the corresponding Export class (see G-04)
-5. Move shared data-fetching logic into `ReportService` (see G-11)
-
-#### Estimated Effort
-
-Medium–Large. Each report requires data query + blade design. Standard tabular reports (GSIS, HDMF, LBP) follow a predictable pattern; effort is mostly in blade/PDF layout.
+**Remaining related work:** **G-11** (`ReportService` still empty), **G-04** (verify all export classes return real data), **G-07** (stub blade views if any remain under module `resources/views/reports/`).
 
 ---
 
@@ -319,7 +287,7 @@ tests/
   Unit/ExampleTest.php      — asserts true === true
 ```
 
-PHPUnit 10.5 and Mockery are listed in `composer.json` `require-dev`. Scribe (API documentation generator) is also present. The toolchain is ready — only the tests are missing.
+PHPUnit 10.5 and Mockery are listed in `composer.json` `require-dev`. The project root `phpunit.xml` was removed; re-add with `php artisan test` / a new `phpunit.xml` when starting automated tests. Scribe is present for API docs. The toolchain is available — domain tests are still missing.
 
 #### What Has No Test Coverage
 
@@ -709,10 +677,8 @@ G-02 (HRIS Attendance)
   └── blocks → G-03 (YTD/WHT accuracy)
                (attendance data needed to compute YTD correctly)
 
-G-01 (ReportController methods)
-  ├── blocks → G-07 (Report Views)    [views are pointless without controller methods]
-  └── relates → G-04 (Export Classes) [exports called from controller methods]
-               G-11 (ReportService)  [service called by controller methods]
+G-01 (ReportController) — RESOLVED
+  └── relates → G-07 (Report Views), G-04 (Exports), G-11 (ReportService)
 
 G-06 (Policies)
   └── relates → G-15 (Middleware)    [both address the same authorization concern]
@@ -724,7 +690,7 @@ G-12 (Repository Layer)
 **Recommended Resolution Order Based on Dependencies:**
 
 ```
-Phase 1:  G-01 → G-09 → G-10           (unblock the app, fix critical crashes)
+Phase 1:  G-09 → G-10                  (UI feedback + validation; G-01 done)
 Phase 2:  G-02 → G-03                  (fix payroll computation accuracy)
 Phase 3:  G-04 → G-07 → G-11           (complete the reports module)
 Phase 4:  G-06 → G-15                  (formalize authorization)
@@ -740,7 +706,7 @@ Phase 6:  G-08 → G-14 → G-12           (payslip views, API hygiene, architec
 
 **Goal:** Eliminate all 500 errors and restore basic UI feedback.
 
-- [ ] **G-01** — Add all 16 missing `ReportController` methods (can be placeholder views initially)
+- [x] **G-01** — Reports modularized (`PayrollReportController`, `TevReportController`)
 - [ ] **G-09** — Implement `<x-alert>`, `<x-status-badge>`, and `<x-approval-timeline>` components
 - [ ] **G-10** — Add validation rules to `ApprovePayrollRequest` and `StoreSpecialPayrollRequest`
 
@@ -768,7 +734,7 @@ Phase 6:  G-08 → G-14 → G-12           (payslip views, API hygiene, architec
 - [ ] **G-04** — Implement all 7 Export classes (GSIS, HDMF variants)
 - [ ] **G-07** — Implement all 10 stub report blade views
 - [ ] **G-08** — Implement `payroll/payslip.blade.php` and `payroll/detail.blade.php`
-- [ ] **G-01** — Wire newly implemented views/exports into the completed controller methods
+- [ ] Verify all report URLs and exports end-to-end under module controllers
 
 **Success Criteria:** All report URLs return a rendered page or file download. GSIS and HDMF exports produce populated Excel files.
 

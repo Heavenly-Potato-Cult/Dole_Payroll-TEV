@@ -346,49 +346,38 @@
 
             <section id="local-setup" class="section">
                 <h1>Local Setup</h1>
-                <p>The project supports two setup methods: XAMPP (recommended for Windows) and Docker (edge case for PCs without PHP).</p>
+                <p>Local development uses <strong>XAMPP</strong> (MySQL) and <strong>Laravel</strong> (<code>php artisan serve</code>). See <code>TEAM-SETUP.md</code> for the full onboarding guide.</p>
 
-                <h2>XAMPP Setup (Recommended)</h2>
-                <div class="callout-note">
-                    <strong>Note:</strong> An automated setup script is available: <code>setup-xampp.bat</code>
-                </div>
-
+                <h2>XAMPP Setup</h2>
                 <ol>
                     <li>Install XAMPP from <a href="https://www.apachefriends.org/" target="_blank">apachefriends.org</a></li>
-                    <li>Start Apache and MySQL services in XAMPP Control Panel</li>
-                    <li>Clone the repository</li>
-                    <li>Run <code>setup-xampp.bat</code> (this auto-detects XAMPP, creates database, runs migrations, imports data)</li>
-                    <li>Or manually:
-                        <ul>
-                            <li>Copy <code>.env.example</code> to <code>.env</code></li>
-                            <li>Run <code>php artisan key:generate</code></li>
-                            <li>Configure database in <code>.env</code> (XAMPP defaults: DB_HOST=127.0.0.1, DB_USERNAME=root, DB_PASSWORD=)</li>
-                            <li>Run <code>php artisan migrate</code></li>
-                            <li>Run <code>php artisan db:seed</code></li>
-                        </ul>
-                    </li>
-                    <li>Start the server: <code>php artisan serve</code></li>
-                    <li>Access at <code>http://localhost:8000</code></li>
+                    <li>Start Apache and MySQL in the XAMPP Control Panel</li>
+                    <li>Clone the repository and run <code>composer install</code></li>
+                    <li>Copy <code>.env.example</code> to <code>.env</code> and run <code>php artisan key:generate</code></li>
+                    <li>Configure database in <code>.env</code> (defaults: <code>DB_HOST=127.0.0.1</code>, <code>DB_USERNAME=root</code>, <code>DB_PASSWORD=</code>, <code>DB_DATABASE=dole_payroll</code>)</li>
+                    <li>Load the database (see <strong>Google Drive sync</strong> below, or create <code>dole_payroll</code> and import <code>dole_payroll.sql</code> manually)</li>
+                    <li>Run <code>php artisan migrate</code> if the schema is ahead of the SQL dump</li>
+                    <li>Start the app: <code>php artisan serve</code> → <code>http://localhost:8000</code></li>
                 </ol>
 
-                <h2>Docker Setup (Edge Case)</h2>
-                <div class="callout-warning">
-                    <strong>Warning:</strong> Docker is provided as an edge case for PCs that cannot install PHP locally. Use XAMPP setup if possible.
+                <h2>Google Drive database sync (team workflow)</h2>
+                <div class="callout-note">
+                    <strong>Active scripts:</strong> <code>get-rclone.bat</code> (one-time), <code>pull-from-gdrive.bat</code>, <code>push-to-gdrive.bat</code>
                 </div>
-
                 <ol>
-                    <li>Install Docker Desktop and ensure it's running</li>
-                    <li>Clone the repository</li>
-                    <li>Run <code>.\initial_start.bat</code> (Windows) or <code>docker compose up</code></li>
-                    <li>Access at <code>http://localhost:8000</code></li>
-                    <li>Adminer available at <code>http://localhost:8080</code> for database management</li>
+                    <li>Run <code>.\get-rclone.bat</code> once to download <code>rclone.exe</code> (gitignored)</li>
+                    <li>Configure: <code>rclone config</code> — remote name <code>gdrive</code></li>
+                    <li><strong>Pull</strong> latest team DB: <code>.\pull-from-gdrive.bat</code> (Drive → <code>dole_payroll.sql</code> → XAMPP MySQL)</li>
+                    <li><strong>Push</strong> your DB: <code>.\push-to-gdrive.bat</code> (XAMPP → <code>dole_payroll.sql</code> → Drive)</li>
                 </ol>
+                <p>Legacy per-step scripts (<code>gdrive-upload.bat</code>, <code>gdrive-download.bat</code>, <code>gdrive-list.bat</code>) and Docker tooling have been removed from the repository.</p>
 
                 <h2>Common Pitfalls</h2>
                 <ul>
-                    <li><strong>XAMPP Path Detection:</strong> The setup script looks for XAMPP in common paths (C:\xampp, D:\xampp, C:\Program Files\xampp). If installed elsewhere, manual setup is required.</li>
-                    <li><strong>Database Creation:</strong> The <code>dole_payroll</code> database must exist before running migrations. The setup script handles this automatically.</li>
-                    <li><strong>.env Configuration:</strong> Ensure <code>SESSION_DRIVER=database</code>, <code>CACHE_STORE=database</code>, and <code>QUEUE_CONNECTION=database</code> are set for proper operation.</li>
+                    <li><strong>XAMPP path:</strong> Push/pull scripts expect MySQL at <code>C:\xampp\mysql\bin\</code>. Adjust paths if XAMPP is installed elsewhere.</li>
+                    <li><strong>Database:</strong> The <code>dole_payroll</code> database must exist before migrations; <code>pull-from-gdrive.bat</code> recreates it automatically.</li>
+                    <li><strong>.env:</strong> Use <code>SESSION_DRIVER=database</code>, <code>CACHE_STORE=database</code>, and <code>QUEUE_CONNECTION=database</code>.</li>
+                    <li><strong>rclone:</strong> Push/pull fails if <code>rclone.exe</code> is missing or the <code>gdrive</code> remote is not configured.</li>
                 </ul>
             </section>
 
@@ -434,22 +423,15 @@
                 <h1>Folder Structure</h1>
                 <p>Standard Laravel structure with these notable additions:</p>
 
-                <h3>app/Http/Controllers/</h3>
-                <p>18 controllers handling web requests. Key controllers:</p>
+                <h3>Modules (Laravel Modules)</h3>
+                <p>Enabled in <code>modules_statuses.json</code>: <strong>Payroll</strong>, <strong>Tev</strong>. Key controllers:</p>
                 <ul>
-                    <li><code>AuthController</code> — Login/logout</li>
-                    <li><code>DashboardController</code> — Main dashboard</li>
-                    <li><code>EmployeeController</code> — Employee CRUD</li>
-                    <li><code>PayrollController</code> — Payroll batch management, computation</li>
-                    <li><code>PayrollEntryController</code> — Individual payroll entry management</li>
-                    <li><code>SpecialPayrollController</code> — Special payroll types</li>
-                    <li><code>TevController</code> — TEV management</li>
-                    <li><code>TevItineraryController</code> — TEV itinerary lines</li>
-                    <li><code>OfficeOrderController</code> — Office order management</li>
-                    <li><code>ReportController</code> — <span class="badge badge-red">16 missing methods</span></li>
-                    <li><code>UserController</code> — User management, role assignment (dual role system)</li>
-                    <li><code>DeductionTypeController</code> — Deduction type CMS (new)</li>
-                    <li><code>SignatoryController</code> — Signatory management (new)</li>
+                    <li><code>Modules/Payroll/.../PayrollController</code> — Payroll batches, computation, my payslip</li>
+                    <li><code>Modules/Payroll/.../PayrollReportController</code> — GSIS, HDMF, remittances, payroll register</li>
+                    <li><code>Modules/Payroll/.../EmployeeController</code>, <code>SpecialPayrollController</code>, etc.</li>
+                    <li><code>Modules/Tev/.../TevController</code>, <code>TevItineraryController</code>, <code>OfficeOrderController</code></li>
+                    <li><code>Modules/Tev/.../TevReportController</code> — TEV printable reports and register</li>
+                    <li><code>app/Http/Controllers/AuthController</code> — Login, logout, HRIS SSO</li>
                 </ul>
 
                 <h3>app/Traits/</h3>
@@ -470,8 +452,8 @@
                     <li><code>TevPolicy</code> — <span class="badge badge-red">Empty stub</span></li>
                 </ul>
 
-                <h3>app/Exports/</h3>
-                <p>Excel export classes for government remittances (GSIS, HDMF, PHIC, SSS, LBP, CARESS, MASS, Provident Fund, BTR, TEV Register)</p>
+                <h3>Modules/Payroll/app/Exports/</h3>
+                <p>Excel export classes for government remittances (GSIS, HDMF, PHIC, SSS, LBP, CARESS, MASS, Provident Fund, BTR) and TEV register</p>
 
                 <h3>app/Models/</h3>
                 <p>21 Eloquent models including:</p>
@@ -494,11 +476,17 @@
 
                 <h3>Root-level scripts</h3>
                 <ul>
-                    <li><code>setup-xampp.bat</code> — Automated XAMPP setup</li>
-                    <li><code>initial_start.bat</code> — Docker initialization</li>
-                    <li><code>start.sh</code> — Docker startup script for Linux/Mac</li>
-                    <li><code>backup-data.bat</code> / <code>restore-data.bat</code> — Database backup/restore</li>
-                    <li><code>gdrive-*.bat</code> — Google Drive integration scripts (prepared but not configured)</li>
+                    <li><code>get-rclone.bat</code> — Download <code>rclone.exe</code> (one-time)</li>
+                    <li><code>pull-from-gdrive.bat</code> — Google Drive → project SQL → XAMPP MySQL</li>
+                    <li><code>push-to-gdrive.bat</code> — XAMPP MySQL → project SQL → Google Drive</li>
+                </ul>
+
+                <h3>Documentation (markdown)</h3>
+                <ul>
+                    <li><code>README.md</code> — Project overview</li>
+                    <li><code>TEAM-SETUP.md</code> — Developer onboarding and GDrive workflow</li>
+                    <li><code>SYSTEM-GAP-ANALYSIS.md</code> — Gap analysis and roadmap</li>
+                    <li><code>docs.html</code> — This reference (static HTML)</li>
                 </ul>
 
             </section>
@@ -537,6 +525,7 @@
                     <li>Payslip views have been enhanced with better formatting and layout</li>
                     <li><strong>Redesigned My Payslip Page:</strong> New UI with filtering options by month/year, improved responsive design</li>
                     <li><strong>Employee-Specific Access:</strong> Employees can only access their own payslips through proper session management</li>
+                    <li><strong>Locked batches only:</strong> My Payslip lists entries from payroll batches with status <code>locked</code> only</li>
                 </ul>
 
                 <h2>Special Payroll</h2>
@@ -1049,9 +1038,9 @@
                 </ol>
 
                 <h2>Backups</h2>
-                <p>Spatie Laravel Backup is configured. Use:</p>
+                <p>Spatie Laravel Backup is available via:</p>
                 <pre><code>php artisan backup:run</code></pre>
-                <p>Backup scripts (<code>backup-data.bat</code>, <code>restore-data.bat</code>) are available for Windows environments using Google Drive integration (not yet configured).</p>
+                <p>For team development on Windows, use <code>push-to-gdrive.bat</code> / <code>pull-from-gdrive.bat</code> to share <code>dole_payroll.sql</code> via Google Drive (see <code>TEAM-SETUP.md</code>).</p>
             </section>
 
             <section id="known-issues" class="section">
@@ -1110,11 +1099,10 @@
 
                 <h2>Additional Documentation</h2>
                 <ul>
-                    <li><code>README.md</code> - Comprehensive project overview and setup instructions</li>
-                    <li><code>ARCHITECTURE_ANALYSIS.md</code> - Detailed system architecture analysis</li>
-                    <li><code>README-SETUP.md</code> - Detailed XAMPP setup and troubleshooting</li>
-                    <li><code>TEAM-SETUP.md</code> - Team collaboration and Google Drive setup</li>
-                    <li><code>SYSTEM-GAP-ANALYSIS.md</code> - Complete gap analysis and implementation roadmap</li>
+                    <li><code>README.md</code> — Project overview and setup summary</li>
+                    <li><code>TEAM-SETUP.md</code> — XAMPP, <code>.env</code>, and Google Drive push/pull</li>
+                    <li><code>SYSTEM-GAP-ANALYSIS.md</code> — Gap analysis and implementation roadmap</li>
+                    <li><code>docs.html</code> — This technical reference (open in a browser)</li>
                 </ul>
             </section>
         </main>
