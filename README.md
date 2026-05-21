@@ -1,457 +1,240 @@
 # DOLE Payroll System
 
-A comprehensive payroll management system for **DOLE Regional Office 9**, built with Laravel 11. This system handles regular payroll computation, special payroll processing, travel expense vouchers (TEV), government remittance reports, and employee management with role-based access control.
+Payroll management for **DOLE Regional Office 9** — regular payroll, special payroll, travel expense vouchers (TEV), government remittance reports, and employee management with role-based access control.
+
+**Stack:** Laravel 11 · PHP 8.2 · MySQL · Spatie Permission · DomPDF · Maatwebsite Excel
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
 - [Installation](#installation)
-  - [Docker Setup](#docker-setup)
-  - [XAMPP Setup](#xampp-setup)
-- [HRIS Integration](#hris-integration)
-- [Database Management](#database-management)
-- [User Roles & Permissions](#user-roles--permissions)
-- [Known Issues & Gaps](#known-issues--gaps)
-- [Project Structure](#project-structure)
+- [Database sync (Google Drive)](#database-sync-google-drive)
+- [HRIS integration](#hris-integration)
+- [User roles](#user-roles)
+- [Known issues](#known-issues)
+- [Project structure](#project-structure)
 - [Documentation](#documentation)
 
 ---
 
-## ✨ Features
+## Features
 
-### Core Modules
+### Payroll
 
-- **Employee Management**
-  - Employee records with salary grade and step increments
-  - Division/department management
-  - Employee promotion history tracking
-  - Deduction enrollment (GSIS, PhilHealth, Pag-IBIG, loans, etc.)
+- Payroll batch creation, attendance pull, and computation
+- Workflow: Draft → Computed → Pending Accountant → Pending RD → Released → **Locked**
+- Payslips (PDF), payroll register, GSIS/HDMF and other remittance reports
+- Employee deductions (GSIS, PhilHealth, Pag-IBIG, loans, union dues, etc.)
 
-- **Payroll Processing**
-  - Regular payroll batch creation and computation
-  - Automated deduction calculations (government contributions, loans, union dues)
-  - Withholding tax computation based on BIR TRAIN Law
-  - Payroll workflow: Draft → Computed → Pending Accountant → Certified → Approved → Locked
-  - Individual payslip generation (PDF)
+### Special payroll
 
-- **Special Payroll**
-  - Newly hired payroll (prorated salary)
-  - Salary differential processing
-  - NOSI/NOSA (Not on Station/Not on Account) processing
+- Newly hired (prorated)
+- Salary differential
+- NOSI/NOSA
 
-- **Travel Expense Voucher (TEV)**
-  - TEV request creation and approval workflow
-  - Itinerary planning and per-diem computation
-  - Liquidation submission and approval
-  - TEV report generation (Itinerary, Travel Completed, Annex-A)
+### TEV (Travel & Expense Voucher)
 
-- **Government Remittance Reports**
-  - GSIS detailed and summary reports
-  - Pag-IBIG (HDMF) remittance reports (P1, P2, MPL, CAL, Housing)
-  - PhilHealth CSV export
-  - SSS voluntary contribution reports
-  - LBP loan amortization
-  - CARESS union dues and mortuary contributions
-  - BTR refund reports
+- Request workflow, itinerary, liquidation
+- Printable reports (Appendix A, travel completed, Annex A, liquidation DV)
 
-- **Office Orders**
-  - Office order creation and approval
-  - Integration with TEV system
+### Other
 
-- **User Management**
-  - Role-based access control (7 roles)
-  - User role assignment and activation
-  - Signatory management per role
+- Employees, divisions, office orders
+- User and signatory management
+- HRIS SSO (JWT) for employees
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
-### Backend
-- **Framework**: Laravel 11 (PHP 8.2)
-- **Database**: MySQL
-- **Authentication**: Laravel Sanctum + JWT (for HRIS SSO)
-- **Authorization**: Spatie Laravel Permission
-
-### Key Packages
-- `barryvdh/laravel-dompdf` - PDF generation
-- `maatwebsite/excel` - Excel exports
-- `spatie/laravel-backup` - Database backups
-- `spatie/laravel-permission` - Role-based permissions
-- `livewire/livewire` - Dynamic UI components
-- `firebase/php-jwt` - JWT token handling
-- `knuckleswtf/scribe` - API documentation
-
-### Frontend
-- Blade templates with Tailwind CSS
-- Livewire for interactive components
+| Layer | Technology |
+|-------|------------|
+| Backend | Laravel 11, PHP 8.2 |
+| Database | MySQL (XAMPP locally) |
+| Auth | Session + Sanctum; HRIS JWT SSO |
+| Authorization | Spatie Laravel Permission |
+| PDF / Excel | DomPDF, Maatwebsite Excel |
+| Modules | `nwidart/laravel-modules` — **Payroll**, **Tev** |
 
 ---
 
-## 🏗 Architecture
+## Architecture
 
-The system follows a standard Laravel MVC architecture with a service layer:
+Modular Laravel app:
 
 ```
-Routes (web.php)
-  └── Controllers (app/Http/Controllers/)
-        ├── FormRequests (app/Http/Requests/)     — Input validation
-        ├── Resources    (app/Http/Resources/)    — API output shaping
-        └── Services     (app/Services/)          — Business logic
-              └── Models (app/Models/)            — Eloquent ORM
+routes/web.php
+  └── Modules/Payroll/   — payroll, employees, reports, special payroll
+  └── Modules/Tev/       — TEV, office orders
+  └── app/               — auth, shared kernel, HRIS bridge
 ```
 
-### Key Services
-- `PayrollComputationService` - Core payroll calculation logic
-- `DeductionService` - Government contribution and loan computations
-- `TevComputationService` - TEV per-diem and expense calculations
-- `SalaryDifferentialService` - Salary differential processing
-- `NewlyHiredPayrollService` - Prorated payroll for new hires
-- `AttendanceService` - HRIS attendance integration
-- `HrisApiService` - External HRIS API client
-- `ReportService` - Report data aggregation (stub - needs implementation)
+Business logic lives in **Services** under each module (e.g. `PayrollComputationService`, `TevComputationService`, `DeductionService`).
+
+Enabled modules: `modules_statuses.json` (`Payroll`, `Tev`).
 
 ---
 
-## 📦 Installation
+## Installation
 
-### Docker Setup (Recommended for isolated environment)
+**Supported local setup:** XAMPP + Composer + `php artisan serve`.  
+Docker and legacy setup scripts have been removed from the repo.
 
-**Requirements:**
-- Docker Desktop (Windows, macOS, or Linux)
-- Docker Desktop must be running before starting the system
+### Requirements
 
-**Quick Start:**
-
-```powershell
-# Clone the repository
-git clone <repository-url>
-cd Dole_Payroll
-
-# Initial setup (Windows)
-.\initial_start.bat
-```
-
-This script will:
-- Build and start Docker containers
-- Install PHP dependencies
-- Generate application key
-- Run database migrations
-- Start the Laravel development server
-
-**Subsequent starts:**
-```powershell
-docker compose up
-```
-
-The application will be available at `http://localhost:8000`
-
----
-
-### XAMPP Setup (Alternative for local development)
-
-**Requirements:**
-- XAMPP installed and running
-- PHP 8.2+
+- XAMPP (or MySQL 8 + PHP 8.2)
 - Composer
+- Git
 
-**Quick Start:**
+### Steps
 
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd Dole_Payroll
-
-# Install dependencies
 composer install
-npm install
-
-# Automated XAMPP setup (Windows)
-.\setup-xampp.bat
+cp .env.example .env
+php artisan key:generate
 ```
 
-This script will:
-- Auto-detect XAMPP installation
-- Start Apache and MySQL services
-- Create the `dole_payroll` database
-- Run Laravel migrations
-- Import initial data from `dole_payroll.sql` (if available)
+Configure `.env` for MySQL:
 
-**Manual Setup (if automation fails):**
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=dole_payroll
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+**Database:** use [`pull-from-gdrive.bat`](#database-sync-google-drive) (team dump) or create `dole_payroll` and import `dole_payroll.sql` manually, then:
 
 ```bash
-# Copy environment file
-cp .env.example .env
-
-# Generate app key
-php artisan key:generate
-
-# Configure .env for XAMPP
-# DB_CONNECTION=mysql
-# DB_HOST=127.0.0.1
-# DB_PORT=3306
-# DB_DATABASE=dole_payroll
-# DB_USERNAME=root
-# DB_PASSWORD=
-
-# Create database in phpMyAdmin
-# CREATE DATABASE dole_payroll;
-
-# Run migrations
-php artisan migrate
-
-# Start Laravel
+php artisan migrate   # if schema is ahead of the dump
 php artisan serve
 ```
 
-Access at: `http://localhost:8000`
+App URL: **http://localhost:8000**
+
+Full onboarding: **[`TEAM-SETUP.md`](TEAM-SETUP.md)**
 
 ---
 
-## 🔗 HRIS Integration
+## Database sync (Google Drive)
 
-The system integrates with an external HRIS (Human Resource Information System) for:
-- Employee Single Sign-On (SSO) via JWT tokens
-- Attendance data for payroll computation
-- Employee data synchronization
+Team database sharing uses **rclone** and two scripts in the project root:
 
-### HRIS Simulation Server (Development)
+| Script | Purpose |
+|--------|---------|
+| `get-rclone.bat` | One-time download of `rclone.exe` |
+| `pull-from-gdrive.bat` | Drive → `dole_payroll.sql` → XAMPP MySQL |
+| `push-to-gdrive.bat` | XAMPP MySQL → `dole_payroll.sql` → Drive |
 
-A simulation HRIS server is included in the `HRIS/` directory for development:
+`dole_payroll.sql` and `rclone.exe` are gitignored.
 
-```bash
-cd HRIS
-npm install
-npm start
-```
-
-The HRIS server runs on `http://localhost:3001`
-
-**Features:**
-- Employee login with Employee ID (EMP001-EMP082) and password (pass123)
-- JWT token generation for SSO
-- Navigation links to Payroll and TEV systems
-- Dummy data for 82 employees with attendance records
-
-**JWT Configuration:**
-- Secret: `dole-hris-payroll-shared-secret-2024`
-- Expiration: 1 hour
-- Issuer: `hris-system`
-- Audience: `payroll-system`
-
-**Laravel Integration:**
-- Payroll: `http://localhost:8000/hris-auth?token={jwt}`
-- TEV: `http://localhost:8000/tev-hris-auth?token={jwt}`
+One-time rclone config: see **TEAM-SETUP.md**.
 
 ---
 
-## 💾 Database Management
+## HRIS integration
 
-### Google Drive Integration
+- Employee SSO via JWT (`/hris-auth`, `/tev-hris-auth`)
+- Attendance API for payroll computation (integration may still be stubbed — see gap analysis)
 
-The project includes scripts for database backup and sharing via Google Drive using rclone:
-
-**Setup (one-time per team member):**
-```bash
-# Download rclone
-.\get-rclone.bat
-
-# Configure rclone
-rclone config
-# Follow prompts: name=gdrive, storage=18, scope=1, auto config=y
-```
-
-**Usage:**
-```bash
-# Pull latest database from Google Drive
-.\pull-from-gdrive.bat
-
-# Push database to Google Drive
-.\push-to-gdrive.bat
-
-# List Google Drive backups
-.\gdrive-list.bat
-
-# Download specific backup
-.\gdrive-download.bat <file-id>
-```
-
-**Scheduled Backup:**
-```bash
-gdrive-backup.bat
-# Can be set up in Windows Task Scheduler for automated backups
-```
-
-### Local Backup/Restore
-
-```bash
-# Backup database
-.\backup-data.bat
-
-# Restore database
-.\restore-data.bat
-```
+**Local HRIS simulator:** `HRIS/` (Node.js, port 3001). See `HRIS/README.md` if present.
 
 ---
 
-## 👥 User Roles & Permissions
+## User roles
 
-The system uses role-based access control with the following roles:
+| Role | Typical access |
+|------|----------------|
+| `payroll_officer` | Payroll, employees, reports |
+| `hrmo` | Employees, payroll review, TEV |
+| `accountant` | Certify payroll, TEV, reports |
+| `ard` | Approve payroll / TEV |
+| `chief_admin_officer` | Approvals, reports |
+| `cashier` | Release, liquidation |
+| `budget_officer` | Office orders, TEV |
+| `super_admin` | Full access |
 
-| Role | Description |
-|------|-------------|
-| `payroll_officer` | Full payroll management, employee records, deduction types |
-| `hrmo` | Employee management, payroll review, TEV approval |
-| `accountant` | Payroll certification, TEV approval, reports |
-| `ard` (Assistant Regional Director) | Payroll approval, TEV approval |
-| `chief_admin_officer` | High-level approvals, reports |
-| `cashier` | Payroll processing, TEV liquidation approval |
-| `budget_officer` | Office order approval, TEV approval |
-| `super_admin` | Full system access, user management |
-
-**Role Groups:**
-- **Payroll Group**: payroll_officer, hrmo, accountant, ard, chief_admin_officer, cashier, budget_officer
-- **Special Payroll Group**: payroll_officer, hrmo, accountant, ard, chief_admin_officer
-- **TEV Group**: All roles (for viewing and submitting requests)
-- **TEV Approval Group**: hrmo, accountant, budget_officer, ard, cashier, chief_admin_officer
+Employees (HRIS login) use **My Payslip** and **My TEV** with limited scope.
 
 ---
 
-## ⚠️ Known Issues & Gaps
+## Known issues
 
-A comprehensive gap analysis has been documented in [`SYSTEM-GAP-ANALYSIS.md`](SYSTEM-GAP-ANALYSIS.md). Key critical gaps include:
+See **[`SYSTEM-GAP-ANALYSIS.md`](SYSTEM-GAP-ANALYSIS.md)** for the full backlog (G-01–G-15).
 
-### Critical Issues (Tier 1)
-- **G-01**: `ReportController` missing 16 methods - causes 500 errors on report pages
-- **G-02**: HRIS attendance integration stubbed - all payroll shows zero attendance deductions
-- **G-03**: YTD gross not tracked - withholding tax under-computed in later periods
+**Highlights:**
 
-### High Impact (Tier 2)
-- **G-04**: 7 government export classes empty - cannot generate official remittance reports
-- **G-05**: Zero automated test suite - no regression safety net
-- **G-06**: `EmployeePolicy` and `TevPolicy` empty - authorization not formalized
-
-### Medium Impact (Tier 3)
-- **G-07**: 10 standard report views are stubs
-- **G-08**: Payslip and detail views are stubs
-- **G-09**: 3 UI components (alert, status-badge, approval-timeline) are empty
-- **G-10**: FormRequest validation rules missing for approval and special payroll
-
-See [`SYSTEM-GAP-ANALYSIS.md`](SYSTEM-GAP-ANALYSIS.md) for complete details, implementation roadmap, and risk register.
+| ID | Topic | Status |
+|----|--------|--------|
+| G-01 | Missing `ReportController` methods | **Resolved** — reports in `PayrollReportController` / `TevReportController` |
+| G-02 | HRIS attendance stubbed | Open |
+| G-03 | YTD gross / withholding tax | Open |
+| G-04–G-15 | Exports, tests, policies, UI stubs, architecture | See gap doc |
 
 ---
 
-## 📁 Project Structure
+## Project structure
 
 ```
 Dole_Payroll/
-├── app/
-│   ├── Http/
-│   │   ├── Controllers/         # All controllers (18 controllers)
-│   │   ├── Requests/            # Form request validation
-│   │   ├── Middleware/          # Custom middleware (JWT, role checks)
-│   │   └── Resources/           # API resource transformers
-│   ├── Models/                  # Eloquent models (21 models)
-│   ├── Services/                # Business logic layer (9 services)
-│   ├── Policies/                # Authorization policies
-│   ├── Exports/                 # Excel export classes (15 exports)
-│   └── Traits/                  # Reusable traits
-├── database/
-│   ├── migrations/              # Database migrations
-│   ├── seeders/                 # Database seeders
-│   └── factories/               # Model factories for testing
-├── resources/
-│   ├── views/                   # Blade templates
-│   │   ├── components/          # Reusable Blade components
-│   │   ├── layouts/             # Main layout templates
-│   │   ├── auth/                # Authentication views
-│   │   ├── dashboard/           # Dashboard views
-│   │   ├── employees/           # Employee management views
-│   │   ├── payroll/             # Payroll views
-│   │   ├── tev/                 # TEV views
-│   │   ├── reports/             # Report views
-│   │   └── payslip/             # Payslip PDF templates
-│   └── lang/                    # Language files
-├── routes/
-│   ├── web.php                  # Web routes
-│   └── api.php                  # API routes
-├── HRIS/                        # HRIS simulation server (Node.js)
-│   ├── server.js
-│   ├── config.js
-│   └── package.json
-├── config/                      # Configuration files
-├── public/                      # Public assets
-├── storage/                     # Application storage
-├── tests/                       # Test files (minimal coverage)
-├── .env.example                 # Environment template
-├── composer.json                # PHP dependencies
-├── package.json                 # Node dependencies
-├── docker-compose.yaml          # Docker configuration
-├── Dockerfile                   # Docker image definition
-├── setup-xampp.bat              # XAMPP automated setup
-├── initial_start.bat            # Docker initial setup
-├── pull-from-gdrive.bat         # Google Drive pull script
-├── push-to-gdrive.bat           # Google Drive push script
-├── README.md                    # This file
-├── README-SETUP.md              # Detailed XAMPP setup guide
-├── TEAM-SETUP.md                # Team collaboration setup
-└── SYSTEM-GAP-ANALYSIS.md       # Comprehensive gap analysis
+├── app/                    # Auth, SharedKernel, policies
+├── Modules/
+│   ├── Payroll/            # Payroll module (controllers, views, exports)
+│   └── Tev/                # TEV module
+├── database/               # Migrations, seeders
+├── routes/web.php          # Main routes + report routes
+├── HRIS/                   # Optional HRIS simulator
+├── public/                 # Web root
+├── .env.example
+├── composer.json
+├── modules_statuses.json
+├── get-rclone.bat
+├── pull-from-gdrive.bat
+├── push-to-gdrive.bat
+├── README.md               # This file
+├── TEAM-SETUP.md           # Developer onboarding
+└── SYSTEM-GAP-ANALYSIS.md  # Gap analysis & roadmap
 ```
 
 ---
 
-## 📚 Documentation
+## Documentation
 
-- [`README-SETUP.md`](README-SETUP.md) - Detailed XAMPP setup and troubleshooting
-- [`TEAM-SETUP.md`](TEAM-SETUP.md) - Team collaboration and Google Drive setup
-- [`SYSTEM-GAP-ANALYSIS.md`](SYSTEM-GAP-ANALYSIS.md) - Complete gap analysis and implementation roadmap
-- [`HRIS/README.md`](HRIS/README.md) - HRIS simulation server documentation
+| File | Purpose |
+|------|---------|
+| [`TEAM-SETUP.md`](TEAM-SETUP.md) | Clone, `.env`, XAMPP, Google Drive push/pull |
+| [`SYSTEM-GAP-ANALYSIS.md`](SYSTEM-GAP-ANALYSIS.md) | Technical gaps and phased roadmap |
+| [`docs.html`](docs.html) | Static HTML reference (optional) |
 
 ---
 
-## 🚀 Quick Start Commands
+## Common commands
 
 ```bash
-# Docker
-docker compose up
-docker compose down
-
-# XAMPP
 php artisan serve
-
-# Database
 php artisan migrate
-php artisan migrate:fresh --seed
-
-# Cache
-php artisan cache:clear
 php artisan config:clear
+php artisan cache:clear
 php artisan view:clear
+```
 
-# Testing
-php artisan test
-
-# Code quality
-./vendor/bin/pint
-php artisan ide-helper:generate
+```powershell
+.\pull-from-gdrive.bat
+.\push-to-gdrive.bat
 ```
 
 ---
 
-## 📝 License
+## License
 
-This project is proprietary software for DOLE Regional Office 9.
+Proprietary — DOLE Regional Office 9.
 
----
-
-## 👨‍💻 Development Team
-
-DOLE Regional Office 9 - Payroll Management System
-
----
-
-**Last Updated**: April 2026
+**Last updated:** May 2026
