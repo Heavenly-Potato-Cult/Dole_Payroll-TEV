@@ -226,21 +226,21 @@
     // ── Permissions ──
     // No canSubmit: TEVs are auto-submitted on creation, manual submit removed.
     $canReject = (
-        ($tev->status === 'submitted'            && auth()->user()->hasAnyRole(['accountant'])) ||
-        ($tev->status === 'accountant_certified' && auth()->user()->hasAnyRole(['ard', 'chief_admin_officer'])) ||
-        ($tev->status === 'rd_approved'          && auth()->user()->hasAnyRole(['cashier']))
+        ($tev->status === 'submitted'            && auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CERTIFY->value)) ||
+        ($tev->status === 'accountant_certified' && auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_APPROVE->value)) ||
+        ($tev->status === 'rd_approved'          && auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_DISBURSE->value))
     );
     $canCertify = in_array($tev->status, ['rd_approved','cashier_released','reimbursed','liquidation_filed','liquidated'])
-               && auth()->user()->hasAnyRole(['hrmo','accountant']);
+               && auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CERTIFY->value);
 
     $canFileLiquidation    = $tev->track === 'cash_advance'
                           && $tev->status === 'cashier_released'
                           && (
                                 ($tev->employee && $tev->employee->user_id === auth()->id())
-                                || auth()->user()->hasAnyRole(['hrmo'])
+                                || auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CREATE->value)
                              );
     $canApproveLiquidation = $tev->status === 'liquidation_filed'
-                          && auth()->user()->hasAnyRole(['cashier']);
+                          && auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_DISBURSE->value);
 
     $showBalanceWidget = $tev->track === 'cash_advance'
                       && in_array($tev->status, ['cashier_released','liquidation_filed','liquidated']);
@@ -303,80 +303,86 @@
     $lastMeta = $lastLog ? "Last action by {$lastWho} · {$lastWhen}" : null;
 
     // ── HRMO ──────────────────────────────────────────────────────────────
-    if ($u->hasAnyRole(['hrmo'])) {
-        $ab = match ($tev->status) {
-            // No 'draft' case — TEVs go straight to submitted on creation
-            'submitted'            => ['ab-waiting', '📬', 'Submitted — awaiting Accountant certification.',
-                                       'No further action needed from HR. The accountant will review and certify this TEV for ' . optional($emp)->last_name . '.', $lastMeta],
-            'accountant_certified' => ['ab-waiting', '🔍', 'Accountant certified — awaiting RD/ARD approval.',
-                                       'The TEV is moving through the approval chain. No HR action needed at this stage.', $lastMeta],
-            'rd_approved'          => ['ab-waiting', '✅', 'RD approved — awaiting cashier release.',
-                                       $tev->track === 'cash_advance'
-                                           ? 'The cashier will release the cash advance. No HR action needed.'
-                                           : 'The cashier will process the reimbursement. No HR action needed.',
-                                       $lastMeta],
-            'cashier_released'     => ['ab-warning', '💵', 'Cash advance released — liquidation required.',
-                                       'The cash advance of ₱' . number_format($tev->cash_advance_amount ?? $tev->grand_total, 2) . ' has been released to ' . optional($emp)->last_name . '. File the liquidation once travel is complete.',
-                                       $lastMeta],
-            'reimbursed'           => ['ab-success', '🎉', 'Reimbursement processed — TEV closed.',
-                                       'This TEV has been fully reimbursed and closed. No further action needed.', $lastMeta],
-            'liquidation_filed'    => ['ab-waiting', '🗂',  'Liquidation filed — awaiting cashier approval.',
-                                       'The liquidation has been filed. The cashier will review and finalise.', $lastMeta],
-            'liquidated'           => ['ab-success', '🎉', 'Fully liquidated — process complete.',
-                                       'This TEV has been reconciled and closed.', $lastMeta],
-            'rejected'             => ['ab-danger',  '🚫', 'TEV rejected.',
-                                       $lastLog?->remarks ? 'Reason: ' . $lastLog->remarks : 'See the Approval Timeline below for details.',
-                                       $lastMeta],
-            default                => null,
-        };
-    }
+    @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_VIEW->value)
+    @php
+    $ab = match ($tev->status) {
+        // No 'draft' case — TEVs go straight to submitted on creation
+        'submitted'            => ['ab-waiting', '📬', 'Submitted — awaiting Accountant certification.',
+                                   'No further action needed from HR. The accountant will review and certify this TEV for ' . optional($emp)->last_name . '.', $lastMeta],
+        'accountant_certified' => ['ab-waiting', '🔍', 'Accountant certified — awaiting RD/ARD approval.',
+                                   'The TEV is moving through the approval chain. No HR action needed at this stage.', $lastMeta],
+        'rd_approved'          => ['ab-waiting', '✅', 'RD approved — awaiting cashier release.',
+                                   $tev->track === 'cash_advance'
+                                       ? 'The cashier will release the cash advance. No HR action needed.'
+                                       : 'The cashier will process the reimbursement. No HR action needed.',
+                                   $lastMeta],
+        'cashier_released'     => ['ab-warning', '💵', 'Cash advance released — liquidation required.',
+                                   'The cash advance of ₱' . number_format($tev->cash_advance_amount ?? $tev->grand_total, 2) . ' has been released to ' . optional($emp)->last_name . '. File the liquidation once travel is complete.',
+                                   $lastMeta],
+        'reimbursed'           => ['ab-success', '🎉', 'Reimbursement processed — TEV closed.',
+                                   'This TEV has been fully reimbursed and closed. No further action needed.', $lastMeta],
+        'liquidation_filed'    => ['ab-waiting', '🗂',  'Liquidation filed — awaiting cashier approval.',
+                                   'The liquidation has been filed. The cashier will review and finalise.', $lastMeta],
+        'liquidated'           => ['ab-success', '🎉', 'Fully liquidated — process complete.',
+                                   'This TEV has been reconciled and closed.', $lastMeta],
+        'rejected'             => ['ab-danger',  '🚫', 'TEV rejected.',
+                                   $lastLog?->remarks ? 'Reason: ' . $lastLog->remarks : 'See the Approval Timeline below for details.',
+                                   $lastMeta],
+        default                => null,
+    };
+    @endphp
+    @elsecan(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CERTIFY->value)
+    @php
     // ── Accountant ────────────────────────────────────────────────────────
-    elseif ($u->hasAnyRole(['accountant'])) {
-        $ab = match ($tev->status) {
-            'submitted'            => ['ab-action',  '📋', 'Action required — certify or reject this TEV.',
-                                       'Review the itinerary and totals below, then use the panel on the right.', null],
-            'accountant_certified' => ['ab-success', '✅', 'You have certified this TEV.',
-                                       'Waiting for RD/ARD approval. Nothing further needed from you.', $lastMeta],
-            default                => ['ab-waiting', 'ℹ️', 'No action required at this step.',
-                                       'This TEV is at a stage outside your review scope.', null],
-        };
-    }
+    $ab = match ($tev->status) {
+        'submitted'            => ['ab-action',  '📋', 'Action required — certify or reject this TEV.',
+                                   'Review the itinerary and totals below, then use the panel on the right.', null],
+        'accountant_certified' => ['ab-success', '✅', 'You have certified this TEV.',
+                                   'Waiting for RD/ARD approval. Nothing further needed from you.', $lastMeta],
+        default                => ['ab-waiting', 'ℹ️', 'No action required at this step.',
+                                   'This TEV is at a stage outside your review scope.', null],
+    };
+    @endphp
+    @elsecan(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_APPROVE->value)
+    @php
     // ── ARD / Chief Admin Officer ──────────────────────────────────────────
-    elseif ($u->hasAnyRole(['ard', 'chief_admin_officer'])) {
-        $ab = match ($tev->status) {
-            'accountant_certified' => ['ab-action',  '🏆', 'Action required — approve or reject this TEV.',
-                                       'The Accountant has certified this request. Use the panel on the right to proceed.', $lastMeta],
-            'rd_approved'          => ['ab-success', '✅', 'You have approved this TEV.',
-                                       'Waiting for the cashier to release the ' . ($tev->track === 'cash_advance' ? 'cash advance.' : 'reimbursement.'),
-                                       $lastMeta],
-            default                => ['ab-waiting', 'ℹ️', 'No action required at this step.',
-                                       'This TEV is outside your current review scope.', null],
-        };
-    }
+    $ab = match ($tev->status) {
+        'accountant_certified' => ['ab-action',  '🏆', 'Action required — approve or reject this TEV.',
+                                   'The Accountant has certified this request. Use the panel on the right to proceed.', $lastMeta],
+        'rd_approved'          => ['ab-success', '✅', 'You have approved this TEV.',
+                                   'Waiting for the cashier to release the ' . ($tev->track === 'cash_advance' ? 'cash advance.' : 'reimbursement.'),
+                                   $lastMeta],
+        default                => ['ab-waiting', 'ℹ️', 'No action required at this step.',
+                                   'This TEV is outside your current review scope.', null],
+    };
+    @endphp
+    @elsecan(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_DISBURSE->value)
+    @php
     // ── Cashier ────────────────────────────────────────────────────────────
-    elseif ($u->hasAnyRole(['cashier'])) {
-        $ab = match ($tev->status) {
-            'rd_approved'       => ['ab-action',  '💵', 'Action required — release this TEV.',
-                                    $tev->track === 'cash_advance'
-                                        ? 'RD has approved. Release the cash advance of ₱' . number_format($tev->grand_total, 2) . ' to the employee.'
-                                        : 'RD has approved. Process the reimbursement of ₱' . number_format($tev->grand_total, 2) . '.',
-                                    $lastMeta],
-            'cashier_released'  => ['ab-waiting', '⏳', 'Cash advance released — awaiting employee liquidation.',
-                                    'Nothing to do yet. HRMO will file the liquidation on behalf of the employee once travel is complete.', $lastMeta],
-            'liquidation_filed' => ['ab-purple',  '🗂',  'Action required — approve this liquidation.',
-                                    'Review the reconciliation widget on the right and approve or reject.', $lastMeta],
-            'liquidated'        => ['ab-success', '✅', 'Liquidation approved. TEV fully closed.',
-                                    'No further action needed.', $lastMeta],
-            default             => ['ab-waiting', 'ℹ️', 'No action required at this step.',
-                                    'This TEV is outside your current release scope.', null],
-        };
-    }
+    $ab = match ($tev->status) {
+        'rd_approved'       => ['ab-action',  '💵', 'Action required — release this TEV.',
+                                $tev->track === 'cash_advance'
+                                    ? 'RD has approved. Release the cash advance of ₱' . number_format($tev->grand_total, 2) . ' to the employee.'
+                                    : 'RD has approved. Process the reimbursement of ₱' . number_format($tev->grand_total, 2) . '.',
+                                $lastMeta],
+        'cashier_released'  => ['ab-waiting', '⏳', 'Cash advance released — awaiting employee liquidation.',
+                                'Nothing to do yet. HRMO will file the liquidation on behalf of the employee once travel is complete.', $lastMeta],
+        'liquidation_filed' => ['ab-purple',  '🗂',  'Action required — approve this liquidation.',
+                                'Review the reconciliation widget on the right and approve or reject.', $lastMeta],
+        'liquidated'        => ['ab-success', '✅', 'Liquidation approved. TEV fully closed.',
+                                'No further action needed.', $lastMeta],
+        default             => ['ab-waiting', 'ℹ️', 'No action required at this step.',
+                                'This TEV is outside your current release scope.', null],
+    };
+    @endphp
+    @else
+    @php
     // ── Other roles ────────────────────────────────────────────────────────
-    else {
-        $ab = ['ab-waiting', 'ℹ️',
-               ucwords(str_replace('_', ' ', $tev->status)) . ' — in progress.',
-               'This TEV is moving through the approval workflow.', $lastMeta];
-    }
+    $ab = ['ab-waiting', 'ℹ️',
+           ucwords(str_replace('_', ' ', $tev->status)) . ' — in progress.',
+           'This TEV is moving through the approval workflow.', $lastMeta];
+    @endphp
+    @endcan
 @endphp
 @if ($ab)
 @php [$abVariant, $abIcon, $abTitle, $abDesc, $abMeta] = $ab; @endphp
@@ -639,39 +645,39 @@
             $contextNote = null;
 
             if ($tev->status === 'submitted') {
-                if ($u->hasAnyRole(['accountant'])) {
-                    $contextNote = 'Review the itinerary and expenses below, then certify or reject.';
-                } elseif ($u->hasAnyRole(['hrmo'])) {
-                    $contextNote = 'TEV submitted on behalf of ' . optional($emp)->last_name . '. Awaiting accountant review — no HR action needed.';
-                }
+                @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CERTIFY->value)
+                $contextNote = 'Review the itinerary and expenses below, then certify or reject.';
+                @elsecan(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_VIEW->value)
+                $contextNote = 'TEV submitted on behalf of ' . optional($emp)->last_name . '. Awaiting accountant review — no HR action needed.';
+                @endcan
             } elseif ($tev->status === 'accountant_certified') {
-                if ($u->hasAnyRole(['ard', 'chief_admin_officer'])) {
-                    $contextNote = 'This TEV has been certified by the Accountant. Review and approve or reject.';
-                } elseif ($u->hasAnyRole(['hrmo'])) {
-                    $contextNote = 'Certified by the Accountant. Waiting for RD/ARD approval — no HR action needed.';
-                } elseif ($u->hasAnyRole(['accountant'])) {
-                    $contextNote = 'You have certified this TEV. It is now pending RD/ARD approval.';
-                }
+                @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_APPROVE->value)
+                $contextNote = 'This TEV has been certified by the Accountant. Review and approve or reject.';
+                @elsecan(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_VIEW->value)
+                $contextNote = 'Certified by the Accountant. Waiting for RD/ARD approval — no HR action needed.';
+                @elsecan(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CERTIFY->value)
+                $contextNote = 'You have certified this TEV. It is now pending RD/ARD approval.';
+                @endcan
             } elseif ($tev->status === 'rd_approved') {
-                if ($u->hasAnyRole(['cashier'])) {
-                    $contextNote = $tev->track === 'cash_advance'
-                        ? 'RD has approved this TEV. Release the cash advance to the employee.'
-                        : 'RD has approved this TEV. Process the reimbursement.';
-                } elseif ($u->hasAnyRole(['hrmo'])) {
-                    $contextNote = 'RD approved. The cashier will process the ' . ($tev->track === 'cash_advance' ? 'cash advance release' : 'reimbursement') . ' for ' . optional($emp)->last_name . ' shortly.';
-                }
+                @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_DISBURSE->value)
+                $contextNote = $tev->track === 'cash_advance'
+                    ? 'RD has approved this TEV. Release the cash advance to the employee.'
+                    : 'RD has approved this TEV. Process the reimbursement.';
+                @elsecan(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_VIEW->value)
+                $contextNote = 'RD approved. The cashier will process the ' . ($tev->track === 'cash_advance' ? 'cash advance release' : 'reimbursement') . ' for ' . optional($emp)->last_name . ' shortly.';
+                @endcan
             } elseif ($tev->status === 'cashier_released') {
-                if ($u->hasAnyRole(['hrmo'])) {
-                    $contextNote = 'Cash advance released. File the liquidation on behalf of ' . optional($emp)->last_name . ' once travel is complete.';
-                } elseif ($u->hasAnyRole(['cashier'])) {
-                    $contextNote = 'You have released the cash advance. Awaiting liquidation filing by HRMO.';
-                }
+                @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_VIEW->value)
+                $contextNote = 'Cash advance released. File the liquidation on behalf of ' . optional($emp)->last_name . ' once travel is complete.';
+                @elsecan(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_DISBURSE->value)
+                $contextNote = 'You have released the cash advance. Awaiting liquidation filing by HRMO.';
+                @endcan
             } elseif ($tev->status === 'liquidation_filed') {
-                if ($u->hasAnyRole(['cashier'])) {
-                    $contextNote = 'HRMO has filed the liquidation on behalf of ' . optional($emp)->last_name . '. Review the balance and approve.';
-                } elseif ($u->hasAnyRole(['hrmo'])) {
-                    $contextNote = 'Liquidation filed. Waiting for the cashier to review and close out.';
-                }
+                @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_DISBURSE->value)
+                $contextNote = 'HRMO has filed the liquidation on behalf of ' . optional($emp)->last_name . '. Review the balance and approve.';
+                @elsecan(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_VIEW->value)
+                $contextNote = 'Liquidation filed. Waiting for the cashier to review and close out.';
+                @endcan
             } elseif ($tev->status === 'liquidated') {
                 $contextNote = 'This TEV has been fully liquidated. No further action required.';
             } elseif ($tev->status === 'reimbursed') {

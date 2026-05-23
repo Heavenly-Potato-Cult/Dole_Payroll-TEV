@@ -33,7 +33,7 @@ class PayrollEntryController extends Controller
      */
     public function update(Request $request, PayrollBatch $payrollBatch, PayrollEntry $entry)
     {
-        if (! Auth::user()->hasAnyRole(['payroll_officer'])) {
+        if (! auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_FORCE_EDIT->value)) {
             abort(403, 'Only Payroll Officers may override payroll entries.');
         }
 

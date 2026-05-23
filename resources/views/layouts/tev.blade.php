@@ -179,34 +179,34 @@
             </a>
 
             {{-- ── Office Orders (officers only) ───────────────────────── --}}
-            @role('hrmo|accountant|budget_officer|ard|cashier|chief_admin_officer|super_admin')
+            @can(\App\SharedKernel\Enums\Permission::TEV_OFFICE_ORDERS_VIEW->value)
             <a href="{{ route('tev.office-orders.index') }}"
                class="nav-item {{ request()->routeIs('tev.office-orders.*') ? 'active' : '' }}">
                 <span class="nav-icon">📝</span> Office Orders
             </a>
-            @endrole
+            @endcan
 
             {{-- ── Reports ─────────────────────────────────────────────── --}}
-            @role('hrmo|accountant|budget_officer|ard|cashier|chief_admin_officer|super_admin')
+            @can(\App\SharedKernel\Enums\Permission::TEV_REPORTS_VIEW->value)
             {{-- TEV Register temporarily hidden --}}
             {{-- <div class="nav-section-label">Reports</div>
             <a href="{{ route('reports.tev-register') }}"
                class="nav-item {{ request()->routeIs('reports.tev-register*') ? 'active' : '' }}">
                 <span class="nav-icon">📊</span> TEV Register
             </a> --}}
-            @endrole
+            @endcan
 
             
         </nav>
 
         {{-- ═══ SIDEBAR FOOTER ═══ --}}
-        @unless(auth()->user()->hasRole('payroll_officer'))
+        @cannot(\App\SharedKernel\Enums\Permission::TEV_ACCESS->value)
         <div class="sidebar-footer">
             <a href="{{ route('payroll.dashboard') }}" class="btn-switch" title="Go to Payroll">
                 Go to Payroll
             </a>
         </div>
-        @endif
+        @endcannot
     </aside>
     @endif
 
@@ -234,7 +234,7 @@
                         {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
                     </div>
                     <div class="user-divider"></div>
-                    @role('super_admin')
+                    @can(\App\SharedKernel\Enums\Permission::ADMINISTRATION_ACCESS->value)
                     <form method="POST" action="{{ route('logout') }}" style="display: inline;">
                         @csrf
                         <button type="submit" class="sign-out-btn">
@@ -250,7 +250,7 @@
                             Logout
                         </button>
                     </form>
-                    @endrole
+                    @endcan
                 </div>
             </div>
         </header>

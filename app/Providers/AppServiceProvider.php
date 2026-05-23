@@ -18,22 +18,5 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(PayrollBatch::class, PayrollPolicy::class);
-        
-        // Blade directives for role-based access control
-        Blade::if('canAccessPayroll', function () {
-            return \App\SharedKernel\Services\RoleService::canAccessPayroll(auth()->user());
-        });
-        
-        Blade::if('canCreatePayroll', function () {
-            return \App\SharedKernel\Services\RoleService::canCreatePayroll(auth()->user());
-        });
-        
-        Blade::if('canAccessSpecialPayroll', function () {
-            return \App\SharedKernel\Services\RoleService::canAccessSpecialPayroll(auth()->user());
-        });
-        
-        Blade::if('canAccessTev', function () {
-            return \App\SharedKernel\Services\RoleService::canAccessTev(auth()->user());
-        });
     }
 }

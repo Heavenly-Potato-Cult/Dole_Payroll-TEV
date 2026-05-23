@@ -54,27 +54,22 @@ class DashboardController extends Controller
 
 
 
-        if ($user->hasRole('super_admin')) {
+        // Determine pending payroll count based on user permissions
+        if ($user->can(\App\SharedKernel\Enums\Permission::ADMINISTRATION_ACCESS->value)) {
             // Super admin sees everything across all queues (view-only context)
             $pendingPayroll = PayrollBatch::whereIn('status', ['draft', 'computed', 'pending_accountant', 'pending_rd'])->count();
-
-        } elseif ($user->hasRole('payroll_officer')) {
+        } elseif ($user->can(\App\SharedKernel\Enums\Permission::PAYROLL_CREATE->value)) {
             $pendingPayroll = PayrollBatch::whereIn('status', ['draft', 'computed'])->count();
-
-        } elseif ($user->hasAnyRole(['hrmo'])) {
+        } elseif ($user->can(\App\SharedKernel\Enums\Permission::EMPLOYEES_MANAGE->value)) {
             $pendingPayroll = PayrollBatch::whereIn('status', ['draft', 'computed'])->count();
-
-        } elseif ($user->hasRole('accountant')) {
+        } elseif ($user->can(\App\SharedKernel\Enums\Permission::PAYROLL_CERTIFY->value)) {
             $pendingPayroll = PayrollBatch::where('status', 'pending_accountant')->count();
-
-        } elseif ($user->hasAnyRole(['ard', 'chief_admin_officer'])) {
+        } elseif ($user->can(\App\SharedKernel\Enums\Permission::PAYROLL_APPROVE->value)) {
             $pendingPayroll = PayrollBatch::where('status', 'pending_rd')->count();
-
-        } elseif ($user->hasRole('cashier')) {
+        } elseif ($user->can(\App\SharedKernel\Enums\Permission::PAYROLL_LOCK->value)) {
             // Cashier can see payroll batches for release processing
             $pendingPayroll = PayrollBatch::where('status', 'released')->count();
-
-        } elseif ($user->hasRole('budget_officer')) {
+        } elseif ($user->can(\App\SharedKernel\Enums\Permission::TEV_ACCESS->value)) {
             // Budget officer has no approval action for payroll
             $pendingPayroll = 0;
         }

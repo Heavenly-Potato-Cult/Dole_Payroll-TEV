@@ -15,7 +15,7 @@ use Spatie\Permission\Models\Role;
 class UserController extends Controller
 {
     /**
-     * Restrict the entire controller to super admins.
+     * Restrict the entire controller to user management roles.
      */
     public function __construct()
     {
@@ -23,8 +23,8 @@ class UserController extends Controller
             /** @var \App\Models\User $user */
             $user = Auth::user();
 
-            if (!$user || !$user->hasRole('super_admin')) {
-                abort(403, 'Only Super Admins can manage system users.');
+            if (!$user || !$user->can(\App\SharedKernel\Enums\Permission::USERS_MANAGE->value)) {
+                abort(403, 'Only users with user management access can manage system users.');
             }
 
             return $next($request);

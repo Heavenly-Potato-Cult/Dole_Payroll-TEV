@@ -112,9 +112,9 @@ class EmployeeAuthService
      */
     public function getRedirectDestination(User $user): string
     {
-        $isEmployee = $user->hasRole('employee');
-        $isOfficer = $user->hasAnyRole(RoleService::getRoleGroup('payroll'));
-        $isCashier = $user->hasRole('cashier');
+        $isEmployee = RoleService::isEmployee($user);
+        $isOfficer = RoleService::canAccessPayroll($user);
+        $isCashier = RoleService::isCashier($user);
 
         if ($isCashier) {
             // Cashiers go to payroll index where they can access their functions

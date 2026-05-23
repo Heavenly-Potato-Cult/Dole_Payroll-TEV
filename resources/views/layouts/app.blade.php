@@ -146,9 +146,7 @@
 
         <nav class="sidebar-nav">
 
-            @role('cashier')
-            {{-- Dashboard hidden for cashiers --}}
-        @else
+            @can(\App\SharedKernel\Enums\Permission::PAYROLL_ACCESS->value)
             <a href="{{ route('payroll.dashboard') }}"
                        class="nav-item {{ request()->routeIs('payroll.dashboard') ? 'active' : '' }}">
                     <span class="nav-icon">
@@ -157,10 +155,10 @@
                         </svg>
                     </span> Dashboard
                 </a>
-        @endrole
+            @endcan
 
             {{-- ── Employees ─────────────────────────────────────────── --}}
-            @role('payroll_officer|hrmo|accountant|chief_admin_officer|super_admin')
+            @can(\App\SharedKernel\Enums\Permission::EMPLOYEES_VIEW->value)
             <div class="nav-section-label">Employees</div>
             <a href="{{ route('employees.index') }}"
                class="nav-item {{ request()->routeIs('employees.*') ? 'active' : '' }}">
@@ -170,7 +168,7 @@
                     </svg>
                 </span> Employees
             </a>
-            @role('payroll_officer|hrmo|super_admin')
+            @can(\App\SharedKernel\Enums\Permission::EMPLOYEES_MANAGE->value)
             <a href="{{ route('divisions.index') }}"
                class="nav-item {{ request()->routeIs('divisions.*') ? 'active' : '' }}">
                 <span class="nav-icon">
@@ -179,8 +177,8 @@
                     </svg>
                 </span> Divisions
             </a>
-            @endrole
-            @endrole
+            @endcan
+            @endcan
 
             {{-- ── Payroll section ────────────────────────────────────── --}}
             {{--
@@ -193,7 +191,7 @@
             --}}
 
             {{-- Staff / officer payroll menu --}}
-            @role('payroll_officer|hrmo|accountant|ard|cashier|chief_admin_officer|super_admin')
+            @can(\App\SharedKernel\Enums\Permission::PAYROLL_ACCESS->value)
             <div class="nav-section-label">Payroll</div>
             <a href="{{ route('payroll.index') }}"
                class="nav-item {{ request()->routeIs('payroll.index') ? 'active' : '' }}">
@@ -229,7 +227,7 @@
                     </svg>
                 </span> NOSI / NOSA
             </a>
-            @endrole
+            @endcan
 
             {{-- Employee self-service payroll menu --}}
             {{--
@@ -239,16 +237,16 @@
                   (b) A user explicitly assigned the "employee" role by Super Admin
                 We use @unlessrole so it only shows for pure employees.
             --}}
-            @unless(auth()->user()->hasAnyRole(['payroll_officer','hrmo','accountant','ard','cashier','chief_admin_officer','super_admin']))
+            @cannot(\App\SharedKernel\Enums\Permission::PAYROLL_ACCESS->value)
             <div class="nav-section-label">Payroll</div>
             <a href="{{ route('my-payslip') }}"
                class="nav-item {{ request()->routeIs('my-payslip') ? 'active' : '' }}">
                 <span class="nav-icon">💰</span> My Payslip
             </a>
-            @endunless
+            @endcannot
 
             {{-- ── Deductions & Loans CMS ─────────────────────────────── --}}
-            @role('payroll_officer|super_admin')
+            @can(\App\SharedKernel\Enums\Permission::CONFIGURATION_ACCESS->value)
             <div class="nav-section-label">Configuration</div>
             <a href="{{ route('deduction-types.index') }}"
                class="nav-item {{ request()->routeIs('deduction-types.*') ? 'active' : '' }}">
@@ -258,10 +256,10 @@
                     </svg>
                 </span> Deduction Types
             </a>
-            @endrole
+            @endcan
 
             {{-- ── Reports ─────────────────────────────────────────────── --}}
-            @role('payroll_officer|super_admin')
+            @can(\App\SharedKernel\Enums\Permission::REPORTS_ACCESS->value)
             <div class="nav-section-label">Reports</div>
             <a href="{{ route('reports.index') }}"
                class="nav-item {{ request()->routeIs('reports.index') || request()->routeIs('reports.*') ? 'active' : '' }}">
@@ -271,44 +269,44 @@
                     </svg>
                 </span> Reports
             </a>
-            @endrole
+            @endcan
 
             {{-- ── Administration ─────────────────────────────────────── --}}
-            @role('payroll_officer|super_admin')
+            @can(\App\SharedKernel\Enums\Permission::ADMINISTRATION_ACCESS->value)
             <div class="nav-section-label">Administration</div>
 
-            @role('super_admin')
+            @can(\App\SharedKernel\Enums\Permission::USERS_MANAGE->value)
             <a href="{{ route('users.index') }}"
                class="nav-item {{ request()->routeIs('users.*') ? 'active' : '' }}">
                 <span class="nav-icon">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="white" style="display: block;">
-                        <path d="m21,12c0-.537-.051-1.082-.153-1.625l3.052-1.755-2.99-5.202-3.051,1.754c-.841-.721-1.81-1.28-2.857-1.649V0h-6v3.522c-1.047.37-2.016.929-2.857,1.649l-3.05-1.754L.102,8.62l3.052,1.755c-.102.544-.153,1.088-.153,1.625s.051,1.082.153,1.625L.102,15.38l2.991,5.202,3.05-1.754c.841.721,1.81,1.28,2.857,1.649v3.522h6v-3.522c1.047-.37,2.016-.929,2.857-1.649l3.051,1.754,2.99-5.202-3.052-1.755c.102-.544.153-1.088.153-1.625Zm-9.505-4.949c.169-.017.332-.051.505-.051s.336.034.504.051c1.139.233,1.995,1.241,1.995,2.449,0,1.381-1.119,2.5-2.5,2.5s-2.5-1.119-2.5-2.5c0-1.208.856-2.215,1.995-2.449Zm2.505,9.525s-.5.424-2,.424-2-.424-2-.424c-.8-.351-1.481-.912-1.997-1.604.015-1.09.904-1.972,1.997-1.972h4c1.094,0,1.982.882,1.997,1.972-.516.692-1.197,1.253-1.997,1.604Z"/>
+                        <path d="m21,12c0-.537-.051-1.082-.153-1.625l3.052-1.755-2.99-5.202-3.051,1.754c-.841-.721-1.81-1.28-2.857-1.649V0h-6v3.522c-1.047.37-2.016.929-2.857,1.649l-3.05-1.754L.102,8.62l3.052,1.755c-.102.544-.153,1.088-.153,1.625s.051,1.082.153,1.625L.102,15.38l2.991,5.202,3.05-1.754c.841.721,1.81,1.28,2.857,1.649v3.522h6v-3.522c1.047-.37,2.016-.929,2.857-1.649l3.051,1.754,2.99-5.202-3.052-1.755c.102-.544.153-1.088.153-1.625Zm-9.505-4.949c.169-.017.332-.051.505-.051s.336.034.504.051c1.139.233,1.995,1.241,1.995,2.449,0,1.381-1.119,2.5-2.5,2.5s-2.5-1.119-2.5-2.5c0-1.208.856-2.215,1.995-2.449Zm2.505,9.525s-.5.424-2 .424-2-.424-2-.424c-.8-.351-1.481-.912-1.997-1.604.015-1.09.904-1.972,1.997-1.972h4c1.094,0,1.982.882,1.997,1.972-.516.692-1.197,1.253-1.997,1.604Z"/>
                     </svg>
                 </span> User Management
             </a>
-            @endrole
+            @endcan
 
             <a href="{{ route('signatories.index') }}"
                class="nav-item {{ request()->routeIs('signatories.*') ? 'active' : '' }}">
                 <span class="nav-icon">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="white" style="display: block;">
-                        <path d="M24,23c0,.55-.45,1-1,1-1.54,0-2.29-1.12-2.83-1.95-.5-.75-.75-1.05-1.17-1.05-.51,0-.9,.44-1.51,1.15-.7,.83-1.57,1.85-3.03,1.85s-2.32-1.03-3-1.87c-.58-.7-.96-1.13-1.46-1.13-.39,0-.63,.25-1.16,.91-.72,.88-1.71,2.09-3.84,2.09-2.76,0-5-2.24-5-5s2.24-5,5-5c.55,0,1,.45,1,1s-.45,1-1,1c-1.65,0-3,1.35-3,3s1.35,3,3,3c1.18,0,1.67-.6,2.29-1.36,.6-.73,1.34-1.64,2.71-1.64,1.47,0,2.32,1.03,3,1.87,.58,.7,.96,1.13,1.46,1.13s.9-.44,1.51-1.15c.7-.83,1.57-1.85,3.03-1.85s2.29,1.12,2.83,1.95c.5,.75,.75,1.05,1.17,1.05,.55,0,1,.45,1,1Zm-15.01-7h.94c1.06,0,2.08-.42,2.83-1.17l7.72-7.72-3.59-3.59-7.72,7.72c-.75,.75-1.17,1.77-1.17,2.83v.94c0,.55,.44,.99,.99,.99ZM23.26,4.33c.48-.48,.74-1.12,.74-1.8s-.26-1.32-.74-1.79c-.99-.99-2.6-.99-3.59,0l-1.36,1.36,3.59,3.59,1.36-1.36Z"/>
+                        <path d="M24,23c0,.55-.45,1-1,1-1.54,0-2.29-1.12-2.83-1.95-.5-.75-.75-1.05-1.17-1.05-.51,0-.9,.44-1.51,1.15-.7,.83-1.57,1.85-3.03,1.85s-2.32-1.03-3-1.87c-.58-.7-.96-1.13-1.46-1.13-.39,0-.63,.25-1.16,.91-.72,.88-1.71,2.09-3.84,2.09-2.76,0-5-2.24-5-5s2.24-5,5-5c.55,0,1,.45,1,1s-.45,1-1,1c-1.65,0-3,1.35-3,3s1.35,3,3,3c1.18,0,1.67-.6,2.29-1.36,.6-.73,1.34-1.64,2.71-1.64,1.47,0,2.32,1.03,3,1.87,.58 .7,.96,1.13,1.46,1.13s.9-.44,1.51-1.15c.7-.83,1.57-1.85,3.03-1.85s2.29,1.12,2.83,1.95c.5,.75,.75,1.05,1.17,1.05,.55,0,1,.45,1,1Zm-15.01-7h.94c1.06,0,2.08-.42,2.83-1.17l7.72-7.72-3.59-3.59-7.72,7.72c-.75,.75-1.17,1.77-1.17,2.83v.94c0,.55,.44,.99,.99,.99ZM23.26,4.33c.48-.48,.74-1.12,.74-1.8s-.26-1.32-.74-1.79c-.99-.99-2.6-.99-3.59,0l-1.36,1.36,3.59,3.59,1.36-1.36Z"/>
                     </svg>
                 </span> Signatories
             </a>
 
-            @endrole
+            @endcan
 
         </nav>
 
         {{-- ═══ SIDEBAR FOOTER ═══ --}}
-        @unless(auth()->user()->hasRole('payroll_officer'))
+        @cannot(\App\SharedKernel\Enums\Permission::PAYROLL_ACCESS->value)
         <div class="sidebar-footer">
             <a href="{{ route('tev.dashboard') }}" class="btn-switch" title="Go to TEV">
                 Go to TEV
             </a>
         </div>
-        @endunless
+        @endcannot
 
     </aside>
 
@@ -350,7 +348,7 @@
                         {{ strtoupper(substr(session('hris_employee_name') ?? auth()->user()->name, 0, 1)) }}
                     </div>
                     <div class="user-divider"></div>
-                    @role('super_admin')
+                    @can(\App\SharedKernel\Enums\Permission::ADMINISTRATION_ACCESS->value)
                     <form method="POST" action="{{ route('logout') }}" style="display: inline;">
                         @csrf
                         <button type="submit" class="sign-out-btn">
@@ -370,7 +368,7 @@
                             Logout
                         </button>
                     </form>
-                    @endrole
+                    @endcan
                 </div>
             </div>
         </header>

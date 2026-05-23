@@ -97,8 +97,8 @@ class AuthController extends Controller
         $user = $this->resolveHrisUser($hrisUser);
 
         // Determine redirect based on role
-        $isEmployee = $user->hasRole('employee');
-        $isOfficer = $user->hasAnyRole(\App\SharedKernel\Services\RoleService::getRoleGroup('payroll'));
+        $isEmployee = \App\SharedKernel\Services\RoleService::isEmployee($user);
+        $isOfficer = \App\SharedKernel\Services\RoleService::canAccessPayroll($user);
 
         if ($isEmployee && !$isOfficer) {
             // Pure employee - redirect to my-payslip

@@ -244,7 +244,7 @@
         </div>
     </div>
     <div class="employee-header-right">
-        @role('payroll_officer|hrmo')
+        @can(\App\SharedKernel\Enums\Permission::EMPLOYEES_MANAGE->value)
         <a href="{{ route('employees.deductions', $employee) }}" class="btn btn-outline">💳 Deductions</a>
         <a href="{{ route('employees.edit', $employee) }}" class="btn btn-primary">✎ Edit</a>
         @endrole

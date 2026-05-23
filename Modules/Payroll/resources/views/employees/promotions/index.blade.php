@@ -11,7 +11,7 @@
         <p>{{ $employee->full_name }} &mdash; {{ $employee->position_title }}</p>
     </div>
     <div class="d-flex gap-2">
-        @role('payroll_officer|hrmo')
+        @can(\App\SharedKernel\Enums\Permission::EMPLOYEES_MANAGE->value)
         <a href="{{ route('employees.promotions.create', $employee) }}" class="btn btn-primary">
             + Add Record
         </a>
@@ -51,7 +51,7 @@
     @if ($history->isEmpty())
         <div class="card-body" style="text-align:center;padding:40px;color:var(--text-light);">
             No promotion records yet.
-            @role('payroll_officer|hrmo')
+            @can(\App\SharedKernel\Enums\Permission::EMPLOYEES_MANAGE->value)
             <a href="{{ route('employees.promotions.create', $employee) }}">Add the first record →</a>
             @endrole
         </div>
@@ -106,7 +106,7 @@
                         {{ $rec->remarks ?? '—' }}
                     </td>
                     <td style="text-align:center;">
-                        @role('payroll_officer|hrmo')
+                        @can(\App\SharedKernel\Enums\Permission::EMPLOYEES_MANAGE->value)
                         @if ($i === 0)
                         <form method="POST"
                               action="{{ route('employees.promotions.destroy', [$employee, $rec]) }}"

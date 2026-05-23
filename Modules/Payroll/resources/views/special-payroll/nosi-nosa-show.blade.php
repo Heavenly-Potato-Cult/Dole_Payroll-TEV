@@ -356,8 +356,8 @@
     $toFmt   = $batch->period_end->format('F j, Y');
     $period  = $fromFmt . ' to ' . $toFmt;
 
-    $canApprove = auth()->user()->hasRole('accountant') && $batch->status === 'draft';
-    $canRelease = auth()->user()->hasAnyRole(['ard', 'chief_admin_officer']) && $batch->status === 'approved';
+    $canApprove = auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_CERTIFY->value) && $batch->status === 'draft';
+    $canRelease = auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_APPROVE->value) && $batch->status === 'approved';
 
     $steps = [
         [

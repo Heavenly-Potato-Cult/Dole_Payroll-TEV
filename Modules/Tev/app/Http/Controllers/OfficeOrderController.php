@@ -19,7 +19,7 @@ class OfficeOrderController extends Controller
 {
     public function index(Request $request)
     {
-        $this->authorizeRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier']);
+        $this->authorize('viewAny', OfficeOrder::class);
 
         $query = OfficeOrder::with('employee')->orderByDesc('id');
 
@@ -39,7 +39,7 @@ class OfficeOrderController extends Controller
 
     public function create()
     {
-        $this->authorizeRole(['hrmo']);
+        $this->authorize('create', OfficeOrder::class);
 
         $employees = Employee::where('status', 'active')
             ->orderBy('last_name')
@@ -51,7 +51,7 @@ class OfficeOrderController extends Controller
 
     public function store(StoreOfficeOrderRequest $request)
     {
-        $this->authorizeRole(['hrmo']);
+        $this->authorize('create', OfficeOrder::class);
 
         $order = OfficeOrder::create(array_merge(
             $request->validated(),
@@ -66,18 +66,16 @@ class OfficeOrderController extends Controller
 
     public function show(int $id)
     {
-        $this->authorizeRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier']);
-
         $order = OfficeOrder::with(['employee', 'approver', 'tevRequests.employee'])->findOrFail($id);
+        $this->authorize('view', $order);
 
         return view('tev::office-orders.show', compact('order'));
     }
 
     public function approve(Request $request, int $id)
     {
-        $this->authorizeRole(['hrmo', 'ard', 'chief_admin_officer']);
-
         $order = OfficeOrder::findOrFail($id);
+        $this->authorize('approve', $order);
 
         if ($order->status !== 'draft') {
             return back()->with('error', 'Only draft Office Orders can be approved.');
@@ -108,9 +106,8 @@ class OfficeOrderController extends Controller
      */
     public function cancel(Request $request, int $id)
     {
-        $this->authorizeRole(['hrmo', 'ard', 'chief_admin_officer']);
-
         $order = OfficeOrder::withCount('tevRequests')->findOrFail($id);
+        $this->authorize('cancel', $order);
 
         if ($order->tev_requests_count > 0) {
             return back()->with('error', 'Cannot cancel: this Office Order has linked TEV requests.');
@@ -149,7 +146,7 @@ class OfficeOrderController extends Controller
      */
     public function pullFromApi(Request $request)
     {
-        $this->authorizeRole(['hrmo']);
+        $this->authorize('pull', OfficeOrder::class);
 
         try {
             $orders = app(HrisApiService::class)->fetchOfficeOrders();
@@ -269,20 +266,6 @@ class OfficeOrderController extends Controller
     // ----------------------------------------------------------------
     // Helpers
     // ----------------------------------------------------------------
-
-    private function authorizeRole(array $roles): void
-    {
-        // super_admin bypasses all role checks — view access to all modules
-        /** @var User $user */
-        $user = Auth::user();
-        if ($user->hasRole('super_admin')) {
-            return;
-        }
-
-        if (! $user->hasAnyRole($roles)) {
-            abort(403);
-        }
-    }
 
     /**
      * Write a standard audit log entry for any office order state change.

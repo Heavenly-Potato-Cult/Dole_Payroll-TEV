@@ -217,7 +217,7 @@
         <h1>Employees</h1>
         <p>DOLE RO9 Regular Plantilla — {{ $employees->total() }} {{ Str::plural('record', $employees->total()) }}</p>
     </div>
-    @role('payroll_officer|hrmo|super_admin')
+    @can(\App\SharedKernel\Enums\Permission::EMPLOYEES_MANAGE->value)
     <form id="syncHrisForm" method="POST" action="{{ route('employees.pullFromApi') }}" style="display:inline;">
         @csrf
         <button type="button" class="btn btn-primary" style="padding-left: 12px;" onclick="confirmSyncHris()">
@@ -358,7 +358,7 @@
                         <div class="d-flex gap-2" style="justify-content:center;">
                             <a href="{{ route('employees.show', $emp) }}"
                                class="btn btn-outline btn-sm" title="View">👁</a>
-                            @role('payroll_officer|hrmo|super_admin')
+                            @can(\App\SharedKernel\Enums\Permission::EMPLOYEES_MANAGE->value)
                             <a href="{{ route('employees.edit', $emp) }}"
                                class="btn btn-outline btn-sm" title="Edit">✎</a>
                             <form method="POST" action="{{ route('employees.destroy', $emp) }}"
@@ -399,7 +399,7 @@
                         </div>
                         <div class="emp-detail-actions">
                             <a href="{{ route('employees.show', $emp) }}" class="btn btn-outline btn-sm">👁 View</a>
-                            @role('payroll_officer|hrmo|super_admin')
+                            @can(\App\SharedKernel\Enums\Permission::EMPLOYEES_MANAGE->value)
                             <a href="{{ route('employees.edit', $emp) }}" class="btn btn-outline btn-sm">✎ Edit</a>
                             <form method="POST" action="{{ route('employees.destroy', $emp) }}" style="flex:1;"
                                   onsubmit="return confirm('Remove {{ addslashes($emp->full_name) }} from the active plantilla?\n(Soft delete — record is preserved.)')">

@@ -178,11 +178,11 @@ class TevReportController extends Controller
         // super_admin bypasses all role checks — view access to all modules
         /** @var User $user */
         $user = Auth::user();
-        if ($user->hasRole('super_admin')) {
+        if (\App\SharedKernel\Services\RoleService::isSuperAdmin($user)) {
             return;
         }
 
-        if (!$user->hasAnyRole($roles)) {
+        if (!\App\SharedKernel\Services\RoleService::hasAnyRoles($user, $roles)) {
             abort(403);
         }
     }
@@ -195,10 +195,10 @@ class TevReportController extends Controller
     {
         /** @var User $user */
         $user = Auth::user();
-        if ($user->hasRole('super_admin')) {
+        if (\App\SharedKernel\Services\RoleService::isSuperAdmin($user)) {
             return;
         }
-        if ($user->hasAnyRole($officerRoles)) {
+        if (\App\SharedKernel\Services\RoleService::hasAnyRoles($user, $officerRoles)) {
             return;
         }
         $employeeId = $this->resolveHrisEmployeeId();

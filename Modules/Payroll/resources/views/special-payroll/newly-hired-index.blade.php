@@ -225,11 +225,11 @@
         <h1>Pro-Rated Payroll — Newly Hired / Transferee</h1>
         <p>Individual payroll records for employees who started mid-period.</p>
     </div>
-@if (auth()->user()->hasRole('payroll_officer'))
+@can(\App\SharedKernel\Enums\Permission::PAYROLL_SPECIAL_MANAGE->value)
     <a href="{{ route('special-payroll.newly-hired.create') }}" class="btn btn-primary">
         + New Entry
     </a>
-@endif
+@endcan
 </div>
 
 @if (session('warning'))
@@ -361,8 +361,7 @@
                                     <a href="{{ route('special-payroll.newly-hired.show', $batch->id) }}"
                                        class="btn btn-outline btn-sm"
                                        onclick="event.stopPropagation();">View</a>
-@if (auth()->user()->hasRole('payroll_officer|super_admin'))
-    @if ($batch->status === 'draft')
+@if ($batch->status === 'draft' && auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_DELETE_DRAFT->value))
                                             <form id="deleteForm-{{ $batch->id }}" method="POST"
                                                   action="{{ route('special-payroll.newly-hired.destroy', $batch->id) }}">
                                                 @csrf
@@ -371,7 +370,6 @@
                                                         title="Delete"
                                                         onclick="event.stopPropagation(); confirmDeleteNewlyHired({{ $batch->id }}, '{{ addslashes(optional($batch->employee)->last_name ?? '') }}')">✕</button>
                                             </form>
-                                        @endif
                                     @endif
                                 </div>
 
@@ -421,8 +419,7 @@
                                 <div class="nh-detail-actions">
                                     <a href="{{ route('special-payroll.newly-hired.show', $batch->id) }}"
                                        class="btn btn-outline btn-sm">View</a>
-@if (auth()->user()->hasRole('payroll_officer|super_admin'))
-    @if ($batch->status === 'draft')
+@if ($batch->status === 'draft' && auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_DELETE_DRAFT->value))
                                             <form id="deleteFormMobile-{{ $batch->id }}" method="POST"
                                                   action="{{ route('special-payroll.newly-hired.destroy', $batch->id) }}"
                                                   style="flex:1;">
@@ -431,7 +428,6 @@
                                                 <button type="button" class="btn btn-danger btn-sm" style="width:100%;"
                                                         onclick="confirmDeleteNewlyHired({{ $batch->id }}, '{{ addslashes(optional($batch->employee)->last_name ?? '') }}', true)">✕ Delete</button>
                                             </form>
-                                        @endif
                                     @endif
                                 </div>
                             </td>
@@ -441,7 +437,7 @@
                         <tr>
                             <td colspan="10" style="text-align:center; padding:40px; color:var(--text-light);">
                                 No records found.
-@if (auth()->user()->hasRole('payroll_officer|super_admin'))
+@if (auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_SPECIAL_MANAGE->value))
     <a href="{{ route('special-payroll.newly-hired.create') }}">
         Create one now →
     </a>

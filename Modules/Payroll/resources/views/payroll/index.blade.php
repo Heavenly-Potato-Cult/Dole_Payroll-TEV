@@ -437,7 +437,7 @@ div#tab-active.active {
                                     <a href="{{ route('payroll.show', $batch) }}"
                                        class="btn btn-outline btn-sm"
                                        onclick="event.stopPropagation();">View</a>
-                                    @role('payroll_officer|super_admin')
+                                    @can(\App\SharedKernel\Enums\Permission::PAYROLL_DELETE_DRAFT->value)
                                         @if ($batch->status === 'draft')
                                             <form id="deleteForm-{{ $batch->id }}" method="POST"
                                                   action="{{ route('payroll.destroy', $batch) }}">

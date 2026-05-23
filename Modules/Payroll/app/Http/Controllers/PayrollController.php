@@ -40,7 +40,7 @@ class PayrollController extends Controller
             ->orderByDesc('id');
 
         // Employees can only see released/locked batches
-        if (!\App\SharedKernel\Services\RoleService::canAccessPayroll($user)) {
+        if (! $user->hasPermissionTo(\App\SharedKernel\Enums\Permission::PAYROLL_ACCESS->value)) {
             $query->whereIn('status', ['released', 'locked']);
         }
 
@@ -208,7 +208,7 @@ class PayrollController extends Controller
 
     public function create()
     {
-        $this->authorizeRole(\App\SharedKernel\Services\RoleService::getRoleGroup('payroll_create'));
+        $this->authorize('create', PayrollBatch::class);
 
         $currentYear  = now()->year;
         $currentMonth = now()->month;
@@ -707,13 +707,6 @@ class PayrollController extends Controller
         $employee = \App\SharedKernel\Models\Employee::where('employee_no', $raw)->first();
 
         return $employee?->id;
-    }
-
-    private function authorizeRole(array $roles): void
-    {
-        if (! Auth::user()->hasAnyRole($roles)) {
-            abort(403);
-        }
     }
 
     private function log(PayrollBatch $batch, string $action, ?string $old, ?string $new): void

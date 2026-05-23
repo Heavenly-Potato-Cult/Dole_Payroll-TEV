@@ -39,7 +39,7 @@ class TevController extends Controller
         $user = Auth::user();
 
         // Officers get the comprehensive dashboard
-        if ($user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin'])) {
+        if (\App\SharedKernel\Services\RoleService::canAccessModule($user, 'tev')) {
             return $this->officerDashboard();
         } else {
             // Employees go directly to their requests page (like my-payslip)
@@ -117,18 +117,18 @@ class TevController extends Controller
         $pendingLiquidation = 0;
         $pendingApprovals = 0;
 
-        if ($user->hasRole('super_admin')) {
+        if (\App\SharedKernel\Services\RoleService::isSuperAdmin($user)) {
             $pendingTev = TevRequest::whereNotIn('status', ['released', 'reimbursed', 'cancelled'])->count();
-        } elseif ($user->hasRole('accountant')) {
+        } elseif (\App\SharedKernel\Services\RoleService::isAccountant($user)) {
             $pendingTev = TevRequest::where('status', 'submitted')->count();
-        } elseif ($user->hasAnyRole(['ard', 'chief_admin_officer'])) {
+        } elseif (\App\SharedKernel\Services\RoleService::isApprovalRole($user)) {
             $pendingTev = TevRequest::where('status', 'accountant_certified')->count();
-        } elseif ($user->hasRole('cashier')) {
+        } elseif (\App\SharedKernel\Services\RoleService::isCashier($user)) {
             $pendingTev = TevRequest::where('status', 'rd_approved')->count();
             $pendingLiquidation = TevRequest::where('status', 'liquidation_filed')->count();
-        } elseif ($user->hasRole('budget_officer')) {
+        } elseif (\App\SharedKernel\Services\RoleService::isBudgetOfficer($user)) {
             $pendingTev = TevRequest::where('status', 'submitted')->count();
-        } elseif ($user->hasRole('hrmo')) {
+        } elseif (\App\SharedKernel\Services\RoleService::isHrmo($user)) {
             // HRMO monitors cash advances that need liquidation
             $pendingTev = TevRequest::where('status', 'cashier_released')
                 ->where('track', 'cash_advance')
@@ -188,7 +188,7 @@ class TevController extends Controller
     {
         /** @var User $user */
         $user = Auth::user();
-        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
+        $isEmployee = !\App\SharedKernel\Services\RoleService::canAccessModule($user, 'tev');
         
         // Base query
         $baseQuery = TevRequest::with(['employee', 'officeOrder'])->orderByDesc('id');
@@ -244,7 +244,7 @@ class TevController extends Controller
     {
         /** @var User $user */
         $user = Auth::user();
-        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'super_admin']);
+        $isEmployee = !\App\SharedKernel\Services\RoleService::canAccessModule($user, 'tev');
 
         $approvedOrdersQuery = OfficeOrder::with('employee')
             ->where('status', 'approved');
@@ -276,7 +276,7 @@ class TevController extends Controller
     {
         /** @var User $user */
         $user = Auth::user();
-        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
+        $isEmployee = !\App\SharedKernel\Services\RoleService::canAccessModule($user, 'tev');
 
         $validated = $request->validated();
 
@@ -367,7 +367,7 @@ class TevController extends Controller
     {
         /** @var User $user */
         $user = Auth::user();
-        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
+        $isEmployee = !\App\SharedKernel\Services\RoleService::canAccessModule($user, 'tev');
 
         $tev = TevRequest::with([
             'employee',
@@ -478,9 +478,9 @@ class TevController extends Controller
         $user = Auth::user();
 
         $authorized = (
-            ($tev->status === 'submitted'            && $user->hasAnyRole(['accountant'])) ||
-            ($tev->status === 'accountant_certified' && $user->hasAnyRole(['ard', 'chief_admin_officer'])) ||
-            ($tev->status === 'rd_approved'          && $user->hasAnyRole(['cashier']))
+            ($tev->status === 'submitted'            && \App\SharedKernel\Services\RoleService::isAccountant($user)) ||
+            ($tev->status === 'accountant_certified' && \App\SharedKernel\Services\RoleService::isApprovalRole($user)) ||
+            ($tev->status === 'rd_approved'          && \App\SharedKernel\Services\RoleService::isCashier($user))
         );
 
         if (!$authorized) {
@@ -527,9 +527,8 @@ class TevController extends Controller
      */
     public function certify(Request $request, int $tevRequest)
     {
-        $this->authorizeRole(['hrmo', 'accountant']);
-
         $tev = TevRequest::findOrFail($tevRequest);
+        $this->authorize('certify', $tev);
 
         $certifiableStatuses = ['rd_approved', 'cashier_released', 'reimbursed', 'liquidation_filed', 'liquidated'];
         if (!in_array($tev->status, $certifiableStatuses)) {
@@ -601,7 +600,7 @@ class TevController extends Controller
             $isOwner = ($tev->employee->user_id === $user->id) ||
                        ($tev->employee_id === $this->resolveHrisEmployeeId());
         }
-        $isStaff = $user->hasAnyRole(['hrmo']);
+        $isStaff = \App\SharedKernel\Services\RoleService::isHrmo($user);
 
         if (!$isOwner && !$isStaff) {
             abort(403, 'You are not authorized to file liquidation for this TEV.');
@@ -660,9 +659,8 @@ class TevController extends Controller
      */
     public function approveLiquidation(Request $request, int $tevRequest)
     {
-        $this->authorizeRole(['cashier']);
-
         $tev = TevRequest::findOrFail($tevRequest);
+        $this->authorize('disburse', $tev);
 
         if ($tev->track !== 'cash_advance') {
             return back()->with('error', 'Liquidation only applies to Cash Advance TEVs.');
@@ -742,7 +740,7 @@ class TevController extends Controller
         }
 
         [$roles, $label] = $map[$status];
-        return [$user->hasAnyRole($roles), $label];
+        return [\App\SharedKernel\Services\RoleService::hasAnyRoles($user, $roles), $label];
     }
 
     /**
@@ -758,13 +756,13 @@ class TevController extends Controller
         $user   = Auth::user();
         $status = $tev->status;
 
-        if ($status === 'submitted' && $user->hasAnyRole(['accountant'])) {
+        if ($status === 'submitted' && \App\SharedKernel\Services\RoleService::isAccountant($user)) {
             return ['accountant_certified', 'Accountant Certified'];
         }
-        if ($status === 'accountant_certified' && $user->hasAnyRole(['ard', 'chief_admin_officer'])) {
+        if ($status === 'accountant_certified' && \App\SharedKernel\Services\RoleService::isApprovalRole($user)) {
             return ['rd_approved', 'RD Approved'];
         }
-        if ($status === 'rd_approved' && $user->hasAnyRole(['cashier'])) {
+        if ($status === 'rd_approved' && \App\SharedKernel\Services\RoleService::isCashier($user)) {
             $newStatus = $tev->track === 'cash_advance' ? 'cashier_released' : 'reimbursed';
             $label     = $tev->track === 'cash_advance' ? 'Cash Advance Released' : 'Reimbursed';
             return [$newStatus, $label];
@@ -773,22 +771,6 @@ class TevController extends Controller
         abort(403, 'You are not authorized to approve this TEV at its current status.');
     }
 
-    /**
-     * Abort with 403 if the authenticated user does not hold any of the given roles.
-     */
-    private function authorizeRole(array $roles): void
-    {
-        // super_admin bypasses all role checks — view access to all modules
-        /** @var User $user */
-        $user = Auth::user();
-        if ($user->hasRole('super_admin')) {
-            return;
-        }
-
-        if (!$user->hasAnyRole($roles)) {
-            abort(403);
-        }
-    }
 
     /**
      * Resolve the integer employee PK from the HRIS session token.

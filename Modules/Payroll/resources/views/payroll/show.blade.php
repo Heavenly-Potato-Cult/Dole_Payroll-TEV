@@ -390,14 +390,14 @@
 
     // CHANGED: hrmo removed — only payroll_officer may compute / re-compute
     $canCompute = in_array($payroll->status, ['draft', 'computed'])
-               && auth()->user()->hasRole('payroll_officer');
+               && auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_COMPUTE->value);
 
     $canPullAttendance = in_array($payroll->status, ['draft', 'computed'])
-                  && auth()->user()->hasRole('payroll_officer');
+                  && auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_COMPUTE->value);
 
     $nextAction = null;
     // CHANGED: hrmo removed — only payroll_officer submits to Accountant
-    if (auth()->user()->hasRole('payroll_officer')
+    if (auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_SUBMIT->value)
         && in_array($payroll->status, ['draft', 'computed'])) {
         $nextAction = [
             'label'  => 'Submit to Accountant',
@@ -405,7 +405,7 @@
             'class'  => 'btn-primary',
             'confirm'=> 'Submit this payroll batch to the Accountant for review?',
         ];
-    } elseif (auth()->user()->hasRole('accountant')
+    } elseif (auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_CERTIFY->value)
               && $payroll->status === 'pending_accountant') {
         $nextAction = [
             'label'  => 'Certify & Forward to RD/ARD',
@@ -413,7 +413,7 @@
             'class'  => 'btn-primary',
             'confirm'=> 'Certify funds and forward to RD/ARD for approval?',
         ];
-    } elseif (auth()->user()->hasAnyRole(['ard', 'chief_admin_officer'])
+    } elseif (auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_APPROVE->value)
               && $payroll->status === 'pending_rd') {
         $nextAction = [
             'label'  => 'Approve & Release',
@@ -421,7 +421,7 @@
             'class'  => 'btn-gold',
             'confirm'=> 'Approve and release this payroll batch?',
         ];
-    } elseif (auth()->user()->hasRole('cashier')
+    } elseif (auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_LOCK->value)
               && $payroll->status === 'released') {
         $nextAction = [
             'label'  => 'Lock — Disbursement Complete',
@@ -521,7 +521,7 @@
         </button>
     @endif
 
-            @if ($payroll->status === 'released' || auth()->user()->hasRole('cashier'))
+            @if ($payroll->status === 'released' || auth()->user()->can(\App\SharedKernel\Enums\Permission::PAYROLL_LOCK->value))
                 <a href="{{ route('payroll.verify', $payroll) }}" class="btn btn-outline btn-sm">
                     📋 Verify Net Pay
                 </a>

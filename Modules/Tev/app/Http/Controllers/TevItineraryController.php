@@ -144,7 +144,7 @@ class TevItineraryController extends Controller
     {
         /** @var User $user */
         $user    = Auth::user();
-        $isStaff = $user->hasAnyRole(['hrmo']);
+        $isStaff = \App\SharedKernel\Services\RoleService::isHrmo($user);
         $isOwner = $tev->employee && $tev->employee->user_id === $user->id;
 
         if (!$isStaff && !$isOwner) {

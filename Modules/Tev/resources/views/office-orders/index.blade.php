@@ -235,14 +235,14 @@
         <h1>Office Orders</h1>
         <p>Manage travel authority documents for DOLE RO9 employees.</p>
     </div>
-    @if (auth()->user()->hasAnyRole(['hrmo', 'super_admin']))
+    @can(\App\SharedKernel\Enums\Permission::TEV_OFFICE_ORDERS_PULL->value)
         <form id="pullOfficeOrdersForm" method="POST" action="{{ route('tev.office-orders.pullFromApi') }}" style="display:inline;">
             @csrf
             <button type="submit" class="btn btn-primary" onclick="event.preventDefault(); pullOfficeOrders();">
                  Pull Office Orders
             </button>
         </form>
-    @endif
+    @endcan
 </div>
 
 @if (session('success'))
@@ -380,28 +380,32 @@
                                        class="btn btn-outline btn-sm"
                                        onclick="event.stopPropagation();">View</a>
 
-                                    @if ($order->status === 'draft' && auth()->user()->hasAnyRole(['ard', 'chief_admin_officer']))
-                                        <form method="POST"
-                                              action="{{ route('tev.office-orders.approve', $order->id) }}"
-                                              onsubmit="event.stopPropagation(); return confirm('Approve this Office Order?')">
-                                            @csrf
-                                            <button type="submit" class="btn btn-sm btn-primary"
-                                                    onclick="event.stopPropagation();">
-                                                ✓ Approve
-                                            </button>
-                                        </form>
+                                    @if ($order->status === 'draft')
+                                        @can(\App\SharedKernel\Enums\Permission::TEV_OFFICE_ORDERS_APPROVE->value)
+                                            <form method="POST"
+                                                  action="{{ route('tev.office-orders.approve', $order->id) }}"
+                                                  onsubmit="event.stopPropagation(); return confirm('Approve this Office Order?')">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-primary"
+                                                        onclick="event.stopPropagation();">
+                                                    ✓ Approve
+                                                </button>
+                                            </form>
+                                        @endcan
                                     @endif
 
-                                    @if ($order->status === 'approved' && auth()->user()->hasAnyRole(['hrmo', 'ard', 'chief_admin_officer']))
-                                        <form method="POST"
-                                              action="{{ route('tev.office-orders.cancel', $order->id) }}"
-                                              onsubmit="event.stopPropagation(); return confirm('Cancel this Office Order? This cannot be undone.')">
-                                            @csrf
-                                            <button type="submit" class="btn btn-sm btn-danger"
-                                                    onclick="event.stopPropagation();">
-                                                Cancel
-                                            </button>
-                                        </form>
+                                    @if ($order->status === 'approved')
+                                        @can(\App\SharedKernel\Enums\Permission::TEV_OFFICE_ORDERS_CANCEL->value)
+                                            <form method="POST"
+                                                  action="{{ route('tev.office-orders.cancel', $order->id) }}"
+                                                  onsubmit="event.stopPropagation(); return confirm('Cancel this Office Order? This cannot be undone.')">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-danger"
+                                                        onclick="event.stopPropagation();">
+                                                    Cancel
+                                                </button>
+                                            </form>
+                                        @endcan
                                     @endif
                                 </div>
 
@@ -452,30 +456,34 @@
                                     <a href="{{ route('tev.office-orders.show', $order->id) }}"
                                        class="btn btn-outline btn-sm">View</a>
 
-                                    @if ($order->status === 'draft' && auth()->user()->hasAnyRole(['ard', 'chief_admin_officer']))
-                                        <form method="POST"
-                                              action="{{ route('tev.office-orders.approve', $order->id) }}"
-                                              style="flex:1;"
-                                              onsubmit="return confirm('Approve this Office Order?')">
-                                            @csrf
-                                            <button type="submit" class="btn btn-sm btn-primary"
-                                                    style="width:100%;">
-                                                ✓ Approve
-                                            </button>
-                                        </form>
+                                    @if ($order->status === 'draft')
+                                        @can(\App\SharedKernel\Enums\Permission::TEV_OFFICE_ORDERS_APPROVE->value)
+                                            <form method="POST"
+                                                  action="{{ route('tev.office-orders.approve', $order->id) }}"
+                                                  style="flex:1;"
+                                                  onsubmit="return confirm('Approve this Office Order?')">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-primary"
+                                                        style="width:100%;">
+                                                    ✓ Approve
+                                                </button>
+                                            </form>
+                                        @endcan
                                     @endif
 
-                                    @if ($order->status === 'approved' && auth()->user()->hasAnyRole(['hrmo', 'ard', 'chief_admin_officer']))
-                                        <form method="POST"
-                                              action="{{ route('tev.office-orders.cancel', $order->id) }}"
-                                              style="flex:1;"
-                                              onsubmit="return confirm('Cancel this Office Order?')">
-                                            @csrf
-                                            <button type="submit" class="btn btn-sm btn-danger"
-                                                    style="width:100%;">
-                                                Cancel
-                                            </button>
-                                        </form>
+                                    @if ($order->status === 'approved')
+                                        @can(\App\SharedKernel\Enums\Permission::TEV_OFFICE_ORDERS_CANCEL->value)
+                                            <form method="POST"
+                                                  action="{{ route('tev.office-orders.cancel', $order->id) }}"
+                                                  style="flex:1;"
+                                                  onsubmit="return confirm('Cancel this Office Order?')">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-danger"
+                                                        style="width:100%;">
+                                                    Cancel
+                                                </button>
+                                            </form>
+                                        @endcan
                                     @endif
                                 </div>
                             </td>

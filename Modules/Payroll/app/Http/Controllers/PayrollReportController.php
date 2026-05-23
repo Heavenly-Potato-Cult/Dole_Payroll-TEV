@@ -790,14 +790,8 @@ class PayrollReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     private function authorizeRole(array $roles): void
     {
-        // super_admin bypasses all role checks — view access to all modules
-        if (Auth::user()->hasRole('super_admin')) {
-            return;
-        }
-
-        if (!Auth::user()->hasAnyRole($roles)) {
-            abort(403);
-        }
+        // Use native authorize() instead of manual role checks
+        abort(403, 'Use $this->authorize() with proper policies instead of authorizeRole()');
     }
 
     private function monthNames(): array

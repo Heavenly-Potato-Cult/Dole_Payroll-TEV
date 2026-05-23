@@ -397,7 +397,7 @@
 <div class="d-flex gap-2 flex-wrap" style="margin-top:24px; align-items:flex-start;">
 
     {{-- CASHIER: Finalize & Lock --}}
-    @role('cashier')
+    @can(\App\SharedKernel\Enums\Permission::PAYROLL_LOCK->value)
         @if ($payroll->status === 'released')
             <form method="POST" action="{{ route('payroll.lock', $payroll) }}"
                   onsubmit="return confirm('Finalize and lock this payroll batch?\n\nThis marks disbursement as complete. The batch will be locked and cannot be further edited without an override.')">
@@ -412,7 +412,7 @@
 </div>
 
 {{-- PAYROLL OFFICER: Admin Override (shown when locked) --}}
-@role('payroll_officer')
+@can(\App\SharedKernel\Enums\Permission::PAYROLL_FORCE_EDIT->value)
     @if ($payroll->status === 'locked')
         <div class="admin-override-card">
             <h4>⚠ Admin Override — Unlock Batch</h4>

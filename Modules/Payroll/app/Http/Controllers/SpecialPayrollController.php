@@ -35,7 +35,7 @@ class SpecialPayrollController extends Controller
      */
     public function newHireIndex(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+        $this->authorize('viewAny', SpecialPayrollBatch::class);
 
         $query = SpecialPayrollBatch::with('employee')
             ->where('type', 'newly_hired')
@@ -63,7 +63,7 @@ class SpecialPayrollController extends Controller
      */
     public function newHireCreate()
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo']);
+        $this->authorize('create', SpecialPayrollBatch::class);
 
         $sixMonthsAgo = now()->subMonths(6);
 
@@ -156,11 +156,10 @@ class SpecialPayrollController extends Controller
      */
     public function newHireShow(int $id)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
-
-        $batch    = SpecialPayrollBatch::with('employee', 'approver')
+        $batch = SpecialPayrollBatch::with('employee', 'approver')
             ->where('type', 'newly_hired')
             ->findOrFail($id);
+        $this->authorize('view', $batch);
 
         $employee = $batch->employee;
 
@@ -195,11 +194,11 @@ class SpecialPayrollController extends Controller
         $old = $batch->status;
 
         if ($batch->status === 'draft') {
-            $this->authorizeRole(['accountant']);
+            $this->authorize('certify', $batch);
             $new    = 'approved';
             $action = 'Approved Newly Hired Payroll';
         } elseif ($batch->status === 'approved') {
-            $this->authorizeRole(['ard', 'chief_admin_officer']);
+            $this->authorize('approve', $batch);
             $new    = 'released';
             $action = 'Released Newly Hired Payroll';
         } else {
@@ -238,11 +237,10 @@ class SpecialPayrollController extends Controller
      */
     public function newHireDestroy(int $id)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo']);
-
         $batch = SpecialPayrollBatch::where('type', 'newly_hired')
             ->where('status', 'draft')
             ->findOrFail($id);
+        $this->authorize('delete', $batch);
 
         $batch->delete();
 
@@ -261,7 +259,7 @@ class SpecialPayrollController extends Controller
      */
     public function differentialIndex(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+        $this->authorize('viewAny', SpecialPayrollBatch::class);
 
         $query = SpecialPayrollBatch::with('employee')
             ->where('type', 'salary_differential')
@@ -287,7 +285,7 @@ class SpecialPayrollController extends Controller
      */
     public function differentialCreate()
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo']);
+        $this->authorize('create', SpecialPayrollBatch::class);
 
         $employees = Employee::where('status', 'active')
             ->orderBy('last_name')
@@ -307,7 +305,7 @@ class SpecialPayrollController extends Controller
      */
     public function differentialStore(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo']);
+        $this->authorize('create', SpecialPayrollBatch::class);
 
         $request->validate([
             'employee_id'          => ['required', 'integer', 'exists:employees,id'],
@@ -378,11 +376,10 @@ class SpecialPayrollController extends Controller
      */
     public function differentialShow(int $id)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
-
         $batch = SpecialPayrollBatch::with('employee', 'approver')
             ->where('type', 'salary_differential')
             ->findOrFail($id);
+        $this->authorize('view', $batch);
 
         $employee = $batch->employee;
 
@@ -415,11 +412,11 @@ class SpecialPayrollController extends Controller
         $old = $batch->status;
 
         if ($batch->status === 'draft') {
-            $this->authorizeRole(['accountant']);
+            $this->authorize('certify', $batch);
             $new    = 'approved';
             $action = 'Approved Salary Differential';
         } elseif ($batch->status === 'approved') {
-            $this->authorizeRole(['ard', 'chief_admin_officer']);
+            $this->authorize('approve', $batch);
             $new    = 'released';
             $action = 'Released Salary Differential';
         } else {
@@ -458,11 +455,10 @@ class SpecialPayrollController extends Controller
      */
     public function differentialDestroy(int $id)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo']);
-
         $batch = SpecialPayrollBatch::where('type', 'salary_differential')
             ->where('status', 'draft')
             ->findOrFail($id);
+        $this->authorize('delete', $batch);
 
         $batch->delete();
 
@@ -483,7 +479,7 @@ class SpecialPayrollController extends Controller
      */
     public function nosiNosaIndex(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+        $this->authorize('viewAny', SpecialPayrollBatch::class);
 
         $query = SpecialPayrollBatch::with('employee')
             ->whereIn('type', ['nosi', 'nosa'])
@@ -513,7 +509,7 @@ class SpecialPayrollController extends Controller
      */
     public function nosiNosaCreate()
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo']);
+        $this->authorize('create', SpecialPayrollBatch::class);
 
         $employees = Employee::where('status', 'active')
             ->orderBy('last_name')
@@ -534,7 +530,7 @@ class SpecialPayrollController extends Controller
      */
     public function nosiNosaStore(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo']);
+        $this->authorize('create', SpecialPayrollBatch::class);
 
         $request->validate([
             'type'                 => ['required', 'in:nosi,nosa'],
@@ -609,11 +605,10 @@ class SpecialPayrollController extends Controller
      */
     public function nosiNosaShow(int $id)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
-
         $batch = SpecialPayrollBatch::with('employee', 'approver')
             ->whereIn('type', ['nosi', 'nosa'])
             ->findOrFail($id);
+        $this->authorize('view', $batch);
 
         $employee = $batch->employee;
 
@@ -646,11 +641,11 @@ class SpecialPayrollController extends Controller
         $typeLabel = strtoupper($batch->type);
 
         if ($batch->status === 'draft') {
-            $this->authorizeRole(['accountant']);
+            $this->authorize('certify', $batch);
             $new    = 'approved';
             $action = 'Approved ' . $typeLabel;
         } elseif ($batch->status === 'approved') {
-            $this->authorizeRole(['ard', 'chief_admin_officer']);
+            $this->authorize('approve', $batch);
             $new    = 'released';
             $action = 'Released ' . $typeLabel;
         } else {
@@ -689,11 +684,10 @@ class SpecialPayrollController extends Controller
      */
     public function nosiNosaDestroy(int $id)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo']);
-
         $batch = SpecialPayrollBatch::whereIn('type', ['nosi', 'nosa'])
             ->where('status', 'draft')
             ->findOrFail($id);
+        $this->authorize('delete', $batch);
 
         $batch->delete();
 
@@ -704,19 +698,4 @@ class SpecialPayrollController extends Controller
     // =====================================================================
     //  Private helpers
     // =====================================================================
-
-    /**
-     * Abort with 403 if the authenticated user does not hold any of the given roles.
-     */
-    private function authorizeRole(array $roles): void
-    {
-        // super_admin bypasses all role checks — view access to all modules
-        if (Auth::user()->hasRole('super_admin')) {
-            return;
-        }
-
-        if (!Auth::user()->hasAnyRole($roles)) {
-            abort(403);
-        }
-    }
 }

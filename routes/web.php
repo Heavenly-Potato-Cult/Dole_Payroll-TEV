@@ -39,7 +39,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     // ── Employees ────────────────────────────────────────────────
-    Route::middleware(['role:payroll_officer|hrmo|accountant|chief_admin_officer|super_admin'])
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getModuleRoles('employee_management'))])
         ->group(function () {
             Route::resource('employees', EmployeeController::class);
             Route::post('/employees/pull-from-api', [EmployeeController::class, 'pullFromApi'])->name('employees.pullFromApi');
@@ -64,7 +64,7 @@ Route::middleware(['auth'])->group(function () {
         });
 
     // ── Deduction Types CMS ──────────────────────────────────────
-    Route::middleware(['role:payroll_officer|super_admin'])
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getModuleRoles('configuration'))])
         ->group(function () {
             Route::resource('deduction-types', DeductionTypeController::class)
                 ->except(['show', 'destroy']);
@@ -83,7 +83,7 @@ Route::middleware(['auth'])->group(function () {
         });
 
     // ── Divisions ────────────────────────────────────────────────
-    Route::middleware(['role:payroll_officer|hrmo|super_admin'])
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getModuleRoles('division_management'))])
         ->group(function () {
             Route::resource('divisions', DivisionController::class);
         });
@@ -173,7 +173,7 @@ Route::middleware(['auth'])->group(function () {
 
 
     // ── Reports ──────────────────────────────────────────────────
-    Route::middleware(['role:payroll_officer|super_admin'])
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getModuleRoles('reports'))])
         ->group(function () {
             Route::get('/reports',                    [PayrollReportController::class, 'index'])->name('reports.index');
             Route::get('/reports/payroll-register',   [PayrollReportController::class, 'payrollRegister'])->name('reports.payroll-register');
@@ -217,7 +217,7 @@ Route::middleware(['auth'])->group(function () {
                [TevReportController::class, 'tevRegister'])->name('reports.tev-register');
 
     // ── Users ────────────────────────────────────────────────────
-    Route::middleware(['role:super_admin'])
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getModuleRoles('user_management'))])
         ->group(function () {
             Route::resource('users', UserController::class);
 
@@ -228,7 +228,7 @@ Route::middleware(['auth'])->group(function () {
 
     // ── Signatories (payroll_officer + super_admin) ──────────────
     // Manages the dynamic signing officers shown on payslips and reports.
-    Route::middleware(['role:payroll_officer|super_admin'])
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getModuleRoles('signatories'))])
         ->group(function () {
             // Must be declared BEFORE the resource to avoid Laravel
             // treating 'users-for-role' as a {signatory} model binding.

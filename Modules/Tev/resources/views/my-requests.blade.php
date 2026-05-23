@@ -459,7 +459,7 @@
                             $statusLabel = ucwords(str_replace('_', ' ', $tev->status));
                             $isOwner  = $emp && ($emp->user_id === auth()->id() || $emp->employee_id === session('hris_employee_id'));
                             $canSubmit = $tev->status === 'draft'
-                                && ($isOwner || auth()->user()->hasAnyRole(['payroll_officer', 'hrmo']));
+                                && ($isOwner || auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CREATE->value));
                         @endphp
 
                         <tr class="sd-main-row" data-id="{{ $tev->id }}" onclick="toggleSdRow(this)">

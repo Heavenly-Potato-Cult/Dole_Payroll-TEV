@@ -74,11 +74,11 @@
     };
 
     $hasTev     = $order->tevRequests->count() > 0;
-    $canApprove = auth()->user()->hasAnyRole(['hrmo', 'ard', 'chief_admin_officer'])
+    $canApprove = auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_OFFICE_ORDERS_APPROVE->value)
                   && $order->status === 'draft';
-    $canEdit    = auth()->user()->hasAnyRole(['payroll_officer', 'hrmo'])
+    $canEdit    = auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_OFFICE_ORDERS_VIEW->value)
                   && $order->status === 'draft';
-    $canCancel  = auth()->user()->hasAnyRole(['hrmo', 'ard', 'chief_admin_officer'])
+    $canCancel  = auth()->user()->can(\App\SharedKernel\Enums\Permission::TEV_OFFICE_ORDERS_CANCEL->value)
                   && $order->status === 'approved'
                   && !$hasTev;
 @endphp
@@ -255,10 +255,12 @@
                     <p style="font-size:0.83rem; color:var(--text-light); margin:0 0 10px;">
                         No TEV requests yet.
                     </p>
-                    @if ($order->status === 'approved' && auth()->user()->hasAnyRole(['payroll_officer', 'hrmo']))
-                        <a href="{{ route('tev.requests.create') }}" class="btn btn-primary btn-sm">
-                            + Create TEV
-                        </a>
+                    @if ($order->status === 'approved')
+                        @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CREATE->value)
+                            <a href="{{ route('tev.requests.create') }}" class="btn btn-primary btn-sm">
+                                + Create TEV
+                            </a>
+                        @endcan
                     @endif
                 @endif
             </div>

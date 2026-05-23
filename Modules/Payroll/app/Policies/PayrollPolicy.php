@@ -57,7 +57,7 @@ class PayrollPolicy
      */
     public function delete(User $user, PayrollBatch $batch): bool
     {
-        return $user->hasAnyRole(['payroll_officer', 'super_admin'])
+        return \App\SharedKernel\Services\RoleService::isPayrollOfficerOrAdmin($user)
             && $batch->status === 'draft';
     }
 
@@ -68,7 +68,9 @@ class PayrollPolicy
      */
     public function compute(User $user, PayrollBatch $batch): bool
     {
-        return $user->hasAnyRole(['payroll_officer', 'hrmo', 'super_admin'])
+        return (\App\SharedKernel\Services\RoleService::isPayrollOfficer($user)
+                || \App\SharedKernel\Services\RoleService::isHrmo($user)
+                || \App\SharedKernel\Services\RoleService::isSuperAdmin($user))
             && $batch->status !== 'locked';
     }
 
@@ -82,7 +84,9 @@ class PayrollPolicy
      */
     public function submit(User $user, PayrollBatch $batch): bool
     {
-        return $user->hasAnyRole(['payroll_officer', 'hrmo', 'super_admin'])
+        return (\App\SharedKernel\Services\RoleService::isPayrollOfficer($user)
+                || \App\SharedKernel\Services\RoleService::isHrmo($user)
+                || \App\SharedKernel\Services\RoleService::isSuperAdmin($user))
             && in_array($batch->status, ['draft', 'computed'], true);
     }
 
@@ -96,7 +100,7 @@ class PayrollPolicy
      */
     public function certify(User $user, PayrollBatch $batch): bool
     {
-        return $user->hasRole('accountant')
+        return \App\SharedKernel\Services\RoleService::isAccountant($user)
             && $batch->status === 'pending_accountant';
     }
 
@@ -110,7 +114,7 @@ class PayrollPolicy
      */
     public function approve(User $user, PayrollBatch $batch): bool
     {
-        return $user->hasAnyRole(['ard', 'chief_admin_officer'])
+        return \App\SharedKernel\Services\RoleService::isApprovalRole($user)
             && $batch->status === 'pending_rd';
     }
 
@@ -125,7 +129,7 @@ class PayrollPolicy
      */
     public function lock(User $user, PayrollBatch $batch): bool
     {
-        return $user->hasRole('cashier')
+        return \App\SharedKernel\Services\RoleService::isCashier($user)
             && $batch->status === 'released';
     }
 
@@ -137,7 +141,7 @@ class PayrollPolicy
      */
     public function forceEdit(User $user, PayrollBatch $batch): bool
     {
-        return $user->hasAnyRole(['payroll_officer', 'super_admin'])
+        return \App\SharedKernel\Services\RoleService::isPayrollOfficerOrAdmin($user)
             && $batch->status === 'locked';
     }
 
