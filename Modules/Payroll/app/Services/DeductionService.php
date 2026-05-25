@@ -11,57 +11,54 @@ use Carbon\Carbon;
  * DeductionService
  *
  * Resolves the full set of deduction line items for a single employee
- * for one payroll cut-off. Returns an ordered array ready to be
- * persisted as PayrollDeduction records.
+ * for one payroll cut-off.
  *
- * Separation of concerns:
- *   - PayrollComputationService  → orchestrates, persists, computes gross/net
- *   - DeductionService           → resolves WHAT deductions apply and HOW MUCH
- *   - AttendanceService          → resolves attendance-based deductions (LWOP, tardiness)
+ * ── Three-Tier Resolution Order ──────────────────────────────────────────
+ *
+ *  Tier 1 — Formula-driven  (is_computed = true)
+ *    a. If is_locked = true AND override_amount is set → use override_amount (global fixed).
+ *    b. If override_amount is set (not locked) → use override_amount (Enhancement #1).
+ *    c. Otherwise → run the salary-based formula.
+ *
+ *  Tier 2 — Locked global  (is_computed = false, isEffectivelyLocked() = true)
+ *    Use default_amount directly. No per-employee enrollment lookup.
+ *    Loan-category types are exempt — they always fall to Tier 3.
+ *
+ *  Tier 3 — Per-employee  (is_computed = false, isEffectivelyLocked() = false)
+ *    Look up the employee's active enrollment for this cut-off date.
+ *    If found, use enrollment.amount. Otherwise 0.
+ * ─────────────────────────────────────────────────────────────────────────
  */
 class DeductionService
 {
-    /**
-     * Fixed working-day denominator per DOLE RO9 payroll rules.
-     */
     const DENOMINATOR = 22;
 
     /**
      * Resolve all deduction line items for one employee in one payroll batch.
      *
-     * Returns an array of deduction lines in display_order, each shaped:
-     *   [
-     *     'deduction_type_id' => int,
-     *     'code'              => string,
-     *     'name'              => string,
-     *     'amount'            => float,   // per cut-off (semi-monthly) amount
-     *   ]
-     *
-     * Only lines with amount > 0 are included.
-     *
      * @param  Employee     $employee
      * @param  PayrollBatch $batch
      * @param  float        $ytdGross   Year-to-date gross before this cut-off (for WHT)
-     * @return array
+     * @return array        Each element: [deduction_type_id, code, name, amount, is_overridden, is_global]
      */
     public function resolveDeductions(Employee $employee, PayrollBatch $batch, float $ytdGross = 0.0): array
     {
-        $basicMonthly = (float) $employee->basic_monthly_salary;   // alias → basic_salary
-        $peraMonthly  = (float) $employee->pera_amount;            // alias → pera
+        $basicMonthly = (float) $employee->basic_monthly_salary;
+        $peraMonthly  = (float) $employee->pera_amount;
         $payrollDate  = Carbon::create($batch->period_year, $batch->period_month, 1)->toDateString();
 
-        // ── Load all active deduction types (ordered for payslip display) ──
         $allTypes = DeductionType::active()->ordered()->get();
 
-        // ── Load employee enrollments active on this payroll date ──────────
+        // Pre-load per-employee enrollments (Tier 3 only)
         $enrollments = $employee->deductionEnrollments()
             ->with('deductionType')
             ->activeOn($payrollDate)
             ->get()
             ->keyBy(fn ($e) => $e->deductionType->code);
 
-        // ── Pre-compute the four mandatory government deductions ────────────
-        $computed = [
+        // ── Pre-compute formula amounts ───────────────────────────────────
+        // These are computed once and used only when the formula path is taken.
+        $formulaAmounts = [
             'PAG_IBIG_1'           => $this->computePagibig1($basicMonthly),
             'PHILHEALTH'           => $this->computePhilHealth($basicMonthly),
             'GSIS_LIFE_RETIREMENT' => $this->computeGsisLife($basicMonthly),
@@ -74,13 +71,36 @@ class DeductionService
         $lines = [];
 
         foreach ($allTypes as $type) {
-            $amount = 0.00;
+            $amount       = 0.00;
+            $isOverridden = false;
+            $isGlobal     = false;
 
+            // ── Tier 1: Formula-driven ────────────────────────────────────
             if ($type->is_computed) {
-                // Government-mandated: computed from salary
-                $amount = $computed[$type->code] ?? 0.00;
+                if ($type->isEffectivelyLocked() && $type->override_amount !== null) {
+                    // Locked + override → global fixed amount, bypasses formula
+                    $amount       = (float) $type->override_amount;
+                    $isOverridden = true;
+                    $isGlobal     = true;
+                } elseif ($type->isOverridden()) {
+                    // Not locked but override set → per-type manual adjustment (Enhancement #1)
+                    $amount       = (float) $type->override_amount;
+                    $isOverridden = true;
+                } else {
+                    // Normal formula path
+                    $amount = $formulaAmounts[$type->code] ?? 0.00;
+                }
+
+            // ── Tier 2: Locked global manual ─────────────────────────────
+            } elseif ($type->isEffectivelyLocked()) {
+                if ($type->default_amount !== null) {
+                    $amount   = (float) $type->default_amount;
+                    $isGlobal = true;
+                }
+                // If no default_amount configured yet → amount stays 0, skip.
+
+            // ── Tier 3: Per-employee enrollment ──────────────────────────
             } elseif (isset($enrollments[$type->code])) {
-                // Fixed / loan: enrolled amount (already semi-monthly in DB)
                 $amount = (float) $enrollments[$type->code]->amount;
             }
 
@@ -90,6 +110,11 @@ class DeductionService
                     'code'              => $type->code,
                     'name'              => $type->name,
                     'amount'            => round($amount, 2),
+                    // is_overridden: payslip view shows asterisk for manual overrides
+                    'is_overridden'     => $isOverridden,
+                    // is_global: payslip view may show a different indicator for
+                    // globally-applied amounts (e.g. a globe icon)
+                    'is_global'         => $isGlobal,
                 ];
             }
         }
@@ -102,76 +127,26 @@ class DeductionService
     //  All return the PER CUT-OFF (semi-monthly) amount.
     // ═══════════════════════════════════════════════════════════════════
 
-    /**
-     * Pag-IBIG I (HDMF) — Employee Share
-     *
-     * Rate:
-     *   Basic ≤ ₱1,500  →  1%
-     *   Basic  > ₱1,500  →  2%
-     *   Monthly EE cap: ₱100
-     *
-     * Returns: monthly EE ÷ 2  (per cut-off)
-     */
     public function computePagibig1(float $basicMonthly): float
     {
         $rate      = $basicMonthly <= 1_500.00 ? 0.01 : 0.02;
         $monthlyEE = min(round($basicMonthly * $rate, 2), 100.00);
-
         return round($monthlyEE / 2, 2);
     }
 
-    /**
-     * PhilHealth — Employee Share (2024 rate: 5% of basic monthly salary)
-     *
-     * Monthly premium = 5% of basic
-     *   Floor: ₱500/month
-     *   Ceiling: ₱5,000/month
-     * EE Share = 50% of monthly premium
-     *
-     * Returns: monthly EE share ÷ 2  (per cut-off)
-     *
-     * NOTE: DOLE RO9 uses the basic monthly salary (not the annual basis)
-     * to compute the monthly premium directly.
-     */
     public function computePhilHealth(float $basicMonthly): float
     {
         $monthlyPremium = max(500.00, min(round($basicMonthly * 0.05, 2), 5_000.00));
-        $monthlyEE      = round($monthlyPremium / 2, 2);   // 50% EE share
-
-        return round($monthlyEE / 2, 2);                   // per cut-off
+        $monthlyEE      = round($monthlyPremium / 2, 2);
+        return round($monthlyEE / 2, 2);
     }
 
-    /**
-     * GSIS Life & Retirement — Personal Share (PS)
-     *
-     * Rate: 9% of basic monthly salary
-     *
-     * Returns: monthly PS ÷ 2  (per cut-off)
-     */
     public function computeGsisLife(float $basicMonthly): float
     {
         $monthlyPS = round($basicMonthly * 0.09, 2);
-
         return round($monthlyPS / 2, 2);
     }
 
-    /**
-     * Withholding Tax — Annualized Method (BIR TRAIN Law, 2023+)
-     *
-     * Algorithm:
-     *   1. Determine which cut-off number we are on (1–24 in the calendar year).
-     *   2. Accumulate gross = ytdGross + this cut-off's gross.
-     *   3. Project annual taxable = (accumulated ÷ cut-off number) × 24.
-     *   4. Subtract annual non-taxable: GSIS PS + PhilHealth EE + Pag-IBIG EE.
-     *   5. Apply BIR graduated table → annual tax.
-     *   6. Per cut-off WHT = annual tax ÷ 24.
-     *
-     * ⚠ STUB NOTE: ytdGross is currently passed as 0 from PayrollComputationService
-     * because attendance / YTD tracking is not yet wired. This will be refined
-     * in Phase 3A when YTD accumulation logic is implemented.
-     *
-     * Returns: per cut-off WHT amount (never negative)
-     */
     public function computeWithholdingTax(
         Employee     $employee,
         float        $basicMonthly,
@@ -179,18 +154,13 @@ class DeductionService
         float        $ytdGross,
         PayrollBatch $batch
     ): float {
-        // Which cut-off number in the year (1 = Jan 1st, 24 = Dec 2nd)?
         $cutoffNumber = ($batch->period_month - 1) * 2 + ($batch->cutoff === '1st' ? 1 : 2);
         $cutoffNumber = max(1, $cutoffNumber);
 
-        // This cut-off's gross contribution
         $thisGross        = round(($basicMonthly + $peraMonthly) / 2, 2);
         $accumulatedGross = $ytdGross + $thisGross;
+        $projectedAnnual  = round($accumulatedGross / $cutoffNumber * 24, 2);
 
-        // Project to full year
-        $projectedAnnual = round($accumulatedGross / $cutoffNumber * 24, 2);
-
-        // Annual non-taxable deductions
         $annualGSIS = round($basicMonthly * 0.09 * 12, 2);
         $annualPHIC = max(6_000.00, min(round($basicMonthly * 0.05 * 12, 2), 60_000.00));
         $annualHDMF = min(round($basicMonthly * 0.02 * 12, 2), 1_200.00);
@@ -201,16 +171,6 @@ class DeductionService
         return max(0.00, round($annualTax / 24, 2));
     }
 
-    /**
-     * BIR Graduated Income Tax — TRAIN Law (effective 2023+)
-     *
-     *   ≤ 250,000             →  0%
-     *   250,001 – 400,000     →  15% of excess over 250,000
-     *   400,001 – 800,000     →  22,500 + 20% of excess over 400,000
-     *   800,001 – 2,000,000   →  102,500 + 25% of excess over 800,000
-     *   2,000,001 – 8,000,000 →  402,500 + 30% of excess over 2,000,000
-     *   > 8,000,000           →  2,202,500 + 35% of excess over 8,000,000
-     */
     public function birGraduatedTax(float $taxableIncome): float
     {
         return match (true) {

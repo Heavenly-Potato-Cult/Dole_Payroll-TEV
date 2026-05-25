@@ -34,12 +34,27 @@
 </div>
 
 <div class="alert alert-info" style="margin-bottom:20px;">
-    <div>
-        <strong>How this works:</strong>
-        Tick the checkbox to enroll an employee in a deduction and enter the monthly amount.
-        <strong>Computed deductions</strong> (PhilHealth, GSIS Life/Ret, PAG-IBIG I, W/Holding Tax)
-        are calculated automatically — you cannot set amounts for those here.
-        All amounts are <strong>monthly totals</strong>; the payroll engine halves them per cut-off.
+    <div style="display:flex;flex-direction:column;gap:6px;">
+        <div>
+            <strong>Three types of deductions:</strong>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.85rem;">
+            <span>⚙️</span>
+            <span><strong>Auto-computed</strong> — PhilHealth, GSIS Life/Ret, PAG-IBIG I, W/Holding Tax.
+            Calculated automatically based on the employee's salary. You cannot set amounts here.</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.85rem;">
+            <span>🔒</span>
+            <span><strong>Global Fixed</strong> — A single amount is set at the deduction type level and
+            applied uniformly to all employees. Edit the amount under
+            <a href="{{ route('deduction-types.index') }}">Deduction Types</a>.</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.85rem;">
+            <span>☑</span>
+            <span><strong>Per-employee</strong> — Tick the checkbox to enroll this employee and enter
+            the amount per cut-off. Loans and variable deductions fall here.
+            All amounts shown are <strong>per cut-off</strong> (already halved).</span>
+        </div>
     </div>
 </div>
 
@@ -68,7 +83,7 @@
         @foreach ($leftCategories as $cat)
             @if (isset($grouped[$cat]))
                 @include('payroll::employees._deduction_category', [
-                    'label'       => $categoryLabels[$cat],
+                    'label'       => $categoryLabels[$cat] ?? $cat,
                     'types'       => $grouped[$cat],
                     'enrollments' => $enrollments,
                     'employee'    => $employee,
@@ -82,7 +97,7 @@
         @foreach ($rightCategories as $cat)
             @if (isset($grouped[$cat]))
                 @include('payroll::employees._deduction_category', [
-                    'label'       => $categoryLabels[$cat],
+                    'label'       => $categoryLabels[$cat] ?? $cat,
                     'types'       => $grouped[$cat],
                     'enrollments' => $enrollments,
                     'employee'    => $employee,
@@ -90,18 +105,19 @@
             @endif
         @endforeach
 
-        {{-- Summary card --}}
+        {{-- Summary card — manual/per-employee totals only --}}
         <div class="card" id="deductionSummaryCard">
-            <div class="card-header"><h3>Monthly Deduction Summary</h3></div>
+            <div class="card-header"><h3>Per-Employee Deduction Summary</h3></div>
             <div class="card-body">
                 <div style="font-size:0.85rem;color:var(--text-mid);margin-bottom:12px;">
-                    Manual deductions only. Computed deductions (PhilHealth, GSIS, PAG-IBIG I, WHT)
-                    are excluded — they are calculated during payroll run.
+                    Shows only <strong>per-employee (Tier 3)</strong> deductions that are currently checked.
+                    Auto-computed and Global Fixed deductions are excluded here — they are resolved
+                    automatically during the payroll run.
                 </div>
                 <div style="display:flex;justify-content:space-between;
                             padding:10px 0;border-top:2px solid var(--navy);
                             font-weight:700;font-size:1.05rem;color:var(--navy);">
-                    <span>Total Manual Deductions</span>
+                    <span>Total (Per-Employee)</span>
                     <span id="totalDeductionsDisplay">₱0.00</span>
                 </div>
             </div>
@@ -140,7 +156,20 @@ document.addEventListener('DOMContentLoaded', function () {
         cb.addEventListener('change', function () {
             const row    = this.closest('.deduction-row');
             const amtRow = row.querySelector('.deduction-amount-row');
-            if (amtRow) amtRow.style.display = this.checked ? 'block' : 'none';
+            if (amtRow) {
+                amtRow.style.display = this.checked ? 'block' : 'none';
+
+                // Pre-fill with the default if the amount field is empty
+                if (this.checked) {
+                    const amtInput = amtRow.querySelector('.deduction-amount');
+                    if (amtInput && (!amtInput.value || amtInput.value === '0')) {
+                        const placeholder = amtInput.getAttribute('placeholder');
+                        if (placeholder && placeholder !== '0.00') {
+                            amtInput.value = placeholder;
+                        }
+                    }
+                }
+            }
             recalcTotal();
         });
     });
