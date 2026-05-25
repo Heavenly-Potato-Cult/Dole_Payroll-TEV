@@ -13,15 +13,21 @@ use Carbon\Carbon;
  * Resolves the full set of deduction line items for a single employee
  * for one payroll cut-off.
  *
- * Enhancement #1 change:
- *   Before calling a formula helper, the service now checks
- *   DeductionType::isOverridden(). When an override_amount is set
- *   by an authorized HR user, that value is used directly — the formula
- *   is bypassed. This allows adjustments for edge cases (e.g. a new
- *   employee mid-year, GSIS premium correction) without changing the code.
+ * ── Three-Tier Resolution Order ──────────────────────────────────────────
  *
- *   override_amount is a *per-cutoff* amount (same unit as the formula output),
- *   so no halving is applied again when it is used.
+ *  Tier 1 — Formula-driven  (is_computed = true)
+ *    a. If is_locked = true AND override_amount is set → use override_amount (global fixed).
+ *    b. If override_amount is set (not locked) → use override_amount (Enhancement #1).
+ *    c. Otherwise → run the salary-based formula.
+ *
+ *  Tier 2 — Locked global  (is_computed = false, isEffectivelyLocked() = true)
+ *    Use default_amount directly. No per-employee enrollment lookup.
+ *    Loan-category types are exempt — they always fall to Tier 3.
+ *
+ *  Tier 3 — Per-employee  (is_computed = false, isEffectivelyLocked() = false)
+ *    Look up the employee's active enrollment for this cut-off date.
+ *    If found, use enrollment.amount. Otherwise 0.
+ * ─────────────────────────────────────────────────────────────────────────
  */
 class DeductionService
 {
@@ -33,7 +39,7 @@ class DeductionService
      * @param  Employee     $employee
      * @param  PayrollBatch $batch
      * @param  float        $ytdGross   Year-to-date gross before this cut-off (for WHT)
-     * @return array
+     * @return array        Each element: [deduction_type_id, code, name, amount, is_overridden, is_global]
      */
     public function resolveDeductions(Employee $employee, PayrollBatch $batch, float $ytdGross = 0.0): array
     {
@@ -43,14 +49,16 @@ class DeductionService
 
         $allTypes = DeductionType::active()->ordered()->get();
 
+        // Pre-load per-employee enrollments (Tier 3 only)
         $enrollments = $employee->deductionEnrollments()
             ->with('deductionType')
             ->activeOn($payrollDate)
             ->get()
             ->keyBy(fn ($e) => $e->deductionType->code);
 
-        // ── Pre-compute formulas (only used when no override is set) ──────
-        $computed = [
+        // ── Pre-compute formula amounts ───────────────────────────────────
+        // These are computed once and used only when the formula path is taken.
+        $formulaAmounts = [
             'PAG_IBIG_1'           => $this->computePagibig1($basicMonthly),
             'PHILHEALTH'           => $this->computePhilHealth($basicMonthly),
             'GSIS_LIFE_RETIREMENT' => $this->computeGsisLife($basicMonthly),
@@ -63,15 +71,35 @@ class DeductionService
         $lines = [];
 
         foreach ($allTypes as $type) {
-            $amount = 0.00;
+            $amount       = 0.00;
+            $isOverridden = false;
+            $isGlobal     = false;
 
+            // ── Tier 1: Formula-driven ────────────────────────────────────
             if ($type->is_computed) {
-                // Enhancement #1: honour the manual override when set
-                if ($type->isOverridden()) {
-                    $amount = (float) $type->override_amount;
+                if ($type->isEffectivelyLocked() && $type->override_amount !== null) {
+                    // Locked + override → global fixed amount, bypasses formula
+                    $amount       = (float) $type->override_amount;
+                    $isOverridden = true;
+                    $isGlobal     = true;
+                } elseif ($type->isOverridden()) {
+                    // Not locked but override set → per-type manual adjustment (Enhancement #1)
+                    $amount       = (float) $type->override_amount;
+                    $isOverridden = true;
                 } else {
-                    $amount = $computed[$type->code] ?? 0.00;
+                    // Normal formula path
+                    $amount = $formulaAmounts[$type->code] ?? 0.00;
                 }
+
+            // ── Tier 2: Locked global manual ─────────────────────────────
+            } elseif ($type->isEffectivelyLocked()) {
+                if ($type->default_amount !== null) {
+                    $amount   = (float) $type->default_amount;
+                    $isGlobal = true;
+                }
+                // If no default_amount configured yet → amount stays 0, skip.
+
+            // ── Tier 3: Per-employee enrollment ──────────────────────────
             } elseif (isset($enrollments[$type->code])) {
                 $amount = (float) $enrollments[$type->code]->amount;
             }
@@ -82,8 +110,11 @@ class DeductionService
                     'code'              => $type->code,
                     'name'              => $type->name,
                     'amount'            => round($amount, 2),
-                    // Flag lets payslip views show an asterisk on overridden lines
-                    'is_overridden'     => $type->isOverridden(),
+                    // is_overridden: payslip view shows asterisk for manual overrides
+                    'is_overridden'     => $isOverridden,
+                    // is_global: payslip view may show a different indicator for
+                    // globally-applied amounts (e.g. a globe icon)
+                    'is_global'         => $isGlobal,
                 ];
             }
         }

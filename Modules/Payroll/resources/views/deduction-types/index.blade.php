@@ -593,6 +593,20 @@
     padding: 0 24px;
 }
 
+.badge-locked {
+    background: #dcfce7;
+    color: #166534;
+    font-size: 0.63rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    padding: 3px 8px;
+    border-radius: 99px;
+    border: 1px solid #16a34a;
+    white-space: nowrap;
+    font-family: var(--font);
+}
+
 /* ── Responsive Design ───────────────────────────────────────────── */
 @media (max-width: 768px) {
     .dt-search-filter {
@@ -771,14 +785,16 @@
                             <span style="font-weight:600;color:var(--navy);">{{ $type->name }}</span>
                         </td>
 
-                        {{-- Type badge --}}
-                        <td>
-                            @if ($type->is_computed)
-                                <span class="badge-computed">🔒 Auto-computed</span>
-                            @else
-                                <span class="badge-manual">Manual</span>
-                            @endif
-                        </td>
+{{-- Type badge --}}
+<td>
+    @if ($type->is_computed)
+        <span class="badge-computed">⚙️ Auto-computed</span>
+    @elseif ($type->isEffectivelyLocked())
+        <span class="badge-locked">🔒 Global Fixed</span>
+    @else
+        <span class="badge-manual">Manual</span>
+    @endif
+</td>
 
                         {{-- Status --}}
                         <td>

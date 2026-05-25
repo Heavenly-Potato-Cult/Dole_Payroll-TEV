@@ -16,36 +16,25 @@ use Illuminate\Validation\Rule;
  * ── CRITICAL CONTRACT ────────────────────────────────────────────────────────
  * The `code` field is IMMUTABLE after creation. It is the cross-system
  * contract key used by:
- *   1. DeductionService::resolveDeductions()         — computed[] map keys
+ *   1. DeductionService::resolveDeductions()         — tier resolution
  *   2. PayrollComputationService::computeEntry()     — match() code keys
  *   3. employee_deduction_enrollments.deduction_type_id — via code lookup
  *
- * Enhancement #1 — Override amounts:
- *   Authorized users may set a manual `override_amount` on a computed type.
- *   DeductionService::resolveDeductions() checks isOverridden() first and
- *   uses override_amount when set, bypassing the formula.
+ * ── Three-Tier Model ─────────────────────────────────────────────────────────
  *
- * Enhancement #1b — Lock / Unlock (is_computed toggle):
- *   `is_computed` may now be changed via the Edit UI.
- *   - Locking (false → true) re-enables formula-driven computation.
- *   - Unlocking (true → false) disables the formula; the type becomes
- *     enrollment-based (manual amounts per employee).
- *   When unlocking, any active override is automatically cleared.
+ *  Tier 1 — Formula-driven  (is_computed = true)
+ *    Amounts calculated per-employee from salary. is_locked + override_amount
+ *    turns them into a global fixed amount bypassing the formula.
  *
- * Enhancement #2 — Dynamic categories:
- *   categoryLabels() now reads from deduction_categories table instead of a
- *   hard-coded array. A dedicated DeductionCategoryController manages CRUD.
+ *  Tier 2 — Locked global  (is_computed = false, is_locked = true)
+ *    default_amount applied to ALL employees. HR cannot edit per-employee.
+ *    Changing default_amount in CMS takes effect on the next payroll run.
+ *    Loan-category types (category IN ['loan','caress']) are EXEMPT — they
+ *    are always Tier 3 even when is_locked = true.
  *
- * Enhancement #3 — Display order uniqueness:
- *   display_order is validated to be unique *within its category* on both
- *   store() and update(). Duplicates across categories are allowed.
- *
- * FIX — existingOrders moved to controller:
- *   Previously the Blade @section('scripts') called DeductionType::all()
- *   directly inside a @json() directive.  Any PHP exception there silently
- *   broke the entire <script> block (including the submit-listener setup),
- *   which is why the Save button appeared to do nothing.  The data is now
- *   computed here and passed as a plain PHP variable.
+ *  Tier 3 — Per-employee  (is_computed = false, is_locked = false OR loan category)
+ *    default_amount (if set) pre-fills the enrollment form. HR may override
+ *    per employee. Used for loans and variable deductions.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 class DeductionTypeController extends Controller
@@ -58,7 +47,6 @@ class DeductionTypeController extends Controller
             ->get();
 
         $grouped = $types->groupBy('category');
-
         $categoryLabels = self::categoryLabels();
 
         return view('payroll::deduction-types.index', compact('grouped', 'categoryLabels'));
@@ -71,39 +59,39 @@ class DeductionTypeController extends Controller
         $categoryLabels = $categories->pluck('label', 'key')->all();
         $nextOrder      = DeductionType::max('display_order') + 1;
 
-        // FIX: compute existingOrders in PHP so the Blade scripts section
-        // never needs to run a raw model query inside @json().
         $existingOrders = DeductionType::all()
             ->groupBy('category')
             ->map(fn ($items) => $items->pluck('display_order')->toArray())
             ->toArray();
 
+        // Loan categories — used by JS to hide the lock toggle for loan types
+        $loanCategories = DeductionType::LOAN_CATEGORIES;
+
         return view('payroll::deduction-types.create',
-            compact('categories', 'categoryLabels', 'nextOrder', 'existingOrders'));
+            compact('categories', 'categoryLabels', 'nextOrder', 'existingOrders', 'loanCategories'));
     }
 
     /**
      * Persist a new deduction type.
      *
-     * New types are always manual (is_computed = false) because no formula
-     * exists for them in DeductionService.  Lock them via Edit after adding
-     * the formula to the service.
+     * New types are always manual (is_computed = false).
+     * is_locked and default_amount may be set at creation time.
      */
     public function store(Request $request)
     {
         $validKeys = DeductionCategory::active()->pluck('key')->all();
 
         $data = $request->validate([
-            'code'          => [
+            'code'           => [
                 'required',
                 'string',
                 'max:50',
                 'regex:/^[A-Z0-9_]+$/',
                 'unique:deduction_types,code',
             ],
-            'name'          => 'required|string|max:200',
-            'category'      => ['required', Rule::in($validKeys)],
-            'display_order' => [
+            'name'           => 'required|string|max:200',
+            'category'       => ['required', Rule::in($validKeys)],
+            'display_order'  => [
                 'required',
                 'integer',
                 'min:0',
@@ -116,11 +104,15 @@ class DeductionTypeController extends Controller
                     }
                 },
             ],
-            'notes' => 'nullable|string|max:500',
+            'notes'          => 'nullable|string|max:500',
+            'default_amount' => 'nullable|numeric|min:0',
+            'is_locked'      => 'nullable|boolean',
         ]);
 
-        $data['is_computed'] = false; // User-created types are never engine-computed
+        $data['is_computed'] = false;
         $data['is_active']   = true;
+        $data['is_locked']   = (bool) ($data['is_locked'] ?? false);
+        $data['default_amount'] = $data['default_amount'] ?? null;
 
         DeductionType::create($data);
 
@@ -134,27 +126,27 @@ class DeductionTypeController extends Controller
         $categories     = DeductionCategory::active()->ordered()->get();
         $categoryLabels = $categories->pluck('label', 'key')->all();
 
-        // FIX: pass existingOrders (excluding current record) from PHP.
         $existingOrders = DeductionType::where('id', '!=', $deductionType->id)
             ->get()
             ->groupBy('category')
             ->map(fn ($items) => $items->pluck('display_order')->toArray())
             ->toArray();
 
-        // Build the formula description for this type (for the preview panel).
         $formulaDescription = self::formulaDescription($deductionType->code);
+        $loanCategories     = DeductionType::LOAN_CATEGORIES;
 
         return view('payroll::deduction-types.edit',
             compact('deductionType', 'categories', 'categoryLabels',
-                    'existingOrders', 'formulaDescription'));
+                    'existingOrders', 'formulaDescription', 'loanCategories'));
     }
 
     /**
      * Update an existing deduction type.
      *
-     * Enhancement #1b: `is_computed` is now accepted from the form.
-     *   - Switching to manual (false) clears any active override.
-     *   - Switching to auto-compute (true) re-enables the formula.
+     * Handles all three tiers:
+     *   - Tier 1 (is_computed): override_amount + is_locked for global formula bypass.
+     *   - Tier 2 (manual, locked): default_amount saved; per-employee editing blocked.
+     *   - Tier 3 (manual, unlocked): default_amount saved as pre-fill default.
      */
     public function update(Request $request, DeductionType $deductionType)
     {
@@ -178,26 +170,30 @@ class DeductionTypeController extends Controller
                 },
             ],
             'notes'           => 'nullable|string|max:500',
-            // Enhancement #1b — allow toggling the computation mode
+            // Global amount + lock
+            'default_amount'  => 'nullable|numeric|min:0',
+            'is_locked'       => 'nullable|boolean',
+            // Tier 1 formula override (is_computed types only)
             'is_computed'     => 'nullable|boolean',
-            // Enhancement #1 — override fields
             'override_amount' => 'nullable|numeric|min:0',
             'override_note'   => 'nullable|string|max:300',
             'clear_override'  => 'nullable|boolean',
         ]);
 
-        // Resolve final is_computed state (checkbox: present = true, absent = false)
-        $newIsComputed = (bool) ($data['is_computed'] ?? false);
+        $newIsComputed = (bool) ($data['is_computed'] ?? $deductionType->is_computed);
+        $newIsLocked   = (bool) ($data['is_locked'] ?? false);
 
         $updateData = [
-            'name'        => $data['name'],
-            'category'    => $data['category'],
-            'display_order' => $data['display_order'],
-            'notes'       => $data['notes'] ?? null,
-            'is_computed' => $newIsComputed,
+            'name'           => $data['name'],
+            'category'       => $data['category'],
+            'display_order'  => $data['display_order'],
+            'notes'          => $data['notes'] ?? null,
+            'is_computed'    => $newIsComputed,
+            'is_locked'      => $newIsLocked,
+            'default_amount' => isset($data['default_amount']) ? $data['default_amount'] : null,
         ];
 
-        // Handle override only when the type is (or remains) computed
+        // ── Tier 1: formula override handling ────────────────────────────
         if ($newIsComputed) {
             if (! empty($data['clear_override'])) {
                 $updateData['override_amount'] = null;
@@ -207,22 +203,21 @@ class DeductionTypeController extends Controller
                 $updateData['override_note']   = $data['override_note'] ?? null;
             }
         } else {
-            // Switching to manual — always clear any active override
+            // Switching to manual — clear any formula override
             $updateData['override_amount'] = null;
             $updateData['override_note']   = null;
         }
 
         $deductionType->update($updateData);
 
-        $modeLabel = $newIsComputed ? 'locked (auto-computed)' : 'unlocked (manual)';
+        $lockLabel = $newIsLocked ? 'Locked (global amount)' : 'Unlocked (per-employee)';
+        $modeLabel = $newIsComputed ? 'Auto-computed' : $lockLabel;
 
         return redirect()->route('deduction-types.index')
             ->with('success', "Deduction type \"{$deductionType->name}\" updated. Mode: {$modeLabel}.");
     }
 
-    /**
-     * Toggle is_active on/off.
-     */
+    /** Toggle is_active on/off. */
     public function toggle(DeductionType $deductionType)
     {
         $deductionType->update(['is_active' => ! $deductionType->is_active]);
@@ -233,10 +228,7 @@ class DeductionTypeController extends Controller
 
     /**
      * Permanently delete a deduction type.
-     *
-     * Only allowed when the type is inactive — this prevents accidental removal
-     * of types that are referenced by active payroll runs or enrollments.
-     * For types with payroll history, deactivate instead of deleting.
+     * Only allowed when inactive.
      */
     public function destroy(DeductionType $deductionType)
     {
@@ -251,10 +243,7 @@ class DeductionTypeController extends Controller
             ->with('success', "Deduction type \"{$name}\" has been permanently deleted.");
     }
 
-    /**
-     * Reorder via AJAX drag-and-drop.
-     * Exempt from per-category uniqueness check (batch overwrite).
-     */
+    /** Reorder via AJAX drag-and-drop. */
     public function reorder(Request $request)
     {
         $request->validate([
@@ -307,17 +296,17 @@ class DeductionTypeController extends Controller
     public static function formulaDescription(string $code): ?array
     {
         return match ($code) {
-            'PAG_IBIG_1' => [
+            'PAG_IBIG_1', 'PAGIBIG_1' => [
                 'label'       => 'PAG-IBIG I (HDMF Mandatory)',
-                'formula'     => '2% of Basic Monthly Salary, capped at ₱100/month EE share → ÷ 2 per cut-off.',
+                'formula'     => '2% of Basic Monthly Salary (1% if basic ≤ ₱1,500), capped at ₱100/month EE share → ÷ 2 per cut-off.',
                 'variables'   => ['basic_monthly'],
-                'js_formula'  => 'Math.min(basic * 0.02, 100) / 2',
+                'js_formula'  => 'Math.min(basic * (basic <= 1500 ? 0.01 : 0.02), 100) / 2',
             ],
             'PHILHEALTH' => [
                 'label'       => 'PhilHealth Mandatory Premium',
                 'formula'     => '5% of Basic (floor ₱500, ceiling ₱5,000/month) → 50% EE share → ÷ 2 per cut-off.',
                 'variables'   => ['basic_monthly'],
-                'js_formula'  => 'Math.max(250, Math.min(basic * 0.05 * 0.5, 2500)) / 2',
+                'js_formula'  => 'Math.max(125, Math.min(basic * 0.05 * 0.5, 2500)) / 2',
             ],
             'GSIS_LIFE_RETIREMENT', 'GSIS_LIFE_RET' => [
                 'label'       => 'GSIS Life & Retirement (Personal Share)',
@@ -327,9 +316,9 @@ class DeductionTypeController extends Controller
             ],
             'WITHHOLDING_TAX', 'WHT' => [
                 'label'       => 'Withholding Tax (BIR TRAIN Law)',
-                'formula'     => 'Annual projection method: (Accumulated Gross ÷ Cut-off No.) × 24 − mandatory deductions → BIR graduated table → ÷ 24. Varies per employee and YTD gross.',
+                'formula'     => 'Annual projection method: accumulated gross ÷ cut-off no. × 24 minus annual mandatory deductions → BIR graduated table → ÷ 24. Varies per employee and YTD gross.',
                 'variables'   => ['basic_monthly', 'pera_monthly', 'ytd_gross', 'cutoff_number'],
-                'js_formula'  => null, // Too complex for a JS preview
+                'js_formula'  => null,
             ],
             default => null,
         };

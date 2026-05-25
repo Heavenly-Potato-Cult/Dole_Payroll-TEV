@@ -16,7 +16,7 @@ class EmployeeAuthService
     public function authenticate(string $employeeId, string $password): ?Employee
     {
         $employee = Employee::where('employee_no', $employeeId)->first();
-        
+
         if (!$employee) {
             Log::warning('Employee login failed: employee not found', [
                 'employee_id' => $employeeId,
@@ -60,7 +60,7 @@ class EmployeeAuthService
         ];
 
         $positionTitle = strtolower($employee->position_title ?? '');
-        
+
         foreach ($officerKeywords as $keyword) {
             if (str_contains($positionTitle, $keyword)) {
                 return true;
@@ -113,7 +113,7 @@ class EmployeeAuthService
     public function getRedirectDestination(User $user): string
     {
         $isEmployee = RoleService::isEmployee($user);
-        $isOfficer = RoleService::canAccessPayroll($user);
+        $isOfficer = RoleService::canAccessModule($user, 'payroll');
         $isCashier = RoleService::isCashier($user);
 
         if ($isCashier) {
