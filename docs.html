@@ -198,6 +198,12 @@
             color: #0c5460;
         }
 
+        .callout-success {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -366,7 +372,7 @@
                             <li>Run <code>php artisan migrate</code></li>
                             <li>Run <code>php artisan db:seed</code></li>
                         </ul>
-                    </li>
+                    </td>
                     <li>Start the server: <code>php artisan serve</code></li>
                     <li>Access at <code>http://localhost:8000</code></li>
                 </ol>
@@ -427,8 +433,7 @@
                         <td><span class="badge badge-amber">Yes</span></td>
                     </tr>
                 </table>
-
-                            </section>
+            </section>
 
             <section id="folder-structure" class="section">
                 <h1>Folder Structure</h1>
@@ -500,7 +505,6 @@
                     <li><code>backup-data.bat</code> / <code>restore-data.bat</code> — Database backup/restore</li>
                     <li><code>gdrive-*.bat</code> — Google Drive integration scripts (prepared but not configured)</li>
                 </ul>
-
             </section>
 
             <section id="key-modules" class="section">
@@ -519,7 +523,7 @@
                             <li>Applies enrolled loan deductions</li>
                             <li>Computes net pay</li>
                         </ul>
-                    </li>
+                    </td>
                     <li>Batch status changes to <code>computed</code></li>
                     <li>Payroll Officer submits → <code>pending_accountant</code></li>
                     <li>Accountant certifies funds → <code>pending_rd</code></li>
@@ -564,7 +568,7 @@
                             <li>Cash Advance: Records cash advance amount, status → <code>cashier_released</code></li>
                             <li>Reimbursement: Status → <code>reimbursed</code></li>
                         </ul>
-                    </li>
+                    </td>
                     <li>After travel, HRMO certifies travel completion (optional Annex A expenses)</li>
                     <li>For Cash Advance: Employee or HRMO files liquidation with actual amount spent</li>
                     <li>System calculates balance due (positive = refund, negative = additional payment)</li>
@@ -654,68 +658,6 @@
                 </ol>
             </section>
 
-            <section id="authentication" class="section">
-                <h1>Authentication & Role Access</h1>
-                <p>The system uses Laravel Sanctum for authentication and Spatie Laravel Permission for role-based access control.</p>
-
-                <h2>Authentication System</h2>
-                <p><strong>Admin Login:</strong></p>
-                <ul>
-                    <li>Traditional username/password authentication for system administrators</li>
-                    <li>Session-based authentication using Laravel Sanctum</li>
-                    <li>Login form at <code>/login</code> with role-based redirects after authentication</li>
-                </ul>
-
-                <p><strong>Employee Registration:</strong></p>
-                <ul>
-                    <li>Employee accounts are created by system administrators (payroll_officer, super_admin)</li>
-                    <li>Users can be linked to employee records</li>
-                </ul>
-
-                <h2>Role-Based Access Control</h2>
-                <p>The system uses Spatie Laravel Permission package for role management:</p>
-                <ul>
-                    <li><strong>Roles:</strong> payroll_officer, hrmo, accountant, ard, chief_admin_officer, cashier, budget_officer, super_admin</li>
-                    <li><strong>Dual Role System:</strong> Users can have a main role and a sub role for flexible access control</li>
-                    <li><strong>Role Assignments:</strong> Managed via UserRoleAssignment model with activation status</li>
-                    <li><strong>Authorization:</strong> Role checks enforced throughout controllers and routes</li>
-                </ul>
-
-                <h3>Role-Based Redirects</h3>
-                <p>After authentication, users are redirected based on their role:</p>
-                <ul>
-                    <li><strong>payroll_officer, hrmo, accountant, ard, chief_admin_officer:</strong> Redirected to dashboard</li>
-                    <li><strong>cashier:</strong> Redirected to cashier-specific dashboard with restricted access</li>
-                    <li><strong>budget_officer:</strong> Redirected to TEV dashboard for monitoring</li>
-                    <li><strong>super_admin:</strong> Full system access to all modules</li>
-                </ul>
-
-                <h2>User Management</h2>
-                <p><strong>User Registration:</strong></p>
-                <ul>
-                    <li>Users are created by super_admin or payroll_officer</li>
-                    <li>User accounts have active/inactive status for better account management</li>
-                    <li>Email field is nullable to support employee accounts without email</li>
-                    <li>Users can be linked to employee records via employee_id field</li>
-                </ul>
-
-                <p><strong>Signatory Management:</strong></p>
-                <ul>
-                    <li>Signatory model allows linking users to document signatory roles</li>
-                    <li>Signatories are used for payroll and TEV document approvals</li>
-                    <li>Signatory information is included on payslips and reports</li>
-                </ul>
-
-                <h2>Middleware</h2>
-                <p>Custom middleware for access control:</p>
-                <ul>
-                    <li><code>JwtAuth</code> — JWT authentication middleware</li>
-                    <li><code>PayrollReleasedOnly</code> — Restricts access to released payroll batches only</li>
-                    <li>Role checks are implemented inline in controllers for fine-grained control</li>
-                </ul>
-
-            </section>
-
             <section id="system-overview" class="section">
                 <h1>System Overview</h1>
                 <p>The DOLE Payroll System is a comprehensive payroll and travel expense management system for Department of Labor and Employment Regional Office IX. The system handles semi-monthly payroll processing, government remittances, travel expense vouchers (TEV), and office orders with role-based access control.</p>
@@ -800,7 +742,6 @@
                 <p><strong>GET /attendance and GET /employees/:id/attendance:</strong> <code>period</code> (e.g., 2025-01 YYYY-MM), <code>cutoff</code> (1st or 2nd)</p>
 
                 <h3>Employee Data Format</h3>
-                <p>The employee API returns data in the following format:</p>
                 <pre><code>{
   "employee_id": "EMP001",
   "employee_no": "EMP-2024-001",
@@ -825,30 +766,8 @@
   "philhealth_no": "5566778899",
   "tin": "123-456-789-000"
 }</code></pre>
-                <p><strong>Field Descriptions:</strong></p>
-                <ul>
-                    <li><code>employee_id</code> - Employee identifier (format: EMP###)</li>
-                    <li><code>employee_no</code> - Employee number</li>
-                    <li><code>last_name</code>, <code>first_name</code>, <code>middle_name</code> - Employee name fields</li>
-                    <li><code>position_title</code> - Job position title</li>
-                    <li><code>plantilla_item_no</code> - Plantilla item number</li>
-                    <li><code>salary_grade</code> - Salary grade level</li>
-                    <li><code>step</code> - Salary step increment</li>
-                    <li><code>basic_monthly_salary</code> - Basic monthly salary amount</li>
-                    <li><code>division_id</code>, <code>division_name</code>, <code>division_code</code> - Division information</li>
-                    <li><code>employment_status</code> - Employment status (Permanent, Casual, Contractual, Job Order)</li>
-                    <li><code>official_station</code> - Official station assignment</li>
-                    <li><code>date_original_appointment</code> - Date of original appointment</li>
-                    <li><code>last_promotion_date</code> - Date of last promotion</li>
-                    <li><code>gsis_bp_no</code> - GSIS BP number</li>
-                    <li><code>gsis_crn</code> - GSIS CRN number</li>
-                    <li><code>pagibig_mid_no</code> - Pag-IBIG MID number</li>
-                    <li><code>philhealth_no</code> - PhilHealth number</li>
-                    <li><code>tin</code> - Tax Identification Number</li>
-                </ul>
 
                 <h3>Attendance Data Format</h3>
-                <p>The attendance API returns data in the following format:</p>
                 <pre><code>{
   "employee_id": "EMP001",
   "cutoff_start": "2025-01-01",
@@ -858,20 +777,8 @@
   "late_minutes": 45,
   "undertime_minutes": 30
 }</code></pre>
-                <p><strong>Field Descriptions:</strong></p>
-                <ul>
-                    <li><code>employee_id</code> - Employee identifier (format: EMP###)</li>
-                    <li><code>cutoff_start</code> - Payroll period start date (YYYY-MM-DD)</li>
-                    <li><code>cutoff_end</code> - Payroll period end date (YYYY-MM-DD)</li>
-                    <li><code>days_present</code> - Number of days present (decimal)</li>
-                    <li><code>lwop_days</code> - Leave Without Pay days (decimal)</li>
-                    <li><code>late_minutes</code> - Total late minutes (integer)</li>
-                    <li><code>undertime_minutes</code> - Total undertime minutes (integer)</li>
-                </ul>
-                <p><strong>Note for Official HRIS Integration:</strong> The official HRIS API should follow a similar data structure. The <code>AttendanceService@pullForBatch()</code> method expects attendance data in this format and maps it to the <code>attendance_snapshots</code> table.</p>
 
                 <h3>Office Order Data Format</h3>
-                <p>The dummy HRIS Employee API returns Office Order data in the following format:</p>
                 <pre><code>{
   "office_order_no": "OO-2025-001-1",
   "employee_no": "EMP-0001",
@@ -884,20 +791,6 @@
   "approved_at": "2025-03-01T08:00:00.000Z",
   "remarks": "Urgent"
 }</code></pre>
-                <p><strong>Field Descriptions:</strong></p>
-                <ul>
-                    <li><code>office_order_no</code> - Office Order identifier (format: OO-YYYY-{emp_id}-{order_num})</li>
-                    <li><code>employee_no</code> - Employee number (format: EMP-####)</li>
-                    <li><code>purpose</code> - Purpose of travel (e.g., "Attend regional planning workshop", "Participate in training seminar")</li>
-                    <li><code>destination</code> - Travel destination city</li>
-                    <li><code>travel_type</code> - Type of travel: "local", "regional", or "national"</li>
-                    <li><code>travel_date_start</code> - Travel start date (YYYY-MM-DD)</li>
-                    <li><code>travel_date_end</code> - Travel end date (YYYY-MM-DD)</li>
-                    <li><code>status</code> - Order status (always "approved" for pulled orders)</li>
-                    <li><code>approved_at</code> - Approval timestamp (ISO 8601 datetime)</li>
-                    <li><code>remarks</code> - Optional remarks (e.g., "Urgent", "Regular", "With funding") or null</li>
-                </ul>
-                <p><strong>Note for Official HRIS Integration:</strong> The official HRIS API should follow a similar data structure. The <code>OfficeOrderController@pullFromApi()</code> method expects office order data in this format and maps it to the <code>office_orders</code> table.</p>
             </section>
 
             <section id="business-processes" class="section">
@@ -916,7 +809,7 @@
                             <li>Applies enrolled loan deductions</li>
                             <li>Computes net pay</li>
                         </ul>
-                    </li>
+                    </td>
                     <li><strong>Payroll Submission:</strong> Payroll Officer submits for HRMO review</li>
                     <li><strong>HRMO Certification:</strong> HRMO reviews and certifies the payroll</li>
                     <li><strong>ARD Approval:</strong> Assistant Regional Director approves the payroll</li>
@@ -953,6 +846,40 @@
                 </ul>
             </section>
 
+            <section id="authentication" class="section">
+                <h1>Authentication & Role Access</h1>
+                <p>The system uses Laravel Sanctum for session management and standard cookie-based authentication, backed by Spatie Laravel Permission.</p>
+
+                <div class="callout-note">
+                    <strong>Branch Split Notification:</strong> As of May 2026, the implementation strategy is split into two distinct code paths to preserve production safety while keeping structural work accessible.
+                </div>
+
+                <h2>Current Main Branch Strategy (Stable Version)</h2>
+                <p>The active deployment codebase on <code>main</code> relies on <strong>Legacy String-Literal Declarations</strong> to determine viewport configurations. This approach isolates interface sections via direct string lookups:</p>
+                <pre><code>// Enforces access on views safely without syntax compiler interferences
+@role('payroll_officer|hrmo|accountant|ard|chief_admin_officer')
+    &lt;div class="db-stat neutral"&gt;...&lt;/div&gt;
+@endrole</code></pre>
+                <p>To view layouts on your administrative user account, ensure you append the explicit global master-key inside the application boot sequence:</p>
+                <pre><code>// Enforced inside app/Providers/AppServiceProvider.php
+public function boot(): void
+{
+    \Illuminate\Support\Facades\Gate::before(function ($user, $ability) {
+        return $user->hasRole('super_admin') ? true : null;
+    });
+}</code></pre>
+
+                <h2>Type-Safe Enum Branch (Not Stable Version)</h2>
+                <p>An enterprise upgrade branch named <code>not stableversion</code> is preserved in the remote repository. This version implements an automated, decoupled permission map driven by a central system backend Enum:</p>
+                <pre><code>&lt;!-- Managed via \App\SharedKernel\Enums\Permission --&gt;
+@can(\App\SharedKernel\Enums\Permission::PAYROLL_VIEW-&gt;value)
+    &lt;div class="db-stat neutral"&gt;...&lt;/div&gt;
+@endcan</code></pre>
+                <div class="callout-danger">
+                    <strong>IT Integration Warning:</strong> Merging the enum system directly onto the dashboard template without wrapping separate blocks into a singular structural <code>@if / @elseif</code> tree will trigger a layout cascading rendering bug, compounding card groups down the interface for high-tier accounts.
+                </div>
+            </section>
+
             <section id="data-flows" class="section">
                 <h1>Data Flows</h1>
 
@@ -980,7 +907,7 @@
                             <li>Applies loan deductions via DeductionService</li>
                             <li>Computes net pay</li>
                         </ul>
-                    </li>
+                    </td>
                     <li><strong>Payroll Entries:</strong> Results stored in payroll_entries table</li>
                     <li><strong>Payroll Deductions:</strong> Individual deductions stored in payroll_deductions table</li>
                 </ol>
@@ -998,11 +925,15 @@
             <section id="quirks" class="section">
                 <h1>Quirks & Decisions</h1>
 
-                <h2>Attendance Data</h2>
-                <div class="callout-success">
-                    <strong>Implemented:</strong> Attendance data is automatically pulled from external HRIS API via <code>AttendanceService@pullForBatch()</code> and stored in <code>attendance_snapshots</code> table.
+                <h2>Database Relationship Desyncs</h2>
+                <div class="callout-warning">
+                    <strong>Critical Development Caveat:</strong> When executing database seed executions via <code>php artisan db:seed --class=RolePermissionSeeder</code>, all existing authorization maps in the polymorph tables are systematically flushed. 
                 </div>
-                <p>The <code>attendance_snapshots</code> table stores attendance data (days_present, lwop_days, late_minutes, undertime_minutes) for payroll computation. HR can manually correct attendance data if needed. <strong>YTD (Year-To-Date)</strong> gross tracking is required for accurate withholding tax computation using the annualized method (currently hardcoded to 0.0).</p>
+                <p>Because employee profiles link authentication via <code>employee_id</code> rows rather than standard user string schemas, running a local seeder will drop permissions and hide components globally. To restore dashboard access without manual string mapping scripts, immediately inject the primary key directly into your terminal runtime via Artisan Tinker:</p>
+                <pre><code>// Instantly binds your administrator credentials back to the security loop
+php artisan tinker
+&gt;&gt; \App\Models\User::find(1)-&gt;syncRoles('super_admin');
+&gt;&gt; app()[\Spatie\Permission\PermissionRegistrar::class]-&gt;forgetCachedPermissions();</code></pre>
 
                 <h2>TEV Auto-Submission</h2>
                 <p>TEV requests are auto-submitted on creation. There is no draft state for TEVs. This is intentional because HRMO files TEVs on behalf of employees — the draft state was redundant. The <code>submit()</code> method exists but aborts with a 410 error if called.</p>
@@ -1031,50 +962,30 @@
                 <p>The <code>/payroll/{payroll}/verify</code> endpoint shows combined net pay for both cutoffs of a month, flags employees below ₱5,000 threshold, and identifies LBP loan deductions. This is for cashier verification before disbursement.</p>
             </section>
 
-            <section id="deployment" class="section">
-                <h1>Deployment</h1>
-                <p>No formal deployment scripts or CI/CD configuration found in the codebase. Deployment would be manual:</p>
-
-                <h2>Manual Deployment Steps</h2>
-                <ol>
-                    <li>Clone repository to server</li>
-                    <li>Run <code>composer install --no-dev --optimize-autoloader</code></li>
-                    <li>Copy <code>.env.example</code> to <code>.env</code> and configure production values</li>
-                    <li>Run <code>php artisan key:generate</code></li>
-                    <li>Run <code>php artisan migrate --force</code></li>
-                    <li>Run <code>php artisan db:seed --force</code> (if seeders are production-ready)</li>
-                    <li>Set <code>APP_DEBUG=false</code> in <code>.env</code></li>
-                    <li>Set proper permissions for <code>storage</code> and <code>bootstrap/cache</code></li>
-                    <li>Configure web server (Apache/Nginx) to point to <code>public</code> directory</li>
-                </ol>
-
-                <h2>Backups</h2>
-                <p>Spatie Laravel Backup is configured. Use:</p>
-                <pre><code>php artisan backup:run</code></pre>
-                <p>Backup scripts (<code>backup-data.bat</code>, <code>restore-data.bat</code>) are available for Windows environments using Google Drive integration (not yet configured).</p>
-            </section>
-
             <section id="known-issues" class="section">
                 <h1>Known Issues</h1>
                 <p>Based on system verification as of May 2026:</p>
 
                 <h2>Critical Issues (Tier 1)</h2>
                 <div class="callout-success">
-                    <strong>G-01:</strong> RESOLVED - ReportController has been refactored. System now uses modular architecture with <code>PayrollReportController</code> and <code>TevReportController</code>, both fully implemented.
+                    <strong>G-01:</strong> RESOLVED - ReportController has been completely split out. System now maps data via <code>PayrollReportController</code> and <code>TevReportController</code> hooks.
                 </div>
                 <div class="callout-success">
-                    <strong>G-02:</strong> RESOLVED - Attendance data is pulled from external HRIS API via <code>AttendanceService@pullForBatch()</code> and stored in <code>attendance_snapshots</code> table before payroll computation.
+                    <strong>G-02:</strong> RESOLVED - Attendance data maps through the <code>attendance_snapshots</code> tables prior to processing pipelines.
                 </div>
                 <div class="callout-warning">
                     <strong>G-03:</strong> YTD gross must be manually maintained for accurate tax computation. Currently hardcoded to 0.0 in <code>AttendanceSnapshot.php</code> line 64.
                 </div>
+                <div class="callout-danger">
+                    <strong>G-07 (New Architecture Block):</strong> The <code>not stableversion</code> branch is prone to view duplication bugs. If the IT team transitions the view files to use type-safe enums without refactoring layout wrappers from separate <code>@can</code> directives into combined logical statement chains, elements will append repeatedly on dashboards containing multiple operational roles.
+                </div>
 
                 <h2>High Impact Issues (Tier 2)</h2>
                 <div class="callout-success">
-                    <strong>G-04:</strong> RESOLVED - All government export classes are now fully implemented (GSIS, HDMF, PHIC, LBP, CARESS, MASS, Provident Fund, BTR).
+                    <strong>G-04:</strong> RESOLVED - All government remittance exports are fully implemented (GSIS, HDMF, PHIC, LBP, CARESS, MASS, Provident Fund, BTR).
                 </div>
                 <div class="callout-warning">
-                    <strong>G-06:</strong> EmployeePolicy and TevPolicy are empty stubs — authorization checks are done inline in controllers instead.
+                    <strong>G-06:</strong> EmployeePolicy and TevPolicy remain empty stubs — validation filters are processed safely within inline controller loops.
                 </div>
 
                 <h2>Medium Impact Issues (Tier 3)</h2>
@@ -1100,21 +1011,6 @@
                     <li>Only one Factory (UserFactory) — limited testability</li>
                     <li>API Resource classes return raw data without transformation</li>
                     <li>No reusable role-checking middleware — authorization is inline in controllers</li>
-                </ul>
-
-                <h2>Recommendation</h2>
-                <div class="callout-note">
-                    <strong>Priority:</strong> Address remaining Tier 1 issue (G-03) before production deployment for accurate withholding tax computation.
-                </div>
-                <p>Refer to <code>SYSTEM-GAP-ANALYSIS.md</code> for a detailed 6-phase implementation roadmap and risk register. Note: Some items in that analysis have been resolved (G-01, G-02, G-04). G-05 (automated test suite) is not applicable for OJT student project context.</p>
-
-                <h2>Additional Documentation</h2>
-                <ul>
-                    <li><code>README.md</code> - Comprehensive project overview and setup instructions</li>
-                    <li><code>ARCHITECTURE_ANALYSIS.md</code> - Detailed system architecture analysis</li>
-                    <li><code>README-SETUP.md</code> - Detailed XAMPP setup and troubleshooting</li>
-                    <li><code>TEAM-SETUP.md</code> - Team collaboration and Google Drive setup</li>
-                    <li><code>SYSTEM-GAP-ANALYSIS.md</code> - Complete gap analysis and implementation roadmap</li>
                 </ul>
             </section>
         </main>
