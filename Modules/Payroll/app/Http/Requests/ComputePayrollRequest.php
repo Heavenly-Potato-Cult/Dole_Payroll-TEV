@@ -20,6 +20,8 @@ class ComputePayrollRequest extends FormRequest
             'period_year'  => ['required', 'integer', 'min:2020', 'max:2099'],
             'period_month' => ['required', 'integer', 'min:1', 'max:12'],
             'cutoff'       => ['required', 'in:1st,2nd'],
+            'period_start' => ['nullable', 'date', 'after_or_equal:period_year-01-01'],
+            'period_end'   => ['nullable', 'date', 'after:period_start'],
         ];
     }
 
@@ -33,6 +35,8 @@ class ComputePayrollRequest extends FormRequest
             'period_month.max'      => 'Month must be between January and December.',
             'cutoff.required'       => 'Please choose a cut-off period.',
             'cutoff.in'             => 'Cut-off must be either 1st (1–15) or 2nd (16–30/31).',
+            'period_start.after_or_equal' => 'Period start must be within the selected year.',
+            'period_end.after'      => 'Period end must be after period start.',
         ];
     }
 

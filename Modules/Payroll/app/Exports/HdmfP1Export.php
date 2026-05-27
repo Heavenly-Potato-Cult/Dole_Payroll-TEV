@@ -50,15 +50,16 @@ class HdmfP1Export implements FromCollection, WithTitle, WithEvents
         foreach ($entries as $entry) {
             $ded = $entry->deductions->first();
             $emp = $entry->employee;
+            $percov = sprintf('%04d%02d', $this->year, $this->month);
             $this->rows[] = [
-                $emp->pagibig_mid_no ?? '',   // col A - Pag-IBIG MID NO.
+                $emp->pagibig_mid_no ?? $emp->pagibig_no ?? '',   // col A - Pag-IBIG MID NO.
                 '',                            // col B - MP2 ACCOUNT NO. (blank for P1)
                 // col C - MEMBERSHIP PROGRAM filled directly in buildSheet
                 $emp->last_name      ?? '',   // col D
                 $emp->first_name     ?? '',   // col E
                 $emp->name_extension ?? '',   // col F
                 $emp->middle_name    ?? '',   // col G
-                '',                            // col H - PERCOV
+                $percov,                       // col H - PERCOV (YYYYMM)
                 round((float)($ded->amount ?? 0), 2), // col I - EE SHARE
                 0,                             // col J - ER SHARE
                 '',                            // col K - REMARKS

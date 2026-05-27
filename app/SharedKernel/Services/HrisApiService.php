@@ -128,14 +128,37 @@ class HrisApiService
 
     private function perfectAttendance(string $employeeNo, string $cutoffStart, string $cutoffEnd): array
     {
+        // Generate raw daily logs for the fallback period
+        $dailyLogs = [];
+        $currentDate = strtotime($cutoffStart);
+        $endDate = strtotime($cutoffEnd);
+
+        while ($currentDate <= $endDate) {
+            $dateStr = date('Y-m-d', $currentDate);
+            $dayOfWeek = date('N', $currentDate); // 1 (Monday) to 7 (Sunday)
+
+            // Only generate logs for workdays (Monday-Friday)
+            if ($dayOfWeek >= 1 && $dayOfWeek <= 5) {
+                $dailyLogs[] = [
+                    'date' => $dateStr,
+                    'am' => [
+                        'in' => '07:55:00',  // 5 minutes early
+                        'out' => '12:00:00',
+                    ],
+                    'pm' => [
+                        'in' => '13:00:00',
+                        'out' => '17:00:00',
+                    ],
+                ];
+            }
+
+            $currentDate = strtotime('+1 day', $currentDate);
+        }
+
         return [
-            'employee_id'       => $employeeNo,
-            'cutoff_start'      => $cutoffStart,
-            'cutoff_end'        => $cutoffEnd,
-            'days_present'      => 11.0,
-            'lwop_days'         => 0.0,
-            'late_minutes'      => 0,
-            'undertime_minutes' => 0,
+            'user_id'       => $employeeNo,
+            'daily_logs'    => $dailyLogs,
+            'leave_credits' => 15.0,
         ];
     }
 
@@ -236,5 +259,43 @@ class HrisApiService
         }
 
         return [];
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Leave Credits
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Fetch leave credits balance for a specific employee from HRIS API.
+     * HRIS API: GET /employees/{employee_no}/leave-credits → { leave_credits_balance: 15.5 }
+     *
+     * @param  string $employeeNo  employee_no value (e.g. "EMP-0001")
+     * @return float  Leave credits balance
+     */
+    public function fetchLeaveCredits(string $employeeNo): float
+    {
+        try {
+            $response = Http::withToken($this->apiKey)
+                ->timeout(30)
+                ->get("{$this->baseUrl}/employees/{$employeeNo}/leave-credits");
+
+            if ($response->successful()) {
+                $data = $response->json();
+                return (float) ($data['leave_credits_balance'] ?? 0.0);
+            }
+
+            Log::warning('HRIS API leave-credits non-200', [
+                'employee_no' => $employeeNo,
+                'status'      => $response->status(),
+                'body'        => $response->body(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('HRIS API leave-credits error', [
+                'employee_no' => $employeeNo,
+                'error'       => $e->getMessage(),
+            ]);
+        }
+
+        return 0.0;
     }
 }

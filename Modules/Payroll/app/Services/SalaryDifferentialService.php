@@ -43,6 +43,7 @@ class SalaryDifferentialService
      * @param  string   $effectivity_date_to    e.g. "2025-12-31"
      * @param  float    $old_salary
      * @param  float    $new_salary
+     * @param  array|null $deductionRates  Optional custom deduction rates
      * @return array{
      *   differential:      float,
      *   per_month:         array<int, array{month_label: string, days: int, earned: float,
@@ -67,15 +68,27 @@ class SalaryDifferentialService
         string   $effectivity_date_to,
         float    $old_salary,
         float    $new_salary,
+        ?array   $deductionRates = null,
     ): array {
         $from         = Carbon::parse($effectivity_date_from)->startOfDay();
         $to           = Carbon::parse($effectivity_date_to)->startOfDay();
         $differential = round($new_salary - $old_salary, 2);
 
-        // WHT rate: use stored employee rate if available, else 20%
-        $whtRate = isset($employee->wht_rate) && $employee->wht_rate > 0
-            ? (float) $employee->wht_rate
-            : self::DEFAULT_WHT;
+        // Use custom deduction rates if provided, otherwise use defaults
+        $gsisRate = isset($deductionRates['gsis_percent']) && $deductionRates['gsis_percent'] !== null
+            ? (float) $deductionRates['gsis_percent'] / 100
+            : self::GSIS_RATE;
+        $phicRate = isset($deductionRates['philhealth_percent']) && $deductionRates['philhealth_percent'] !== null
+            ? (float) $deductionRates['philhealth_percent'] / 100
+            : self::PHIC_RATE;
+        $pagibigFixed = isset($deductionRates['pagibig_amount']) && $deductionRates['pagibig_amount'] !== null
+            ? (float) $deductionRates['pagibig_amount']
+            : self::PAGIBIG_FIXED;
+        $whtRate = isset($deductionRates['wht_percent']) && $deductionRates['wht_percent'] !== null
+            ? (float) $deductionRates['wht_percent'] / 100
+            : (isset($employee->wht_rate) && $employee->wht_rate > 0
+                ? (float) $employee->wht_rate
+                : self::DEFAULT_WHT);
 
         $perMonth    = [];
         $totalEarned = 0.0;
@@ -110,9 +123,9 @@ class SalaryDifferentialService
                 $days   = $daysInSegment;
             }
 
-            $gsis   = round($earned * self::GSIS_RATE, 2);
-            $phic   = round($earned * self::PHIC_RATE, 2);
-            $pagIbig = self::PAGIBIG_FIXED;
+            $gsis   = round($earned * $gsisRate, 2);
+            $phic   = round($earned * $phicRate, 2);
+            $pagIbig = $pagibigFixed;
 
             $perMonth[] = [
                 'month_label' => $cursor->format('M Y'),

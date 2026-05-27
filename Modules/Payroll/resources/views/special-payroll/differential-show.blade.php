@@ -516,6 +516,30 @@
                 <span class="label">Position</span>
                 <span class="value">{{ optional($employee)->position_title ?? '—' }}</span>
             </div>
+            @if ($batch->new_position)
+            <div class="doc-meta-item">
+                <span class="label">New Position</span>
+                <span class="value" style="color:var(--navy); font-weight:600;">{{ $batch->new_position }}</span>
+            </div>
+            @endif
+            @if ($batch->old_salary_grade || $batch->new_salary_grade)
+            <div class="doc-meta-item">
+                <span class="label">Salary Grade</span>
+                <span class="value">
+                    @if ($batch->old_salary_grade)SG {{ $batch->old_salary_grade }}@else—@endif
+                    @if ($batch->new_salary_grade) → SG {{ $batch->new_salary_grade }}@endif
+                </span>
+            </div>
+            @endif
+            @if ($batch->old_step || $batch->new_step)
+            <div class="doc-meta-item">
+                <span class="label">Step</span>
+                <span class="value">
+                    @if ($batch->old_step)Step {{ $batch->old_step }}@else—@endif
+                    @if ($batch->new_step) → Step {{ $batch->new_step }}@endif
+                </span>
+            </div>
+            @endif
             <div class="doc-meta-item">
                 <span class="label">Old Rate</span>
                 <span class="value">₱{{ number_format($batch->old_basic_salary, 2) }}</span>

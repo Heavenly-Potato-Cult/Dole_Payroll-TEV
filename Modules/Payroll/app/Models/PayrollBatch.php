@@ -19,6 +19,8 @@ class PayrollBatch extends Model
         'status',
         'created_by',
         'prepared_at',
+        'hr_approved_by',
+        'hr_approved_at',
         'reviewed_by',
         'reviewed_at',
         'approved_by',
@@ -32,6 +34,7 @@ class PayrollBatch extends Model
         'period_year'  => 'integer',
         'period_month' => 'integer',
         'prepared_at'  => 'datetime',
+        'hr_approved_at' => 'datetime',
         'reviewed_at'  => 'datetime',
         'approved_at'  => 'datetime',
         'released_at'  => 'datetime',
@@ -43,6 +46,12 @@ class PayrollBatch extends Model
     public function creator()
     {
         return $this->belongsTo(\App\Models\User::class, 'created_by');
+    }
+
+    /** HR who approved the batch */
+    public function hrApprover()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'hr_approved_by');
     }
 
     /** Accountant who certified funds (certify step) */

@@ -21,12 +21,15 @@ use Carbon\Carbon;
  *    c. Otherwise → run the salary-based formula.
  *
  *  Tier 2 — Locked global  (is_computed = false, isEffectivelyLocked() = true)
- *    Use default_amount directly. No per-employee enrollment lookup.
+ *    If percentage is set → calculate as percentage of basic salary.
+ *    Otherwise use default_amount directly. No per-employee enrollment lookup.
  *    Loan-category types are exempt — they always fall to Tier 3.
  *
  *  Tier 3 — Per-employee  (is_computed = false, isEffectivelyLocked() = false)
  *    Look up the employee's active enrollment for this cut-off date.
- *    If found, use enrollment.amount. Otherwise 0.
+ *    If found and enrollment has amount → use enrollment.amount.
+ *    If found but enrollment has no amount and type has percentage → calculate as percentage.
+ *    Otherwise 0.
  * ─────────────────────────────────────────────────────────────────────────
  */
 class DeductionService
@@ -39,9 +42,11 @@ class DeductionService
      * @param  Employee     $employee
      * @param  PayrollBatch $batch
      * @param  float        $ytdGross   Year-to-date gross before this cut-off (for WHT)
+     * @param  int|null     $daysWorked Days worked in the period (for prorated GSIS)
+     * @param  int          $totalDays  Total working days in the period (default 22)
      * @return array        Each element: [deduction_type_id, code, name, amount, is_overridden, is_global]
      */
-    public function resolveDeductions(Employee $employee, PayrollBatch $batch, float $ytdGross = 0.0): array
+    public function resolveDeductions(Employee $employee, PayrollBatch $batch, float $ytdGross = 0.0, ?int $daysWorked = null, int $totalDays = 22): array
     {
         $basicMonthly = (float) $employee->basic_monthly_salary;
         $peraMonthly  = (float) $employee->pera_amount;
@@ -61,7 +66,7 @@ class DeductionService
         $formulaAmounts = [
             'PAG_IBIG_1'           => $this->computePagibig1($basicMonthly),
             'PHILHEALTH'           => $this->computePhilHealth($basicMonthly),
-            'GSIS_LIFE_RETIREMENT' => $this->computeGsisLife($basicMonthly),
+            'GSIS_LIFE_RETIREMENT' => $this->computeGsisLife($basicMonthly, $daysWorked, $totalDays),
             'WITHHOLDING_TAX'      => $this->computeWithholdingTax(
                                           $employee, $basicMonthly, $peraMonthly,
                                           $ytdGross, $batch
@@ -93,15 +98,31 @@ class DeductionService
 
             // ── Tier 2: Locked global manual ─────────────────────────────
             } elseif ($type->isEffectivelyLocked()) {
-                if ($type->default_amount !== null) {
+                if ($type->percentage !== null) {
+                    // Calculate as percentage of basic salary per cut-off
+                    $monthlyAmount = round($basicMonthly * ($type->percentage / 100), 2);
+                    $amount        = round($monthlyAmount / 2, 2);
+                    $isGlobal      = true;
+                } elseif ($type->default_amount !== null) {
                     $amount   = (float) $type->default_amount;
                     $isGlobal = true;
                 }
-                // If no default_amount configured yet → amount stays 0, skip.
+                // If no percentage or default_amount configured → amount stays 0, skip.
 
             // ── Tier 3: Per-employee enrollment ──────────────────────────
             } elseif (isset($enrollments[$type->code])) {
-                $amount = (float) $enrollments[$type->code]->amount;
+                $enrollment = $enrollments[$type->code];
+                if ($enrollment->amount > 0) {
+                    $amount = (float) $enrollment->amount;
+                } elseif ($enrollment->percentage_override !== null) {
+                    // Use individual percentage override if set
+                    $monthlyAmount = round($basicMonthly * ($enrollment->percentage_override / 100), 2);
+                    $amount        = round($monthlyAmount / 2, 2);
+                } elseif ($type->percentage !== null) {
+                    // Enrollment exists but no amount or override - use type-level percentage
+                    $monthlyAmount = round($basicMonthly * ($type->percentage / 100), 2);
+                    $amount        = round($monthlyAmount / 2, 2);
+                }
             }
 
             if ($amount > 0.00) {
@@ -141,9 +162,15 @@ class DeductionService
         return round($monthlyEE / 2, 2);
     }
 
-    public function computeGsisLife(float $basicMonthly): float
+    public function computeGsisLife(float $basicMonthly, ?int $daysWorked = null, ?int $totalDays = 22): float
     {
         $monthlyPS = round($basicMonthly * 0.09, 2);
+        
+        // Prorate for incomplete months if daysWorked is provided
+        if ($daysWorked !== null && $totalDays > 0 && $daysWorked < $totalDays) {
+            $monthlyPS = round($basicMonthly / $totalDays * 0.09 * $daysWorked, 2);
+        }
+        
         return round($monthlyPS / 2, 2);
     }
 

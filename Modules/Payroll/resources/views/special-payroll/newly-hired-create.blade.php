@@ -102,6 +102,9 @@
                         <option value="transferee" {{ old('payroll_type') == 'transferee' ? 'selected' : '' }}>
                             Transferee
                         </option>
+                        <option value="others" {{ old('payroll_type') == 'others' ? 'selected' : '' }}>
+                            Others
+                        </option>
                     </select>
                     @error('payroll_type')
                         <div class="invalid-feedback">{{ $message }}</div>
@@ -134,10 +137,10 @@
                     @enderror
                 </div>
 
-                {{-- Effectivity Date --}}
+                {{-- Assumption to Duty --}}
                 <div class="form-group">
                     <label for="effectivity_date" id="effectivityLabel">
-                        Effectivity Date (First Day of Work) <span style="color:var(--red);">*</span>
+                        Assumption to Duty (First Day of Work) <span style="color:var(--red);">*</span>
                     </label>
                     <input type="date" id="effectivity_date" name="effectivity_date"
                            value="{{ old('effectivity_date') }}"
@@ -188,6 +191,65 @@
                     @error('lwop_days')
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror
+                </div>
+
+                {{-- Deduction Percentage Override (Optional) --}}
+                <div class="form-group" style="margin-top:16px; padding:16px; background:#F8F9FA; border-radius:8px; border:1px solid #E9ECEF;">
+                    <label style="font-size:0.78rem; font-weight:700; color:var(--navy); margin-bottom:12px; display:block;">
+                        Deduction Percentage Override <span class="text-muted">(optional)</span>
+                    </label>
+                    <div style="font-size:0.75rem; color:var(--text-mid); margin-bottom:12px;">
+                        For newly hired/transferee, only GSIS Personal Share is deducted. Leave blank to use default rate (9%).
+                    </div>
+                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;">
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">GSIS PS %</label>
+                            <input type="number" name="deduction_gsis_percent"
+                                   value="{{ old('deduction_gsis_percent') }}"
+                                   step="0.01" min="0" max="100" placeholder="9.00"
+                                   class="{{ $errors->has('deduction_gsis_percent') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+                            @error('deduction_gsis_percent')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">PhilHealth %</label>
+                            <input type="number" name="deduction_philhealth_percent"
+                                   value="{{ old('deduction_philhealth_percent') }}"
+                                   step="0.01" min="0" max="100" placeholder="0.00"
+                                   class="{{ $errors->has('deduction_philhealth_percent') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;" disabled>
+                            @error('deduction_philhealth_percent')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                            <div style="font-size:0.70rem; color:var(--text-light); margin-top:2px;">Not deducted for newly hired</div>
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">Pag-IBIG Amount</label>
+                            <input type="number" name="deduction_pagibig_amount"
+                                   value="{{ old('deduction_pagibig_amount') }}"
+                                   step="0.01" min="0" placeholder="0.00"
+                                   class="{{ $errors->has('deduction_pagibig_amount') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;" disabled>
+                            @error('deduction_pagibig_amount')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                            <div style="font-size:0.70rem; color:var(--text-light); margin-top:2px;">Government share only</div>
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">WHT %</label>
+                            <input type="number" name="deduction_wht_percent"
+                                   value="{{ old('deduction_wht_percent') }}"
+                                   step="0.01" min="0" max="100" placeholder="0.00"
+                                   class="{{ $errors->has('deduction_wht_percent') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;" disabled>
+                            @error('deduction_wht_percent')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                            <div style="font-size:0.70rem; color:var(--text-light); margin-top:2px;">Annualized (no history)</div>
+                        </div>
+                    </div>
                 </div>
 
                 {{-- Remarks --}}
@@ -396,15 +458,19 @@ function updateFormLabels() {
     if (type === 'transferee') {
         pageTitle.textContent = 'Pro-Rated Payroll — Transferee';
         pageDescription.textContent = 'Compute pro-rated salary for an employee who transferred mid-period.';
-        effectivityLabel.innerHTML = 'Transfer Date (First Day in New Office) <span style="color:var(--red);">*</span>';
+        effectivityLabel.innerHTML = 'Assumption to Duty (First Day in New Office) <span style="color:var(--red);">*</span>';
+    } else if (type === 'others') {
+        pageTitle.textContent = 'Pro-Rated Payroll — Others';
+        pageDescription.textContent = 'Compute special pro-rated payroll for other qualifying cases.';
+        effectivityLabel.innerHTML = 'Assumption to Duty <span style="color:var(--red);">*</span>';
     } else if (type === 'newly_hired') {
         pageTitle.textContent = 'Pro-Rated Payroll — Newly Hired';
         pageDescription.textContent = 'Compute pro-rated salary for an employee who started mid-period.';
-        effectivityLabel.innerHTML = 'Effectivity Date (First Day of Work) <span style="color:var(--red);">*</span>';
+        effectivityLabel.innerHTML = 'Assumption to Duty (First Day of Work) <span style="color:var(--red);">*</span>';
     } else {
         pageTitle.textContent = 'Pro-Rated Payroll — Newly Hired / Transferee';
         pageDescription.textContent = 'Compute pro-rated salary for an employee who started mid-period.';
-        effectivityLabel.innerHTML = 'Effectivity Date (First Day of Work) <span style="color:var(--red);">*</span>';
+        effectivityLabel.innerHTML = 'Assumption to Duty (First Day of Work) <span style="color:var(--red);">*</span>';
     }
 }
 

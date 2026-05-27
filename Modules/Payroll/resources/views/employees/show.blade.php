@@ -379,10 +379,11 @@
             <span class="info-label">Minute Rate</span>
             <span class="info-value mono">₱{{ number_format($employee->minute_rate, 6) }}</span>
         </div>
-        <div class="info-row">
+        {{-- Semi-monthly gross hidden per requirement --}}
+        {{-- <div class="info-row">
             <span class="info-label">Semi-monthly Gross</span>
             <span class="info-value bold">₱{{ number_format($employee->semi_monthly_gross, 2) }}</span>
-        </div>
+        </div> --}}
     </div>
 </div>
 

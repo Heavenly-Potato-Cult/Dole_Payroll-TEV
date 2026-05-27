@@ -46,7 +46,7 @@ class EmployeeDeductionController extends Controller
     {
         $request->validate([
             'deductions'                  => 'nullable|array',
-            'deductions.*.amount'         => 'nullable|numeric|min:0',
+            'deductions.*.amount'         => ['nullable', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
             'deductions.*.effective_from' => 'nullable|date',
             'deductions.*.effective_to'   => 'nullable|date|after_or_equal:deductions.*.effective_from',
         ]);

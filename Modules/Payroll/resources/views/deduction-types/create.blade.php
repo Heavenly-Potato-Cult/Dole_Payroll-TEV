@@ -72,10 +72,10 @@
                     </label>
                     <select id="category" name="category" required>
                         <option value="">— Select a category —</option>
-                        @foreach ($categories as $cat)
-                            <option value="{{ $cat->key }}"
-                                    {{ old('category') === $cat->key ? 'selected' : '' }}>
-                                {{ $cat->label }}
+                        @foreach ($categoryLabels as $key => $label)
+                            <option value="{{ $key }}"
+                                    {{ old('category') === $key ? 'selected' : '' }}>
+                                {{ $label }}
                             </option>
                         @endforeach
                     </select>
@@ -140,6 +140,29 @@
                         </div>
                     </div>
 
+                    {{-- Percentage --}}
+                    <div style="margin-bottom:16px;">
+                        <label for="percentage" style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                            Percentage of Basic Salary (%)
+                        </label>
+                        <input type="number"
+                               id="percentage"
+                               name="percentage"
+                               value="{{ old('percentage') }}"
+                               min="0"
+                               max="100"
+                               step="0.01"
+                               placeholder="e.g. 5.00"
+                               style="max-width:180px;">
+                        @error('percentage')
+                            <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                        @enderror
+                        <div style="font-size:0.72rem;color:var(--text-light);margin-top:4px;">
+                            If set, deduction is calculated as this percentage of the employee's basic salary.
+                            Overrides the fixed amount above. Leave blank to use fixed amount instead.
+                        </div>
+                    </div>
+
                     {{-- Lock toggle --}}
                     <div id="lockToggleWrapper">
                         <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:0;">
@@ -159,7 +182,7 @@
                                     can change it here in the CMS.
                                     <br><br>
                                     When unlocked, employees can be enrolled individually and the amount
-                                    can be set per-employee (e.g. for loans with different amortisation amounts).
+                                    can be set per-employee (e.g. for loans with different amortization amounts).
                                 </div>
                                 <div id="loanLockWarning"
                                      style="display:none;margin-top:8px;padding:8px 10px;
@@ -167,7 +190,7 @@
                                             font-size:0.78rem;color:#854d0e;">
                                     ⚠ <strong>Note:</strong> Loan-category deductions (Bank Loans, CARESS IX) are
                                     always treated as per-employee regardless of this setting, since loan
-                                    amortisation amounts differ per employee.
+                                    amortization amounts differ per employee.
                                 </div>
                             </div>
                         </label>

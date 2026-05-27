@@ -47,6 +47,12 @@ class Employee extends Model
         'gsis_bp_no',
         'gsis_crn',
         'pagibig_no',
+        'pagibig_id',
+        'pagibig_mid_no',
+        'mp2_account_no',
+        'hdmf_mpl_app_no',
+        'hdmf_cal_app_no',
+        'hdmf_housing_app_no',
         'philhealth_no',
         'sss_no',
 
@@ -56,6 +62,7 @@ class Employee extends Model
 
         // Status
         'status',
+        'is_excluded',
     ];
 
     protected $casts = [
@@ -70,6 +77,7 @@ class Employee extends Model
         'date_of_birth'             => 'date',
         'original_appointment_date' => 'date',
         'last_promotion_date'       => 'date',
+        'is_excluded'               => 'boolean',
     ];
 
     // ── Status constants ─────────────────────────────────────────

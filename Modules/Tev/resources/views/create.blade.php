@@ -623,6 +623,124 @@
         </div>
 
         <div class="card">
+            <div class="card-header">
+                <h3>📎 Step 5 — Supporting Documents</h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="documents">
+                        Upload Supporting Documents <span class="text-muted">(optional)</span>
+                    </label>
+                    <input type="file" id="documents" name="documents[]" multiple
+                           accept=".pdf,.jpg,.jpeg,.png"
+                           class="{{ $errors->has('documents') ? 'is-invalid' : '' }}">
+                    @error('documents')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.75rem; color:var(--text-light); margin-top:4px;">
+                        Accepted formats: PDF, JPG, JPEG, PNG. Max file size: 5MB per file.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Cash Advance Liquidation Requirements --}}
+        <div class="card" id="liquidation-card" style="display:none;">
+            <div class="card-header">
+                <h3>📋 Step 6 — Liquidation Requirements</h3>
+            </div>
+            <div class="card-body">
+                <div style="font-size:0.78rem; color:var(--text-mid); margin-bottom:12px;">
+                    For Cash Advance requests, please confirm the availability of the following liquidation documents:
+                </div>
+                <div class="form-group">
+                    <div class="form-check" style="margin-bottom:8px;">
+                        <input class="form-check-input" type="checkbox" id="has_receipt" name="has_receipt" value="1"
+                               {{ old('has_receipt') ? 'checked' : '' }}>
+                        <label class="form-check-label" for="has_receipt">
+                            Receipt <span class="text-muted">(required)</span>
+                        </label>
+                        @error('has_receipt')
+                            <div class="invalid-feedback" style="display:block;">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-check" style="margin-bottom:8px;">
+                        <input class="form-check-input" type="checkbox" id="has_boarding_pass" name="has_boarding_pass" value="1"
+                               {{ old('has_boarding_pass') ? 'checked' : '' }}>
+                        <label class="form-check-label" for="has_boarding_pass">
+                            Boarding Pass <span class="text-muted">(required)</span>
+                        </label>
+                        @error('has_boarding_pass')
+                            <div class="invalid-feedback" style="display:block;">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-check" style="margin-bottom:8px;">
+                        <input class="form-check-input" type="checkbox" id="has_cert_complete" name="has_cert_complete" value="1"
+                               {{ old('has_cert_complete') ? 'checked' : '' }}>
+                        <label class="form-check-label" for="has_cert_complete">
+                            Certificate of Completion <span class="text-muted">(required)</span>
+                        </label>
+                        @error('has_cert_complete')
+                            <div class="invalid-feedback" style="display:block;">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label for="liquidation_remarks">Liquidation Remarks <span class="text-muted">(optional)</span></label>
+                    <textarea id="liquidation_remarks" name="liquidation_remarks" rows="2"
+                              class="form-control {{ $errors->has('liquidation_remarks') ? 'is-invalid' : '' }}"
+                              placeholder="Any additional notes about liquidation documents...">{{ old('liquidation_remarks') }}</textarea>
+                    @error('liquidation_remarks')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
+        </div>
+
+        {{-- Reimbursement Requirements --}}
+        <div class="card" id="reimbursement-card" style="display:none;">
+            <div class="card-header">
+                <h3>📋 Step 6 — Reimbursement Requirements</h3>
+            </div>
+            <div class="card-body">
+                <div style="font-size:0.78rem; color:var(--text-mid); margin-bottom:12px;">
+                    For Reimbursement requests, please confirm the availability of the following supporting documents:
+                </div>
+                <div class="form-group">
+                    <div class="form-check" style="margin-bottom:8px;">
+                        <input class="form-check-input" type="checkbox" id="has_proof_payment" name="has_proof_payment" value="1"
+                               {{ old('has_proof_payment') ? 'checked' : '' }}>
+                        <label class="form-check-label" for="has_proof_payment">
+                            Proof of Payment (Receipts/Invoices) <span class="text-muted">(required)</span>
+                        </label>
+                        @error('has_proof_payment')
+                            <div class="invalid-feedback" style="display:block;">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="form-check" style="margin-bottom:8px;">
+                        <input class="form-check-input" type="checkbox" id="has_travel_cert" name="has_travel_cert" value="1"
+                               {{ old('has_travel_cert') ? 'checked' : '' }}>
+                        <label class="form-check-label" for="has_travel_cert">
+                            Travel Completion Certificate <span class="text-muted">(required)</span>
+                        </label>
+                        @error('has_travel_cert')
+                            <div class="invalid-feedback" style="display:block;">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label for="reimbursement_remarks">Reimbursement Remarks <span class="text-muted">(optional)</span></label>
+                    <textarea id="reimbursement_remarks" name="reimbursement_remarks" rows="2"
+                              class="form-control {{ $errors->has('reimbursement_remarks') ? 'is-invalid' : '' }}"
+                              placeholder="Any additional notes about reimbursement documents...">{{ old('reimbursement_remarks') }}</textarea>
+                    @error('reimbursement_remarks')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
             <div class="card-body">
                 <div style="font-size:0.78rem; color:var(--text-mid); margin-bottom:14px; line-height:1.5;">
                     Review all sections before submitting.<br>
@@ -755,8 +873,37 @@ if (ooSelect) {
                 c.classList.remove('selected-cash', 'selected-reimb');
                 if (r.checked) c.classList.add(r.value === 'cash_advance' ? 'selected-cash' : 'selected-reimb');
             });
+
+            // Toggle liquidation/reimbursement requirements section
+            var liquidationCard = document.getElementById('liquidation-card');
+            var reimbursementCard = document.getElementById('reimbursement-card');
+            if (liquidationCard && reimbursementCard) {
+                if (this.value === 'cash_advance') {
+                    liquidationCard.style.display = 'block';
+                    reimbursementCard.style.display = 'none';
+                } else {
+                    liquidationCard.style.display = 'none';
+                    reimbursementCard.style.display = 'block';
+                }
+            }
         });
     });
+
+    // Initialize liquidation/reimbursement card visibility on page load
+    var initialTrack = document.querySelector('.track-card input[type="radio"]:checked');
+    if (initialTrack) {
+        var liquidationCard = document.getElementById('liquidation-card');
+        var reimbursementCard = document.getElementById('reimbursement-card');
+        if (liquidationCard && reimbursementCard) {
+            if (initialTrack.value === 'cash_advance') {
+                liquidationCard.style.display = 'block';
+                reimbursementCard.style.display = 'none';
+            } else {
+                liquidationCard.style.display = 'none';
+                reimbursementCard.style.display = 'block';
+            }
+        }
+    }
 
 document.getElementById('travel_date_start').addEventListener('change', function () {
     var endInput = document.getElementById('travel_date_end');

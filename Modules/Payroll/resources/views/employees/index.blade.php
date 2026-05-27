@@ -361,11 +361,17 @@
                             @role('payroll_officer|hrmo|super_admin')
                             <a href="{{ route('employees.edit', $emp) }}"
                                class="btn btn-outline btn-sm" title="Edit">✎</a>
+                            <button type="button" 
+                                    class="btn btn-sm {{ $emp->is_excluded ? 'btn-success' : 'btn-warning' }}"
+                                    onclick="toggleExclusion({{ $emp->id }}, {{ $emp->is_excluded ? 'false' : 'true' }}, '{{ addslashes($emp->full_name) }}')"
+                                    title="{{ $emp->is_excluded ? 'Include in payroll' : 'Exclude from payroll' }}">
+                                {{ $emp->is_excluded ? '✓' : '✕' }}
+                            </button>
                             <form method="POST" action="{{ route('employees.destroy', $emp) }}"
                                   onsubmit="return confirm('Remove {{ addslashes($emp->full_name) }} from the active plantilla?\n(Soft delete — record is preserved.)')">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-danger btn-sm" title="Remove">✕</button>
+                                <button type="submit" class="btn btn-danger btn-sm" title="Remove">🗑</button>
                             </form>
                             @endrole
                         </div>
@@ -627,6 +633,77 @@ async function executeHrisSync() {
                 executeHrisSync();
             }
         });
+    }
+
+    // Toggle employee exclusion from payroll
+    async function toggleExclusion(employeeId, shouldExclude, employeeName) {
+        const action = shouldExclude ? 'exclude' : 'include';
+        const message = shouldExclude 
+            ? `Exclude ${employeeName} from payroll processing?` 
+            : `Include ${employeeName} in payroll processing?`;
+
+        const result = await Swal.fire({
+            title: `${action.charAt(0).toUpperCase() + action.slice(1)} Employee`,
+            html: `<div style="text-align:left;">
+                <div style="font-weight:700;color:#dc3545;margin-bottom:6px;">${employeeName}</div>
+                <div style="color:#6b7280;font-size:0.92rem;">${message}</div>
+            </div>`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: shouldExclude ? 'Exclude' : 'Include',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: shouldExclude ? '#dc3545' : '#0F1B4C',
+            cancelButtonColor: '#6B7280',
+            reverseButtons: true,
+            focusCancel: true
+        });
+
+        if (!result.isConfirmed) return;
+
+        Swal.fire({
+            title: `<span style="color:#0F1B4C;">${action.charAt(0).toUpperCase() + action.slice(1)}ing…</span>`,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        try {
+            const response = await fetch(`/employees/${employeeId}/toggle-exclusion`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ is_excluded: shouldExclude }),
+            });
+
+            if (response.ok) {
+                Swal.fire({
+                    icon: 'success',
+                    title: `${action.charAt(0).toUpperCase() + action.slice(1)}d!`,
+                    text: `${employeeName} has been ${action}d from payroll processing.`,
+                    showConfirmButton: false,
+                    timer: 1500
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                const errorText = await response.text();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error!',
+                    text: `Failed to ${action} employee: ${errorText}`,
+                });
+            }
+        } catch (error) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error!',
+                text: `An error occurred: ${error.message}`,
+            });
+        }
     }
 }
 </script>

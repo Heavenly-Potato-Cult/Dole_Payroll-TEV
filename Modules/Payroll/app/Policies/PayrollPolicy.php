@@ -11,7 +11,8 @@ use App\Models\User;
  * Governs who may perform each action on a PayrollBatch.
  *
  * Approval chain:
- *   draft / computed  ──(payroll_officer | hrmo)──►  pending_accountant
+ *   draft / computed  ──(payroll_officer | hrmo)──►  pending_hr
+ *   pending_hr         ──(hrmo)────────────────────►  pending_accountant
  *   pending_accountant ──(accountant)──────────────►  pending_rd
  *   pending_rd         ──(ard)────────────────────►   released
  *   released           ──(cashier)─────────────────►  locked
@@ -23,6 +24,7 @@ use App\Models\User;
  *
  * Usage in controllers:
  *   $this->authorize('submit', $batch);
+ *   $this->authorize('hrApprove', $batch);
  *   $this->authorize('certify', $batch);
  *   $this->authorize('approve', $batch);
  *   $this->authorize('lock', $batch);
@@ -72,13 +74,13 @@ class PayrollPolicy
             && $batch->status !== 'locked';
     }
 
-    // ── Step 1: HR submits to Accountant ─────────────────────────────────
+    // ── Step 1: HR submits to HR Approval ─────────────────────────────────
 
     /**
-     * Payroll Officer or HRMO may submit a draft/computed batch to the Accountant.
+     * Payroll Officer or HRMO may submit a draft/computed batch to HR for approval.
      *
      * Triggered by: POST /payroll/{id}/submit
-     * Transitions:  draft | computed  →  pending_accountant
+     * Transitions:  draft | computed  →  pending_hr
      */
     public function submit(User $user, PayrollBatch $batch): bool
     {
@@ -86,12 +88,26 @@ class PayrollPolicy
             && in_array($batch->status, ['draft', 'computed'], true);
     }
 
-    // ── Step 2: Accountant certifies funds and forwards to RD ────────────
+    // ── Step 2: HRMO approves and forwards to Accountant ────────────────────
+
+    /**
+     * HRMO approves the payroll and forwards to Accountant for certification.
+     *
+     * Triggered by: POST /payroll/{id}/hr-approve
+     * Transitions:  pending_hr  →  pending_accountant
+     */
+    public function hrApprove(User $user, PayrollBatch $batch): bool
+    {
+        return $user->hasAnyRole(['hrmo', 'super_admin'])
+            && $batch->status === 'pending_hr';
+    }
+
+    // ── Step 3: Accountant certifies funds and forwards to RD ────────────
 
     /**
      * Accountant certifies funds available and advances to RD review.
      *
-     * Triggered by: POST /payroll/{id}/certify   (or reusing approve route)
+     * Triggered by: POST /payroll/{id}/certify
      * Transitions:  pending_accountant  →  pending_rd
      */
     public function certify(User $user, PayrollBatch $batch): bool
@@ -100,7 +116,7 @@ class PayrollPolicy
             && $batch->status === 'pending_accountant';
     }
 
-    // ── Step 3: ARD / RD approves and releases ────────────────────────────
+    // ── Step 4: ARD / RD approves and releases ────────────────────────────
 
     /**
      * ARD (or RD) approves the payroll for release.
@@ -114,7 +130,7 @@ class PayrollPolicy
             && $batch->status === 'pending_rd';
     }
 
-    // ── Step 4: Cashier locks after disbursement ──────────────────────────
+    // ── Step 5: Cashier locks after disbursement ──────────────────────────
 
     /**
      * Cashier locks the payroll once disbursement is complete.

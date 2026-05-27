@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Payroll\Http\Controllers\DashboardController;
 use Modules\Payroll\Http\Controllers\PayrollController;
+use Modules\Payroll\Http\Controllers\PayrollEntryController;
 use Modules\Payroll\Http\Controllers\SpecialPayrollController;
 
 /*
@@ -46,9 +47,14 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/{payroll}',       [PayrollController::class, 'update']) ->name('update');
             Route::delete('/{payroll}',    [PayrollController::class, 'destroy'])->name('destroy');
 
+            // Remove employee from batch (delete entry)
+            Route::delete('/{payroll}/entries/{entry}', [PayrollEntryController::class, 'destroy'])
+                ->name('entries.destroy');
+
             // Payroll workflow actions
             Route::post('/{payroll}/compute',         [PayrollController::class, 'compute'])        ->name('compute');
             Route::post('/{payroll}/submit',          [PayrollController::class, 'submit'])         ->name('submit');
+            Route::post('/{payroll}/hr-approve',      [PayrollController::class, 'hrApprove'])      ->name('hrApprove');
             Route::post('/{payroll}/certify',         [PayrollController::class, 'certify'])        ->name('certify');
             Route::post('/{payroll}/approve',         [PayrollController::class, 'approve'])        ->name('approve');
             Route::post('/{payroll}/lock',            [PayrollController::class, 'lock'])           ->name('lock');

@@ -243,6 +243,62 @@
                     </div>
                 </div>
 
+                {{-- Deduction Percentages (Optional Override) --}}
+                <div class="form-group" style="margin-top:16px; padding:16px; background:#F8F9FA; border-radius:8px; border:1px solid #E9ECEF;">
+                    <label style="font-size:0.78rem; font-weight:700; color:var(--navy); margin-bottom:12px; display:block;">
+                        Deduction Percentage Overrides <span class="text-muted">(optional)</span>
+                    </label>
+                    <div style="font-size:0.75rem; color:var(--text-mid); margin-bottom:12px;">
+                        Leave blank to use default rates: GSIS PS (9%), PhilHealth (2.5%), Pag-IBIG (fixed ₱200), WHT (20%).
+                    </div>
+                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;">
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">GSIS PS %</label>
+                            <input type="number" name="deduction_gsis_percent"
+                                   value="{{ old('deduction_gsis_percent') }}"
+                                   step="0.01" min="0" max="100" placeholder="9.00"
+                                   class="{{ $errors->has('deduction_gsis_percent') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+                            @error('deduction_gsis_percent')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">PhilHealth %</label>
+                            <input type="number" name="deduction_philhealth_percent"
+                                   value="{{ old('deduction_philhealth_percent') }}"
+                                   step="0.01" min="0" max="100" placeholder="2.50"
+                                   class="{{ $errors->has('deduction_philhealth_percent') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+                            @error('deduction_philhealth_percent')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">Pag-IBIG Amount</label>
+                            <input type="number" name="deduction_pagibig_amount"
+                                   value="{{ old('deduction_pagibig_amount') }}"
+                                   step="0.01" min="0" placeholder="200.00"
+                                   class="{{ $errors->has('deduction_pagibig_amount') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+                            @error('deduction_pagibig_amount')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">WHT %</label>
+                            <input type="number" name="deduction_wht_percent"
+                                   value="{{ old('deduction_wht_percent') }}"
+                                   step="0.01" min="0" max="100" placeholder="20.00"
+                                   class="{{ $errors->has('deduction_wht_percent') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+                            @error('deduction_wht_percent')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
                 {{-- Remarks --}}
                 <div class="form-group">
                     <label for="remarks">Remarks <span class="text-muted">(optional)</span></label>

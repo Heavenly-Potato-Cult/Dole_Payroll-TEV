@@ -680,20 +680,30 @@
         <a href="{{ route('tev.requests.index') }}?status=submitted" class="tod-queue-row">
             <div class="tod-queue-left">
                 <div class="tod-queue-label-text">Submitted</div>
-                <div class="tod-queue-subtitle">Awaiting accountant review</div>
+                <div class="tod-queue-subtitle">Awaiting Budget Officer review</div>
             </div>
             <div class="tod-queue-right">
                 <div class="tod-queue-number">{{ $tevSubmitted }}</div>
                 <span class="tod-queue-chevron">›</span>
             </div>
         </a>
-        <a href="{{ route('tev.requests.index') }}?status=accountant_certified" class="tod-queue-row">
+        <a href="{{ route('tev.requests.index') }}?status=budget_officer_approved" class="tod-queue-row">
             <div class="tod-queue-left">
-                <div class="tod-queue-label-text">Accountant Certified</div>
+                <div class="tod-queue-label-text">Budget Officer Approved</div>
+                <div class="tod-queue-subtitle">Ready for Chief review</div>
+            </div>
+            <div class="tod-queue-right">
+                <div class="tod-queue-number">{{ $tevBudgetApproved }}</div>
+                <span class="tod-queue-chevron">›</span>
+            </div>
+        </a>
+        <a href="{{ route('tev.requests.index') }}?status=chief_approved" class="tod-queue-row">
+            <div class="tod-queue-left">
+                <div class="tod-queue-label-text">Chief Approved</div>
                 <div class="tod-queue-subtitle">Ready for RD approval</div>
             </div>
             <div class="tod-queue-right">
-                <div class="tod-queue-number">{{ $tevCertified }}</div>
+                <div class="tod-queue-number">{{ $tevChiefApproved }}</div>
                 <span class="tod-queue-chevron">›</span>
             </div>
         </a>

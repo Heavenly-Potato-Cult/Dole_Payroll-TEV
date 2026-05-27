@@ -16,6 +16,7 @@
                 $enroll   = $enrollments->get($type->id);
                 $isActive = $enroll && $enroll->is_active;
                 $amount   = $enroll ? $enroll->amount : '';
+                $percentageOverride = $enroll ? $enroll->percentage_override : '';
                 $effFrom  = $enroll ? $enroll->effective_from?->format('Y-m-d') : now()->startOfMonth()->format('Y-m-d');
                 $effTo    = $enroll ? $enroll->effective_to?->format('Y-m-d') : '';
                 $notes    = $enroll ? $enroll->notes : '';
@@ -25,15 +26,28 @@
                 $isLocked   = $type->isEffectivelyLocked();    // Tier 2
                 $isManual   = !$isFormula && !$isLocked;       // Tier 3
 
-                // For Tier 2, show the global amount from default_amount
-                $globalAmt  = $type->default_amount !== null
+                // For Tier 2, show the global amount from default_amount or percentage
+                if ($type->percentage !== null) {
+                    // Calculate percentage of employee's basic salary
+                    $monthlyAmount = round($employee->basic_monthly_salary * ($type->percentage / 100), 2);
+                    $cutoffAmount  = round($monthlyAmount / 2, 2);
+                    $globalAmt     = number_format($cutoffAmount, 2) . ' (' . number_format((float)$type->percentage, 2) . '%)';
+                } else {
+                    $globalAmt = $type->default_amount !== null
                               ? number_format((float)$type->default_amount, 2)
                               : null;
+                    $cutoffAmount = null;
+                }
 
                 // For Tier 3, use default_amount as pre-fill if no enrollment yet
                 $prefillAmt = ($isManual && !$isActive && $type->default_amount !== null)
                               ? (float)$type->default_amount
                               : $amount;
+                
+                // For Tier 3, use type percentage as pre-fill if no enrollment override
+                $prefillPct = ($isManual && !$isActive && $type->percentage !== null)
+                              ? (float)$type->percentage
+                              : $percentageOverride;
             @endphp
 
             <div class="deduction-row"
@@ -125,6 +139,19 @@
                                 Default: ₱{{ number_format((float)$type->default_amount, 2) }}
                             </span>
                         @endif
+
+                        {{-- Show percentage badge if percentage is set but no active enrollment --}}
+                        @if (!$isActive && $type->percentage !== null)
+                            @php
+                                $monthlyAmount = round($employee->basic_monthly_salary * ($type->percentage / 100), 2);
+                                $cutoffAmount  = round($monthlyAmount / 2, 2);
+                            @endphp
+                            <span class="badge"
+                                  style="background:#dbeafe;color:#1e40af;font-size:0.66rem;"
+                                  title="Calculated as {{ number_format((float)$type->percentage, 2) }}% of basic salary">
+                                {{ number_format((float)$type->percentage, 2) }}% = ₱{{ number_format($cutoffAmount, 2) }}/cut-off
+                            </span>
+                        @endif
                     </div>
 
                     {{-- Amount + dates — shown only when checkbox is checked --}}
@@ -132,19 +159,39 @@
                          style="margin-top:10px;padding-left:28px;
                                 display:{{ $isActive ? 'block' : 'none' }};">
 
-                        <div style="display:grid;grid-template-columns:150px 140px 140px;gap:10px;align-items:end;">
+                        <div style="display:grid;grid-template-columns:150px 100px 140px 140px;gap:10px;align-items:end;">
                             <div>
-                                <label style="font-size:0.72rem;margin-bottom:3px;">Amount per Cut-off (₱)</label>
+                                <label style="font-size:0.72rem;margin-bottom:3px;">Monthly Amortization (₱)</label>
                                 <input type="number"
                                        class="deduction-amount"
                                        name="deductions[{{ $type->id }}][amount]"
                                        value="{{ $prefillAmt }}"
                                        min="0" step="0.01"
-                                       placeholder="{{ $type->default_amount !== null ? number_format((float)$type->default_amount, 2) : '0.00' }}"
+                                       placeholder="{{ $type->percentage !== null ? number_format($cutoffAmount ?? 0, 2) : ($type->default_amount !== null ? number_format((float)$type->default_amount, 2) : '0.00') }}"
                                        style="margin-bottom:0;">
-                                @if ($type->default_amount !== null)
+                                @if ($type->percentage !== null)
+                                    <div style="font-size:0.70rem;color:#1e40af;margin-top:2px;">
+                                        {{ number_format((float)$type->percentage, 2) }}% of salary = ₱{{ number_format($cutoffAmount ?? 0, 2) }}
+                                    </div>
+                                @elseif ($type->default_amount !== null)
                                     <div style="font-size:0.70rem;color:var(--text-light);margin-top:2px;">
                                         Default: ₱{{ number_format((float)$type->default_amount, 2) }}
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div>
+                                <label style="font-size:0.72rem;margin-bottom:3px;">Override % (optional)</label>
+                                <input type="number"
+                                       class="deduction-percentage"
+                                       name="deductions[{{ $type->id }}][percentage_override]"
+                                       value="{{ $prefillPct }}"
+                                       min="0" max="100" step="0.01"
+                                       placeholder="{{ $type->percentage !== null ? number_format((float)$type->percentage, 2) : '' }}"
+                                       style="margin-bottom:0;">
+                                @if ($type->percentage !== null)
+                                    <div style="font-size:0.70rem;color:var(--text-light);margin-top:2px;">
+                                        Type: {{ number_format((float)$type->percentage, 2) }}%
                                     </div>
                                 @endif
                             </div>

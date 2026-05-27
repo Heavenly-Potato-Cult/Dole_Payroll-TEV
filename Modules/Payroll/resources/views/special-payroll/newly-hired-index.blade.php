@@ -281,7 +281,7 @@
                     <tr>
                         <th>Employee</th>
                         <th>Position</th>
-                        <th>Effectivity Date</th>
+                        <th>Assumption to Duty</th>
                         <th>Period Covered</th>
                         <th>Year</th>
                         <th>Status</th>
@@ -394,7 +394,7 @@
                                         <span>{{ $batch->year }}</span>
                                     </div>
                                     <div class="nh-detail-item">
-                                        <label>Effectivity Date</label>
+                                        <label>Assumption to Duty</label>
                                         <span>{{ $batch->effectivity_date ? $batch->effectivity_date->format('M d, Y') : '—' }}</span>
                                     </div>
                                     <div class="nh-detail-item">

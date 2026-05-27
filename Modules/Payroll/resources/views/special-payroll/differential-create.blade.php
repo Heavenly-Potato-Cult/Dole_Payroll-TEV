@@ -108,6 +108,8 @@
                             <option value="{{ $emp->id }}"
                                 data-basic="{{ $emp->basic_salary }}"
                                 data-position="{{ $emp->position_title }}"
+                                data-step="{{ $emp->step }}"
+                                data-salary-grade="{{ $emp->salary_grade }}"
                                 data-wht="0.20"
                                 {{ old('employee_id') == $emp->id ? 'selected' : '' }}>
                                 {{ $emp->last_name }}, {{ $emp->first_name }}
@@ -193,6 +195,157 @@
                              border-radius:6px; padding:6px 10px;">
                             ⚠ New salary must be <strong>greater than</strong> the old salary
                             (₱<span id="warn-old-val">0.00</span>). This entry cannot be saved as-is.
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Old / New Step and Salary Grade --}}
+                <div class="sp-salary-row">
+                    <div class="form-group">
+                        <label for="old_step">
+                            Old Step <span class="text-muted">(optional)</span>
+                        </label>
+                        <input type="number" id="old_step" name="old_step"
+                               value="{{ old('old_step') }}"
+                               min="1" max="10"
+                               placeholder="e.g. 3"
+                               class="{{ $errors->has('old_step') ? 'is-invalid' : '' }}">
+                        @error('old_step')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="form-group">
+                        <label for="new_step">
+                            New Step <span class="text-muted">(optional)</span>
+                        </label>
+                        <input type="number" id="new_step" name="new_step"
+                               value="{{ old('new_step') }}"
+                               min="1" max="10"
+                               placeholder="e.g. 4"
+                               class="{{ $errors->has('new_step') ? 'is-invalid' : '' }}">
+                        @error('new_step')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+
+                <div class="sp-salary-row">
+                    <div class="form-group">
+                        <label for="old_salary_grade">
+                            Old Salary Grade <span class="text-muted">(optional)</span>
+                        </label>
+                        <input type="number" id="old_salary_grade" name="old_salary_grade"
+                               value="{{ old('old_salary_grade') }}"
+                               min="1" max="33"
+                               placeholder="e.g. 18"
+                               class="{{ $errors->has('old_salary_grade') ? 'is-invalid' : '' }}">
+                        @error('old_salary_grade')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="form-group">
+                        <label for="new_salary_grade">
+                            New Salary Grade <span class="text-muted">(optional)</span>
+                        </label>
+                        <input type="number" id="new_salary_grade" name="new_salary_grade"
+                               value="{{ old('new_salary_grade') }}"
+                               min="1" max="33"
+                               placeholder="e.g. 19"
+                               class="{{ $errors->has('new_salary_grade') ? 'is-invalid' : '' }}">
+                        @error('new_salary_grade')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+
+                {{-- Old Position --}}
+                <div class="form-group">
+                    <label for="old_position">
+                        Old Position <span class="text-muted">(optional)</span>
+                    </label>
+                    <input type="text" id="old_position" name="old_position"
+                           value="{{ old('old_position') }}"
+                           placeholder="e.g. Administrative Officer II"
+                           class="{{ $errors->has('old_position') ? 'is-invalid' : '' }}">
+                    @error('old_position')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.75rem; color:var(--text-light); margin-top:4px;">
+                        Auto-filled from employee's current position. Override if needed.
+                    </div>
+                </div>
+
+                {{-- New Position --}}
+                <div class="form-group">
+                    <label for="new_position">
+                        New Position <span class="text-muted">(optional)</span>
+                    </label>
+                    <input type="text" id="new_position" name="new_position"
+                           value="{{ old('new_position') }}"
+                           placeholder="e.g. Administrative Officer III"
+                           class="{{ $errors->has('new_position') ? 'is-invalid' : '' }}">
+                    @error('new_position')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.75rem; color:var(--text-light); margin-top:4px;">
+                        Enter the new position title if this differential is due to a promotion or position change.
+                    </div>
+                </div>
+
+                {{-- Deduction Percentages (Optional Override) --}}
+                <div class="form-group" style="margin-top:16px; padding:16px; background:#F8F9FA; border-radius:8px; border:1px solid #E9ECEF;">
+                    <label style="font-size:0.78rem; font-weight:700; color:var(--navy); margin-bottom:12px; display:block;">
+                        Deduction Percentage Overrides <span class="text-muted">(optional)</span>
+                    </label>
+                    <div style="font-size:0.75rem; color:var(--text-mid); margin-bottom:12px;">
+                        Leave blank to use default rates: GSIS PS (9%), PhilHealth (2.5%), Pag-IBIG (fixed ₱200), WHT (20%).
+                    </div>
+                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:12px;">
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">GSIS PS %</label>
+                            <input type="number" name="deduction_gsis_percent"
+                                   value="{{ old('deduction_gsis_percent') }}"
+                                   step="0.01" min="0" max="100" placeholder="9.00"
+                                   class="{{ $errors->has('deduction_gsis_percent') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+                            @error('deduction_gsis_percent')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">PhilHealth %</label>
+                            <input type="number" name="deduction_philhealth_percent"
+                                   value="{{ old('deduction_philhealth_percent') }}"
+                                   step="0.01" min="0" max="100" placeholder="2.50"
+                                   class="{{ $errors->has('deduction_philhealth_percent') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+                            @error('deduction_philhealth_percent')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">Pag-IBIG Amount</label>
+                            <input type="number" name="deduction_pagibig_amount"
+                                   value="{{ old('deduction_pagibig_amount') }}"
+                                   step="0.01" min="0" placeholder="200.00"
+                                   class="{{ $errors->has('deduction_pagibig_amount') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+                            @error('deduction_pagibig_amount')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">WHT %</label>
+                            <input type="number" name="deduction_wht_percent"
+                                   value="{{ old('deduction_wht_percent') }}"
+                                   step="0.01" min="0" max="100" placeholder="20.00"
+                                   class="{{ $errors->has('deduction_wht_percent') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;">
+                            @error('deduction_wht_percent')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
                         </div>
                     </div>
                 </div>
@@ -325,7 +478,14 @@
     empSelect.addEventListener('change', function () {
         var opt   = this.options[this.selectedIndex];
         var basic = parseFloat(opt.getAttribute('data-basic'));
+        var position = opt.getAttribute('data-position');
+        var step = opt.getAttribute('data-step');
+        var salaryGrade = opt.getAttribute('data-salary-grade');
+        
         var oldSalaryField = document.getElementById('old_salary');
+        var oldPositionField = document.getElementById('old_position');
+        var oldStepField = document.getElementById('old_step');
+        var oldSalaryGradeField = document.getElementById('old_salary_grade');
 
         if (!isNaN(basic) && basic > 0) {
             oldSalaryField.value = basic.toFixed(2);
@@ -339,11 +499,62 @@
             oldSalaryField.title            = '';
         }
 
+        if (position) {
+            oldPositionField.value = position;
+            oldPositionField.style.background = 'var(--surface-alt, #f0f2ff)';
+            oldPositionField.style.color      = 'var(--text-mid)';
+            oldPositionField.title            = 'Auto-filled from employee record. Click to override.';
+        } else {
+            oldPositionField.value      = '';
+            oldPositionField.style.background = '';
+            oldPositionField.style.color      = '';
+            oldPositionField.title            = '';
+        }
+
+        if (step) {
+            oldStepField.value = step;
+            oldStepField.style.background = 'var(--surface-alt, #f0f2ff)';
+            oldStepField.style.color      = 'var(--text-mid)';
+            oldStepField.title            = 'Auto-filled from employee record. Click to override.';
+        } else {
+            oldStepField.value      = '';
+            oldStepField.style.background = '';
+            oldStepField.style.color      = '';
+            oldStepField.title            = '';
+        }
+
+        if (salaryGrade) {
+            oldSalaryGradeField.value = salaryGrade;
+            oldSalaryGradeField.style.background = 'var(--surface-alt, #f0f2ff)';
+            oldSalaryGradeField.style.color      = 'var(--text-mid)';
+            oldSalaryGradeField.title            = 'Auto-filled from employee record. Click to override.';
+        } else {
+            oldSalaryGradeField.value      = '';
+            oldSalaryGradeField.style.background = '';
+            oldSalaryGradeField.style.color      = '';
+            oldSalaryGradeField.title            = '';
+        }
+
         updatePreview();
     });
 
     // Allow manual override — restore normal styling on direct input
     document.getElementById('old_salary').addEventListener('input', function () {
+        this.style.background = '';
+        this.style.color      = '';
+        this.title            = '';
+    });
+    document.getElementById('old_position').addEventListener('input', function () {
+        this.style.background = '';
+        this.style.color      = '';
+        this.title            = '';
+    });
+    document.getElementById('old_step').addEventListener('input', function () {
+        this.style.background = '';
+        this.style.color      = '';
+        this.title            = '';
+    });
+    document.getElementById('old_salary_grade').addEventListener('input', function () {
         this.style.background = '';
         this.style.color      = '';
         this.title            = '';

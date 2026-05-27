@@ -239,7 +239,7 @@ class PayrollReportController extends Controller
         $month  = (int) $request->month;
         $cutoff = $request->get('cutoff', 'both');
 
-        $filename = sprintf('GSIS-Summary-%04d-%02d-%s.xlsx', $year, $month, $cutoff);
+        $filename = sprintf('GSIS-Summary-%04d%02d-%s.xlsx', $year, $month, $cutoff);
 
         return Excel::download(new GsisSummaryExport($year, $month, $cutoff), $filename);
     }
@@ -262,7 +262,7 @@ class PayrollReportController extends Controller
         $month  = (int) $request->month;
         $cutoff = $request->get('cutoff', 'both');
 
-        $filename = sprintf('GSIS-Detailed-%04d-%02d-%s.xlsx', $year, $month, $cutoff);
+        $filename = sprintf('GSIS-Detailed-%04d%02d-%s.xlsx', $year, $month, $cutoff);
 
         return Excel::download(new GsisDetailedExport($year, $month, $cutoff), $filename);
     }
@@ -325,7 +325,7 @@ class PayrollReportController extends Controller
         $month  = (int) $request->month;
         $cutoff = $request->get('cutoff', 'both');
 
-        $filename = sprintf('HDMF-Remittance-%04d-%02d-%s.xlsx', $year, $month, $cutoff);
+        $filename = sprintf('HDMF-Remittance-%04d%02d-%s.xlsx', $year, $month, $cutoff);
 
         return Excel::download(new HdmfRemittanceExport($year, $month, $cutoff), $filename);
     }
@@ -406,7 +406,7 @@ class PayrollReportController extends Controller
             ->sortBy(fn($r) => $r[0])
             ->values();
 
-        $filename = "PHIC_{$year}_{$month}_contributions.csv";
+        $filename = "PHIC_{$year}" . sprintf('%02d', $month) . "_contributions.csv";
 
         $headers = [
             'Content-Type'        => 'text/csv',
@@ -467,7 +467,7 @@ class PayrollReportController extends Controller
             ->sortBy(fn($r) => $r[0])
             ->values();
 
-        $filename = "SSS_Voluntary_{$year}_{$month}.csv";
+        $filename = "SSS_Voluntary_{$year}" . sprintf('%02d', $month) . ".csv";
 
         $headers = [
             'Content-Type'        => 'text/csv',

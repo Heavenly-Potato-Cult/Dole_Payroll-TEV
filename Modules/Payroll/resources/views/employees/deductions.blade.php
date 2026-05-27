@@ -70,12 +70,13 @@
             'philhealth' => 'PhilHealth',
             'gsis'       => 'GSIS',
             'other_gov'  => 'Government / Tax',
+            'other'      => 'Other',
             'loan'       => 'Bank Loans',
             'caress'     => 'CARESS IX',
             'misc'       => 'Miscellaneous',
         ];
         $leftCategories  = ['pagibig', 'philhealth', 'gsis'];
-        $rightCategories = ['other_gov', 'loan', 'caress', 'misc'];
+        $rightCategories = ['other_gov', 'other', 'loan', 'caress', 'misc'];
     @endphp
 
     {{-- Left column --}}

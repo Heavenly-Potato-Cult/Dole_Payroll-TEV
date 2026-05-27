@@ -7,13 +7,14 @@ class StoreSpecialPayrollRequest extends FormRequest {
     
     public function rules() {
         return [
-            'payroll_type' => 'required|in:newly_hired,transferee',
+            'payroll_type' => 'required|in:newly_hired,transferee,others',
             'employee_id' => 'required|exists:employees,id',
             'effectivity_date' => 'required|date',
             'cutoff_start' => 'required|date',
             'cutoff_end' => 'required|date|after_or_equal:cutoff_start',
             'lwop_days' => 'nullable|integer|min:0|max:22',
             'remarks' => 'nullable|string|max:500',
+            'deduction_gsis_percent' => 'nullable|numeric|min:0|max:100',
         ];
     }
     

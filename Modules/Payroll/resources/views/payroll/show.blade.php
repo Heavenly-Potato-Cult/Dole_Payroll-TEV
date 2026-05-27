@@ -260,6 +260,13 @@
 .audit-table td { font-size: 0.80rem; vertical-align: top; }
 .audit-arrow { color: var(--text-light); margin: 0 4px; }
 
+/* Hide tardiness column in regular payroll register */
+#payrollRegisterTable th:nth-child(8),
+#virtualScrollContainer table td:nth-child(8),
+#payrollRegisterTableFooter td:nth-child(8) {
+    display: none;
+}
+
 /* ══════════════════════════════════════════════════
    MOBILE RESPONSIVE
 ══════════════════════════════════════════════════ */
@@ -394,6 +401,9 @@
 
     $canPullAttendance = in_array($payroll->status, ['draft', 'computed'])
                   && auth()->user()->hasRole('payroll_officer');
+
+    $canRemoveEntry = auth()->user()->hasRole('payroll_officer')
+                  && in_array($payroll->status, ['draft', 'computed']);
 
     $nextAction = null;
     // CHANGED: hrmo removed — only payroll_officer submits to Accountant
@@ -533,6 +543,12 @@
     @include('payroll::payroll._approval_bar')
     </div>
 </div>
+
+@if ($payroll->remarks)
+    <div class="alert" style="background:#FAFBFF; border-color:var(--border); margin-top:14px;">
+        <strong style="color:var(--navy);">Remarks:</strong> {{ $payroll->remarks }}
+    </div>
+@endif
 
 {{-- Alerts --}}
 @if (session('success'))
@@ -709,6 +725,7 @@
                     <col style="width:90px;">
                     <col style="width:110px;">
                     <col style="width:110px;">
+                    <col style="width:150px;">
                     <col style="width:90px;">
                 </colgroup>
                 <thead class="virtual-scroll-thead">
@@ -725,6 +742,7 @@
                         <th style="color:white;" class="text-right">Ded. Lines</th>
                         <th style="background:rgba(183,28,28,0.12); color:white;" class="text-right">Total Ded.</th>
                         <th style="background:rgba(27,94,32,0.12); color:white;" class="text-right">Net Pay</th>
+                        <th style="color:white;">Remarks</th>
                         <th style="color:white;">Actions</th>
                     </tr>
                 </thead>
@@ -746,6 +764,7 @@
                         <col style="width:90px;">
                         <col style="width:110px;">
                         <col style="width:110px;">
+                        <col style="width:150px;">
                         <col style="width:90px;">
                     </colgroup>
                     <tbody id="virtualScrollTbody">
@@ -768,6 +787,7 @@
                     <col style="width:90px;">
                     <col style="width:110px;">
                     <col style="width:110px;">
+                    <col style="width:150px;">
                     <col style="width:90px;">
                 </colgroup>
                 <tfoot class="virtual-scroll-tfoot">
@@ -805,6 +825,7 @@
                             ₱{{ number_format($totalNet, 2) }}
                         </td>
                         <td></td>
+                        <td></td>
                     </tr>
                 </tfoot>
             </table>
@@ -826,6 +847,14 @@
                         ];
                     }
 
+                    $deductionNames = collect($deductions)->pluck('name')->values()->all();
+                    $deductionSummary = '—';
+                    if (count($deductionNames) > 0) {
+                        $shown = array_slice($deductionNames, 0, 2);
+                        $more  = max(0, count($deductionNames) - count($shown));
+                        $deductionSummary = implode(', ', $shown) . ($more > 0 ? " +{$more}" : '');
+                    }
+
                     $virtualRows[] = [
                         'id' => $entry->id,
                         'index' => $i + 1,
@@ -841,8 +870,10 @@
                         'tardy' => $tardy,
                         'lwop' => $lwop,
                         'dedCount' => $dedCount,
+                        'deductionSummary' => $deductionSummary,
                         'total_deductions' => $entry->total_deductions,
                         'net_amount' => $entry->net_amount,
+                        'remarks' => $entry->override_notes ?? '',
                         'has_payslip' => in_array($payroll->status, ['released', 'locked']),
                         'payroll_id' => $payroll->id,
                         'deductions' => $deductions,
@@ -854,6 +885,8 @@
                 window.virtualRowData = @json($virtualRows);
                 window.payrollStatus = @json($payroll->status);
                 window.payrollId = @json($payroll->id);
+                window.canRemoveEntry = @json($canRemoveEntry);
+                window.csrfToken = @json(csrf_token());
             </script>
         </div>
     </div>
@@ -975,11 +1008,11 @@
             <span class="badge {{ $statusClass }}">{{ $statusLabel }}</span>
         </p>
 
-        {{-- Option A: Monthly consolidated (default) --}}
+        {{-- Monthly consolidated payslip (whole month) --}}
         <label id="opt-consolidated" class="payslip-opt selected"
                style="display:flex; align-items:flex-start; gap:12px; padding:14px 16px;
                       border:2px solid var(--navy); border-radius:var(--radius);
-                      cursor:pointer; margin-bottom:10px; transition:border-color .15s;">
+                      cursor:pointer; margin-bottom:20px; transition:border-color .15s;">
             <input type="radio" name="payslipMode" value="consolidated"
                    checked onchange="selectOpt('consolidated')"
                    style="margin-top:3px; accent-color:var(--navy);">
@@ -994,24 +1027,6 @@
                 <div style="font-size:0.78rem; color:var(--text-mid); margin-top:3px;">
                     Single payslip showing both 1–15 and 16–30/31 cut-offs side by side.
                     Matches current DOLE practice.
-                </div>
-            </div>
-        </label>
-
-        {{-- Option B: Per batch --}}
-        <label id="opt-perbatch" class="payslip-opt"
-               style="display:flex; align-items:flex-start; gap:12px; padding:14px 16px;
-                      border:2px solid var(--border); border-radius:var(--radius);
-                      cursor:pointer; margin-bottom:20px; transition:border-color .15s;">
-            <input type="radio" name="payslipMode" value="per_batch"
-                   onchange="selectOpt('per_batch')"
-                   style="margin-top:3px; accent-color:var(--navy);">
-            <div>
-                <div style="font-weight:700; font-size:0.88rem; color:var(--navy);">
-                    Per Batch (Separate)
-                </div>
-                <div style="font-size:0.78rem; color:var(--text-mid); margin-top:3px;">
-                    Generate individual payslips for the 1st and 2nd cut-offs separately.
                 </div>
             </div>
         </label>
@@ -1193,8 +1208,6 @@ async function executePullAndCompute(periodLabel) {
 function selectOpt(val) {
     document.getElementById('opt-consolidated').style.borderColor =
         val === 'consolidated' ? 'var(--navy)' : 'var(--border)';
-    document.getElementById('opt-perbatch').style.borderColor =
-        val === 'per_batch' ? 'var(--navy)' : 'var(--border)';
 }
 function submitPayslip() {
     const mode     = document.querySelector('input[name="payslipMode"]:checked').value;
@@ -1240,12 +1253,25 @@ document.getElementById('payslipModal').addEventListener('click', function(e) {
         const rataDisplay = row.rata > 0 ? formatCurrency(row.rata) : '—';
 
         const dedToggle = row.dedCount > 0
-            ? `<button class="ded-toggle" data-entry-id="${row.id}" data-count="${row.dedCount}">${row.dedCount} lines ▾</button>`
+            ? `<div style="display:flex; gap:6px; align-items:center; justify-content:flex-end;">
+                    <span class="text-muted" title="${row.deductionSummary}" style="font-size:0.74rem; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                        ${row.deductionSummary}
+                    </span>
+                    <button class="ded-toggle" data-entry-id="${row.id}" data-count="${row.dedCount}" title="View deduction breakdown">
+                        ▾
+                    </button>
+               </div>`
             : '<span class="text-muted" style="font-size:0.78rem;">—</span>';
 
 const payslipBtn = row.has_payslip
-    ? `<a href="/payroll/${row.payroll_id}/payslips/generate?mode=per_batch&entry_id=${row.id}" class="btn btn-outline btn-sm" target="_blank">Payslip</a>`
+    ? `<a href="/payroll/${row.payroll_id}/payslips/generate?mode=consolidated&entry_id=${row.id}" class="btn btn-outline btn-sm" target="_blank">Payslip</a>`
     : '<span class="text-muted" style="font-size:0.75rem;">—</span>';
+
+const removeBtn = (window.canRemoveEntry && !row.has_payslip)
+    ? `<button type="button" class="btn btn-danger btn-sm" data-remove-entry="${row.id}">Remove</button>`
+    : '';
+
+const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
 
         // Main row HTML
         const mainRow = document.createElement('tr');
@@ -1270,7 +1296,8 @@ const payslipBtn = row.has_payslip
             <td class="text-right fw-bold ${netClass}" style="white-space:nowrap; background:rgba(27,94,32,0.04);">
                 ${formatCurrency(row.net_amount)}${netWarnBadge}
             </td>
-            <td>${payslipBtn}</td>
+            <td style="font-size:0.78rem; color:var(--text-mid); white-space:nowrap;">${row.remarks || '—'}</td>
+            <td>${actionsHtml}</td>
         `;
 
         return mainRow;
@@ -1297,7 +1324,7 @@ const payslipBtn = row.has_payslip
         dedRow.id = `ded-row-${row.id}`;
         dedRow.hidden = true;
         dedRow.innerHTML = `
-            <td colspan="13" style="padding:0;">
+            <td colspan="14" style="padding:0;">
                 <div class="ded-panel" id="ded-panel-${row.id}" hidden>
                     <div class="ded-grid">${dedGrid}</div>
                     <div style="text-align:right; margin-top:6px; font-size:0.78rem; color:var(--text-mid);">
@@ -1355,6 +1382,73 @@ const payslipBtn = row.has_payslip
                 toggleDed(entryId);
             });
         });
+
+        tbody.querySelectorAll('button[data-remove-entry]').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const entryId = this.dataset.removeEntry;
+                confirmRemoveEntry(entryId);
+            });
+        });
+    }
+
+    async function confirmRemoveEntry(entryId) {
+        const row = (window.virtualRowData || []).find(r => String(r.id) === String(entryId));
+        const name = row?.employee_name || 'this employee';
+
+        const result = await Swal.fire({
+            title: 'Remove employee from batch?',
+            html: `<div style="text-align:left;">
+                <div style="font-weight:700;color:#dc3545;margin-bottom:6px;">${name}</div>
+                <div style="color:#6b7280;font-size:0.92rem;">
+                    This will delete the payroll entry and its deduction lines for this batch.
+                </div>
+            </div>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Remove',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6B7280',
+            reverseButtons: true,
+            focusCancel: true
+        });
+
+        if (!result.isConfirmed) return;
+
+        Swal.fire({
+            title: '<span style="color:#0F1B4C;">Removing…</span>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        const url = `/payroll/${window.payrollId}/entries/${entryId}`;
+        const resp = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': window.csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json, text/html',
+            },
+        });
+
+        if (resp.ok) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Removed',
+                confirmButtonColor: '#0F1B4C'
+            }).then(() => window.location.reload());
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Remove failed',
+                html: `<div style="color:#6b7280;">Unable to remove the employee from this batch.</div>`,
+                confirmButtonColor: '#0F1B4C'
+            });
+        }
     }
 
     // Override toggleDed to work with virtual scrolling

@@ -37,7 +37,9 @@ class StoreTevRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
+        $track = $this->input('track');
+        
+        $rules = [
             'office_order_id'             => ['required', 'integer', 'exists:office_orders,id'],
             'track'                       => ['required', 'in:cash_advance,reimbursement'],
             'purpose'                     => ['required', 'string', 'max:500'],
@@ -46,6 +48,10 @@ class StoreTevRequest extends FormRequest
             'travel_date_start'           => ['required', 'date'],
             'travel_date_end'             => ['required', 'date', 'after_or_equal:travel_date_start'],
             'remarks'                     => ['nullable', 'string', 'max:1000'],
+
+            // Supporting documents (optional)
+            'documents'                   => ['nullable', 'array', 'max:5'],
+            'documents.*'                 => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
 
             // Itinerary lines
             'lines'                       => ['required', 'array', 'min:1'],
@@ -59,6 +65,23 @@ class StoreTevRequest extends FormRequest
             'lines.*.per_diem_amount'     => ['required', 'numeric', 'min:0'],
             'lines.*.is_half_day'         => ['nullable', 'boolean'],
         ];
+
+        // Cash Advance requires additional validation for liquidation documents
+        if ($track === 'cash_advance') {
+            $rules['has_receipt'] = ['required', 'boolean'];
+            $rules['has_boarding_pass'] = ['required', 'boolean'];
+            $rules['has_cert_complete'] = ['required', 'boolean'];
+            $rules['liquidation_remarks'] = ['nullable', 'string', 'max:1000'];
+        }
+
+        // Reimbursement requires additional validation for supporting documents
+        if ($track === 'reimbursement') {
+            $rules['has_proof_payment'] = ['required', 'boolean'];
+            $rules['has_travel_cert'] = ['required', 'boolean'];
+            $rules['reimbursement_remarks'] = ['nullable', 'string', 'max:1000'];
+        }
+
+        return $rules;
     }
 
     public function messages(): array
@@ -75,6 +98,11 @@ class StoreTevRequest extends FormRequest
             'lines.*.mode_of_transport.required'  => 'Each line must have a mode of transport.',
             'lines.*.transportation_cost.required' => 'Transportation cost is required for each line.',
             'lines.*.per_diem_amount.required'    => 'Per diem amount is required for each line.',
+            'has_receipt.required'               => 'Receipt status is required for Cash Advance.',
+            'has_boarding_pass.required'          => 'Boarding pass status is required for Cash Advance.',
+            'has_cert_complete.required'          => 'Certificate of completion status is required for Cash Advance.',
+            'has_proof_payment.required'          => 'Proof of payment status is required for Reimbursement.',
+            'has_travel_cert.required'            => 'Travel completion certificate status is required for Reimbursement.',
         ];
     }
 }

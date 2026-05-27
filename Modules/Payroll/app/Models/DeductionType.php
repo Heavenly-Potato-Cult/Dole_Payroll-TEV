@@ -48,15 +48,23 @@ class DeductionType extends Model
         // Global amount + lock mechanism
         'default_amount',
         'is_locked',
+        // Percentage-based deduction
+        'percentage',
+        // Min/max override for flexible deductions (e.g., WHT)
+        'min_override_amount',
+        'max_override_amount',
     ];
 
     protected $casts = [
-        'is_computed'     => 'boolean',
-        'is_active'       => 'boolean',
-        'is_locked'       => 'boolean',
-        'display_order'   => 'integer',
-        'override_amount' => 'decimal:2',
-        'default_amount'  => 'decimal:2',
+        'is_computed'        => 'boolean',
+        'is_active'          => 'boolean',
+        'is_locked'          => 'boolean',
+        'display_order'      => 'integer',
+        'override_amount'    => 'decimal:2',
+        'default_amount'     => 'decimal:2',
+        'percentage'         => 'decimal:2',
+        'min_override_amount'=> 'decimal:2',
+        'max_override_amount'=> 'decimal:2',
     ];
 
     // ── Category constants ────────────────────────────────────────────────
@@ -133,7 +141,7 @@ class DeductionType extends Model
         if (in_array($this->category, self::LOAN_CATEGORIES)) {
             return false;
         }
-        return $this->is_locked;
+        return (bool) $this->is_locked;
     }
 
     /**

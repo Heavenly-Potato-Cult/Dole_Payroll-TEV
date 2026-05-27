@@ -112,6 +112,7 @@ class TevController extends Controller
 
         // ----------------------------------------------------------------
         // Role-scoped pending counts for TEV
+        // Updated workflow: Employee -> Budget Officer -> Chief -> RD
         // ----------------------------------------------------------------
         $pendingTev = 0;
         $pendingLiquidation = 0;
@@ -119,15 +120,15 @@ class TevController extends Controller
 
         if ($user->hasRole('super_admin')) {
             $pendingTev = TevRequest::whereNotIn('status', ['released', 'reimbursed', 'cancelled'])->count();
-        } elseif ($user->hasRole('accountant')) {
+        } elseif ($user->hasRole('budget_officer')) {
             $pendingTev = TevRequest::where('status', 'submitted')->count();
-        } elseif ($user->hasAnyRole(['ard', 'chief_admin_officer'])) {
-            $pendingTev = TevRequest::where('status', 'accountant_certified')->count();
+        } elseif ($user->hasRole('chief_admin_officer')) {
+            $pendingTev = TevRequest::where('status', 'budget_officer_approved')->count();
+        } elseif ($user->hasRole('ard')) {
+            $pendingTev = TevRequest::where('status', 'chief_approved')->count();
         } elseif ($user->hasRole('cashier')) {
             $pendingTev = TevRequest::where('status', 'rd_approved')->count();
             $pendingLiquidation = TevRequest::where('status', 'liquidation_filed')->count();
-        } elseif ($user->hasRole('budget_officer')) {
-            $pendingTev = TevRequest::where('status', 'submitted')->count();
         } elseif ($user->hasRole('hrmo')) {
             // HRMO monitors cash advances that need liquidation
             $pendingTev = TevRequest::where('status', 'cashier_released')
@@ -139,9 +140,11 @@ class TevController extends Controller
 
         // ----------------------------------------------------------------
         // TEV Queue counts for pipeline overview
+        // Updated workflow: Employee -> Budget Officer -> Chief -> RD
         // ----------------------------------------------------------------
         $tevSubmitted    = TevRequest::where('status', 'submitted')->count();
-        $tevCertified    = TevRequest::where('status', 'accountant_certified')->count();
+        $tevBudgetApproved = TevRequest::where('status', 'budget_officer_approved')->count();
+        $tevChiefApproved = TevRequest::where('status', 'chief_approved')->count();
         $tevRdApproved   = TevRequest::where('status', 'rd_approved')->count();
         $tevLiqFiled     = TevRequest::where('status', 'liquidation_filed')->count();
         $tevCashReleased = TevRequest::where('status', 'cashier_released')->where('track', 'cash_advance')->count();
@@ -164,7 +167,8 @@ class TevController extends Controller
             'pendingLiquidation',
             'tevThisMonth',
             'tevSubmitted',
-            'tevCertified',
+            'tevBudgetApproved',
+            'tevChiefApproved',
             'tevRdApproved',
             'tevLiqFiled',
             'tevCashReleased',
@@ -290,6 +294,7 @@ class TevController extends Controller
 
             $tev = TevRequest::create([
                 'tev_no'               => $this->tevService->generateTevNo(),
+                'tev_series_no'        => $this->tevService->generateTevSeriesNo(),
                 'office_order_id'      => $officeOrderId,
                 'employee_id'          => $employeeId,
                 'track'                => $validated['track'],
@@ -304,6 +309,13 @@ class TevController extends Controller
                 'submitted_by'         => Auth::id(),
                 'submitted_at'         => now(),
                 'remarks'              => $validated['remarks'] ?? null,
+                'has_receipt'          => $validated['has_receipt'] ?? false,
+                'has_boarding_pass'    => $validated['has_boarding_pass'] ?? false,
+                'has_cert_complete'    => $validated['has_cert_complete'] ?? false,
+                'liquidation_remarks'  => $validated['liquidation_remarks'] ?? null,
+                'has_proof_payment'    => $validated['has_proof_payment'] ?? false,
+                'has_travel_cert'      => $validated['has_travel_cert'] ?? false,
+                'reimbursement_remarks'=> $validated['reimbursement_remarks'] ?? null,
             ]);
 
             foreach ($validated['lines'] as $line) {
@@ -323,6 +335,26 @@ class TevController extends Controller
             }
 
             $this->tevService->computeTotals($tev);
+
+            // Handle supporting documents upload
+            if ($request->hasFile('documents')) {
+                foreach ($request->file('documents') as $file) {
+                    if ($file->isValid()) {
+                        $fileName = time() . '_' . $file->getClientOriginalName();
+                        $filePath = $file->storeAs('tev_documents', $fileName, 'public');
+                        
+                        Modules\Tev\Models\TevDocument::create([
+                            'tev_request_id' => $tev->id,
+                            'document_type' => 'supporting_document',
+                            'file_name' => $fileName,
+                            'file_path' => $filePath,
+                            'mime_type' => $file->getMimeType(),
+                            'file_size' => $file->getSize(),
+                            'uploaded_by' => Auth::id(),
+                        ]);
+                    }
+                }
+            }
 
             // Record the auto-submission as the first entry in the approval timeline
             TevApprovalLog::create([
@@ -375,6 +407,7 @@ class TevController extends Controller
             'itineraryLines',
             'approvalLogs' => fn($q) => $q->with('user')->orderBy('performed_at'),
             'certification.certifier',
+            'documents.uploader',
         ])->findOrFail($id);
 
         // Employees can only view their own requests
@@ -410,6 +443,7 @@ class TevController extends Controller
     /**
      * Advance a TEV through its role-based approval workflow.
      *
+     * Updated workflow: Employee -> Budget Officer -> Chief -> RD
      * The next status and audit label are resolved by resolveTransition(),
      * which enforces that the current user's role matches the expected step.
      * When a cashier releases a cash advance, the grand total is also
@@ -464,6 +498,8 @@ class TevController extends Controller
      * Each role may only reject at the step they own — this mirrors the
      * $canReject logic in the Blade view and must be kept in sync with it.
      * A rejection reason is mandatory to maintain a meaningful audit trail.
+     * 
+     * Updated workflow: Employee -> Budget Officer -> Chief -> RD
      */
     public function reject(Request $request, int $tevRequest)
     {
@@ -477,10 +513,11 @@ class TevController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
+        // Updated workflow authorization
         $authorized = (
-            ($tev->status === 'submitted'            && $user->hasAnyRole(['accountant'])) ||
-            ($tev->status === 'accountant_certified' && $user->hasAnyRole(['ard', 'chief_admin_officer'])) ||
-            ($tev->status === 'rd_approved'          && $user->hasAnyRole(['cashier']))
+            ($tev->status === 'submitted'            && $user->hasAnyRole(['budget_officer'])) ||
+            ($tev->status === 'budget_officer_approved' && $user->hasAnyRole(['chief_admin_officer'])) ||
+            ($tev->status === 'chief_approved'        && $user->hasAnyRole(['ard']))
         );
 
         if (!$authorized) {
@@ -488,7 +525,12 @@ class TevController extends Controller
         }
 
         $old = $tev->status;
-        $tev->update(['status' => 'rejected']);
+        $tev->update([
+            'status' => 'rejected',
+            'deny_reason' => $request->remarks,
+            'denied_at' => now(),
+            'denied_by' => Auth::id(),
+        ]);
 
         TevApprovalLog::create([
             'tev_request_id' => $tev->id,
@@ -508,7 +550,7 @@ class TevController extends Controller
         ]);
 
         return redirect()->route('tev.requests.show', $tev->id)
-            ->with('error', 'TEV has been rejected.');
+            ->with('error', 'TEV has been rejected. Employee can edit and resubmit.');
     }
 
     // =====================================================================
@@ -698,6 +740,150 @@ class TevController extends Controller
     }
 
     // =====================================================================
+    //  EDIT / RESUBMIT
+    // =====================================================================
+
+    /**
+     * Show the edit form for a rejected TEV request.
+     * 
+     * Only the employee who owns the TEV can edit and resubmit a rejected request.
+     * This allows them to address the denial reason and resubmit for approval.
+     */
+    public function edit(int $id)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
+
+        $tev = TevRequest::with(['employee', 'officeOrder', 'itineraryLines'])
+            ->findOrFail($id);
+
+        // Only rejected requests can be edited
+        if ($tev->status !== 'rejected') {
+            return back()->with('error', 'Only rejected TEV requests can be edited.');
+        }
+
+        // Only the employee who owns the TEV can edit it
+        if ($isEmployee && $tev->employee_id !== $this->resolveHrisEmployeeId()) {
+            abort(403, 'You can only edit your own rejected TEV requests.');
+        }
+
+        $approvedOrdersQuery = OfficeOrder::with('employee')
+            ->where('status', 'approved');
+
+        if ($isEmployee) {
+            $employeeId = $this->resolveHrisEmployeeId();
+            if ($employeeId) {
+                $approvedOrdersQuery->where('employee_id', $employeeId);
+            } else {
+                $approvedOrders = collect();
+                return view('tev::edit', compact('tev', 'approvedOrders', 'isEmployee'));
+            }
+        }
+
+        $approvedOrders = $approvedOrdersQuery->orderByDesc('id')->get();
+        $perDiemRates = PerDiemRate::all()->groupBy('travel_type');
+
+        return view('tev::edit', compact('tev', 'approvedOrders', 'perDiemRates', 'isEmployee'));
+    }
+
+    /**
+     * Update and resubmit a rejected TEV request.
+     * 
+     * Clears the denial status and returns the TEV to 'submitted' status
+     * for re-approval through the workflow.
+     */
+    public function update(Request $request, int $id)
+    {
+        /** @var User $user */
+        $user = Auth::user();
+        $isEmployee = !$user->hasAnyRole(['hrmo', 'accountant', 'budget_officer', 'ard', 'chief_admin_officer', 'cashier', 'payroll_officer', 'super_admin']);
+
+        $tev = TevRequest::findOrFail($id);
+
+        // Only rejected requests can be updated
+        if ($tev->status !== 'rejected') {
+            return back()->with('error', 'Only rejected TEV requests can be updated.');
+        }
+
+        // Only the employee who owns the TEV can update it
+        if ($isEmployee && $tev->employee_id !== $this->resolveHrisEmployeeId()) {
+            abort(403, 'You can only update your own rejected TEV requests.');
+        }
+
+        $validated = $request->validate([
+            'track' => ['required', 'in:cash_advance,reimbursement'],
+            'purpose' => ['required', 'string', 'max:500'],
+            'destination' => ['required', 'string', 'max:255'],
+            'travel_type' => ['required', 'in:local,international'],
+            'travel_date_start' => ['required', 'date'],
+            'travel_date_end' => ['required', 'date', 'after_or_equal:travel_date_start'],
+            'remarks' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        DB::transaction(function () use ($validated, $request, $tev) {
+            // Update TEV details
+            $tev->update([
+                'track' => $validated['track'],
+                'purpose' => $validated['purpose'],
+                'destination' => $validated['destination'],
+                'travel_type' => $validated['travel_type'],
+                'travel_date_start' => $validated['travel_date_start'],
+                'travel_date_end' => $validated['travel_date_end'],
+                'remarks' => $validated['remarks'] ?? null,
+                // Reset denial fields
+                'deny_reason' => null,
+                'denied_at' => null,
+                'denied_by' => null,
+                // Return to submitted status for re-approval
+                'status' => 'submitted',
+            ]);
+
+            // Delete old itinerary lines and create new ones
+            $tev->itineraryLines()->delete();
+
+            foreach ($validated['lines'] as $line) {
+                TevItineraryLine::create([
+                    'tev_request_id'      => $tev->id,
+                    'travel_date'         => $line['travel_date'],
+                    'origin'              => $line['origin'],
+                    'destination'         => $line['destination'],
+                    'departure_time'      => $line['departure_time'] ?? null,
+                    'arrival_time'        => $line['arrival_time'] ?? null,
+                    'mode_of_transport'   => $line['mode_of_transport'],
+                    'transportation_cost' => $line['transportation_cost'],
+                    'per_diem_amount'     => $line['per_diem_amount'],
+                    'is_half_day'         => !empty($line['is_half_day']),
+                    'remarks'             => $line['remarks'] ?? null,
+                ]);
+            }
+
+            $this->tevService->computeTotals($tev);
+
+            // Record the resubmission in approval logs
+            TevApprovalLog::create([
+                'tev_request_id' => $tev->id,
+                'user_id'        => Auth::id(),
+                'step'           => 'resubmitted',
+                'action'         => 'approved',
+                'remarks'        => 'TEV resubmitted after rejection.',
+                'ip_address'     => $request->ip(),
+            ]);
+
+            PayrollAuditLog::create([
+                'user_id'    => Auth::id(),
+                'action'     => 'Resubmitted TEV: ' . $tev->tev_no,
+                'old_value'  => 'rejected',
+                'new_value'  => 'submitted',
+                'ip_address' => $request->ip(),
+            ]);
+        });
+
+        return redirect()->route('tev.requests.show', $tev->id)
+            ->with('success', 'TEV resubmitted successfully. Awaiting Budget Officer review.');
+    }
+
+    // =====================================================================
     //  DESTROY (not permitted)
     // =====================================================================
 
@@ -720,6 +906,7 @@ class TevController extends Controller
      * Determine whether the current user can act on a TEV, and what the
      * action label should be for the button in the view.
      *
+     * Updated workflow: Employee -> Budget Officer -> Chief -> RD
      * Returns [bool $canApprove, string $nextAction]. The map covers every
      * status that has a pending approval step; any other status returns
      * [false, ''] so the view knows to hide the action button.
@@ -731,10 +918,11 @@ class TevController extends Controller
         $status = $tev->status;
 
         $map = [
-            'submitted'            => [['accountant'],                 'Certify (Accountant)'],
-            'accountant_certified' => [['ard', 'chief_admin_officer'], 'RD Approve'],
-            'rd_approved'          => [['cashier'],                    $tev->track === 'cash_advance' ? 'Release Cash Advance' : 'Mark Reimbursed'],
-            'liquidation_filed'    => [['cashier'],                    'Approve Liquidation'],
+            'submitted'                  => [['budget_officer'],          'Approve (Budget Officer)'],
+            'budget_officer_approved'    => [['chief_admin_officer'],     'Approve (Chief)'],
+            'chief_approved'             => [['ard'],                     'Approve (RD)'],
+            'rd_approved'                => [['cashier'],                 $tev->track === 'cash_advance' ? 'Release Cash Advance' : 'Mark Reimbursed'],
+            'liquidation_filed'          => [['cashier'],                 'Approve Liquidation'],
         ];
 
         if (!isset($map[$status])) {
@@ -748,6 +936,7 @@ class TevController extends Controller
     /**
      * Resolve the next status and audit label for the current user's approval step.
      *
+     * Updated workflow: Employee -> Budget Officer -> Chief -> RD
      * Aborts with 403 if the user's role does not match the expected step for
      * the TEV's current status, ensuring the transition map is the single
      * source of truth for workflow progression.
@@ -758,10 +947,14 @@ class TevController extends Controller
         $user   = Auth::user();
         $status = $tev->status;
 
-        if ($status === 'submitted' && $user->hasAnyRole(['accountant'])) {
-            return ['accountant_certified', 'Accountant Certified'];
+        // Updated workflow: Employee -> Budget Officer -> Chief -> RD
+        if ($status === 'submitted' && $user->hasAnyRole(['budget_officer'])) {
+            return ['budget_officer_approved', 'Budget Officer Approved'];
         }
-        if ($status === 'accountant_certified' && $user->hasAnyRole(['ard', 'chief_admin_officer'])) {
+        if ($status === 'budget_officer_approved' && $user->hasAnyRole(['chief_admin_officer'])) {
+            return ['chief_approved', 'Chief Approved'];
+        }
+        if ($status === 'chief_approved' && $user->hasAnyRole(['ard'])) {
             return ['rd_approved', 'RD Approved'];
         }
         if ($status === 'rd_approved' && $user->hasAnyRole(['cashier'])) {

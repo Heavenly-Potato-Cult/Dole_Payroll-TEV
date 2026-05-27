@@ -502,11 +502,7 @@ body {
 
         {{-- ── Tardiness / LWOP ── --}}
         @php
-            $tardy1 = $entry1st ? round(($entry1st->tardiness ?? 0) + ($entry1st->undertime ?? 0), 2) : 0;
-            $lwop1  = $entry1st ? round($entry1st->lwop_deduction ?? 0, 2) : 0;
-            $tardy2 = $entry2nd ? round(($entry2nd->tardiness ?? 0) + ($entry2nd->undertime ?? 0), 2) : 0;
-            $lwop2  = $entry2nd ? round($entry2nd->lwop_deduction ?? 0, 2) : 0;
-            $showAttendance = ($tardy1 + $lwop1 + $tardy2 + $lwop2) > 0;
+            $showAttendance = false;
         @endphp
 
         @if ($showAttendance)

@@ -118,6 +118,40 @@
                     @enderror
                 </div>
 
+                {{-- Custom Date Range (Optional) --}}
+                <div class="form-group" style="margin-top:16px; padding:16px; background:#F8F9FA; border-radius:8px; border:1px solid #E9ECEF;">
+                    <label style="font-size:0.78rem; font-weight:700; color:var(--navy); margin-bottom:12px; display:block;">
+                        Custom Date Range <span class="text-muted">(optional)</span>
+                    </label>
+                    <div style="font-size:0.75rem; color:var(--text-mid); margin-bottom:12px;">
+                        Leave blank to use standard cut-off dates above. Specify custom dates for special payroll periods.
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">Period Start</label>
+                            <input type="date" name="period_start" id="period_start"
+                                   value="{{ old('period_start') }}"
+                                   class="{{ $errors->has('period_start') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;"
+                                   onchange="updatePreview()">
+                            @error('period_start')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div>
+                            <label style="font-size:0.73rem; margin-bottom:4px; display:block;">Period End</label>
+                            <input type="date" name="period_end" id="period_end"
+                                   value="{{ old('period_end') }}"
+                                   class="{{ $errors->has('period_end') ? 'is-invalid' : '' }}"
+                                   style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85rem;"
+                                   onchange="updatePreview()">
+                            @error('period_end')
+                                <div class="invalid-feedback" style="display:block; font-size:0.73rem;">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
                 {{-- Confirmation notice --}}
                 <div class="alert alert-warning" id="confirmNotice" style="display:none;">
                     <div>
@@ -182,8 +216,7 @@
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
                         <span class="fw-bold text-navy">Tardiness / Undertime</span><br>
-                        Converted via <strong>Table IV</strong> lookup<br>
-                        (not direct formula)
+                        Hidden in regular payroll view; reflected in special payroll processing
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
                         <span class="fw-bold text-navy">Withholding Tax</span><br>
@@ -251,10 +284,33 @@ function updatePreview() {
     const year   = document.getElementById('period_year').value;
     const month  = parseInt(document.getElementById('period_month').value);
     const cutoff = document.querySelector('input[name="cutoff"]:checked')?.value || '1st';
+    const customStart = document.getElementById('period_start').value;
+    const customEnd = document.getElementById('period_end').value;
 
-    const days    = cutoff === '1st' ? '1–15' : '16–30/31';
-    const release = cutoff === '1st' ? '10th' : '25th';
-    const label   = `${MONTHS[month]} ${days}, ${year}`;
+    let days, release, label;
+
+    // Use custom dates if both are provided, otherwise use preset cutoffs
+    if (customStart && customEnd) {
+        const startDate = new Date(customStart);
+        const endDate = new Date(customEnd);
+        const startDay = startDate.getDate();
+        const endDay = endDate.getDate();
+        const startMonth = startDate.getMonth() + 1;
+        const endMonth = endDate.getMonth() + 1;
+
+        if (startMonth === endMonth && startMonth === month) {
+            days = `${startDay}–${endDay}`;
+        } else {
+            days = `${MONTHS[startMonth]} ${startDay} – ${MONTHS[endMonth]} ${endDay}`;
+        }
+
+        label = `${MONTHS[month]} ${days}, ${year}`;
+        release = 'Custom';
+    } else {
+        days = cutoff === '1st' ? '1–15' : '16–30/31';
+        release = cutoff === '1st' ? '10th' : '25th';
+        label = `${MONTHS[month]} ${days}, ${year}`;
+    }
 
     document.getElementById('previewLabel').textContent = label;
     document.getElementById('previewSub').textContent   = `${cutoff.toUpperCase()} cut-off`;

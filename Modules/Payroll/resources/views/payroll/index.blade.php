@@ -361,6 +361,7 @@ div#tab-active.active {
                             <th class="text-right">Total Gross</th>
                             <th class="text-right">Total Deductions</th>
                             <th class="text-right">Total Net Pay</th>
+                            <th>Remarks</th>
                             <th>Created By</th>
                             <th>Actions</th>
                         </tr>
@@ -426,6 +427,9 @@ div#tab-active.active {
                             <td class="col-netpay text-right fw-bold">
                                 {{ $entryCount > 0 ? '₱' . number_format($totalNet, 2) : '—' }}
                             </td>
+                            <td class="col-remarks text-muted" style="font-size:0.80rem; max-width:260px;">
+                                {{ $batch->remarks ?: '—' }}
+                            </td>
                             <td class="col-creator text-muted" style="font-size:0.82rem;">
                                 {{ $batch->creator->name ?? '—' }}<br>
                                 <span style="font-size:0.75rem;">
@@ -455,7 +459,7 @@ div#tab-active.active {
 
                         {{-- ── Expandable detail row (mobile only) ── --}}
                         <tr class="pr-detail-row" id="pr-detail-{{ $batch->id }}">
-                            <td colspan="9">
+                            <td colspan="10">
                                 <div class="pr-detail-grid">
                                     <div class="pr-detail-item">
                                         <label>Cut-off</label>
@@ -486,6 +490,10 @@ div#tab-active.active {
                                         <span>{{ $batch->creator->name ?? '—' }}<br>
                                             <small style="color:var(--text-light);">{{ $batch->created_at->format('M d, Y') }}</small>
                                         </span>
+                                    </div>
+                                    <div class="pr-detail-item" style="grid-column: 1 / -1;">
+                                        <label>Remarks</label>
+                                        <span>{{ $batch->remarks ?: '—' }}</span>
                                     </div>
                                 </div>
                                 <div class="pr-detail-actions">
@@ -533,6 +541,7 @@ div#tab-active.active {
                             <th class="text-right">Total Gross</th>
                             <th class="text-right">Total Deductions</th>
                             <th class="text-right">Total Net Pay</th>
+                            <th>Remarks</th>
                             <th>Created By</th>
                             <th>Actions</th>
                         </tr>
@@ -606,6 +615,10 @@ div#tab-active.active {
                                 {{ $entryCount > 0 ? '₱' . number_format($totalNet, 2) : '—' }}
                             </td>
 
+                            <td class="col-remarks text-muted" style="font-size:0.80rem; max-width:260px;">
+                                {{ $batch->remarks ?: '—' }}
+                            </td>
+
                             <td class="col-creator text-muted" style="font-size:0.82rem;">
                                 {{ $batch->creator->name ?? '—' }}<br>
                                 <span style="font-size:0.75rem;">
@@ -628,7 +641,7 @@ div#tab-active.active {
 
                         {{-- ── Expandable detail row (mobile only) ── --}}
                         <tr class="pr-detail-row" id="pr-detail-{{ $batch->id }}">
-                            <td colspan="9">
+                            <td colspan="10">
                                 <div class="pr-detail-grid">
                                     <div class="pr-detail-item">
                                         <label>Cut-off</label>
@@ -659,6 +672,10 @@ div#tab-active.active {
                                         <span>{{ $batch->creator->name ?? '—' }}<br>
                                             <small style="color:var(--text-light);">{{ $batch->created_at->format('M d, Y') }}</small>
                                         </span>
+                                    </div>
+                                    <div class="pr-detail-item" style="grid-column: 1 / -1;">
+                                        <label>Remarks</label>
+                                        <span>{{ $batch->remarks ?: '—' }}</span>
                                     </div>
                                 </div>
                                 <div class="pr-detail-actions">

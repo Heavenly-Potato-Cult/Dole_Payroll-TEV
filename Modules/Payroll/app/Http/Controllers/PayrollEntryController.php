@@ -28,6 +28,44 @@ class PayrollEntryController extends Controller
     }
 
     /**
+     * Remove an employee from a payroll batch (deletes the PayrollEntry + its deductions).
+     * Allowed only for Payroll Officer, and only while the batch is draft/computed.
+     */
+    public function destroy(Request $request, PayrollBatch $payrollBatch, PayrollEntry $entry)
+    {
+        if (! Auth::user()->hasRole('payroll_officer')) {
+            abort(403, 'Only Payroll Officers may remove employees from a batch.');
+        }
+
+        if (! in_array($payrollBatch->status, ['draft', 'computed'])) {
+            return back()->with('error', 'Employees can only be removed while the batch is Draft or Computed.');
+        }
+
+        if ((int) $entry->payroll_batch_id !== (int) $payrollBatch->id) {
+            abort(404);
+        }
+
+        $employeeName = $entry->employee?->full_name ?? 'Employee';
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($entry) {
+            $entry->deductions()->delete();
+            $entry->delete();
+        });
+
+        \Modules\Payroll\Models\PayrollAuditLog::create([
+            'payroll_batch_id' => $payrollBatch->id,
+            'user_id'          => Auth::id(),
+            'action'           => 'entry_removed',
+            'old_value'        => (string) $entry->id,
+            'new_value'        => null,
+            'ip_address'       => $request->ip(),
+        ]);
+
+        return redirect()->route('payroll.show', $payrollBatch)
+            ->with('success', "{$employeeName} removed from the batch.");
+    }
+
+    /**
      * Manual override of a single entry's net amount by a Payroll Officer.
      * Every override is written to the audit log — the reason is mandatory for traceability.
      */

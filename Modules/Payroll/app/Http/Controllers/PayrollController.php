@@ -21,6 +21,7 @@ class PayrollController extends Controller
     const STATUS_LABELS = [
         'draft'              => 'Draft',
         'computed'           => 'Computed',
+        'pending_hr'         => 'Pending HR Approval',
         'pending_accountant' => 'Pending Accountant',
         'pending_rd'         => 'Pending RD/ARD',
         'released'           => 'Released',
@@ -234,13 +235,19 @@ class PayrollController extends Controller
                 ->with('error', "A {$cutoff} cut-off payroll batch for {$request->periodLabel()} already exists.");
         }
 
-        $periodStart = $cutoff === '1st'
-            ? \Carbon\Carbon::create($year, $month, 1)
-            : \Carbon\Carbon::create($year, $month, 16);
+        // Use custom dates if provided, otherwise use standard cutoff dates
+        if ($request->filled('period_start') && $request->filled('period_end')) {
+            $periodStart = \Carbon\Carbon::parse($request->period_start);
+            $periodEnd = \Carbon\Carbon::parse($request->period_end);
+        } else {
+            $periodStart = $cutoff === '1st'
+                ? \Carbon\Carbon::create($year, $month, 1)
+                : \Carbon\Carbon::create($year, $month, 16);
 
-        $periodEnd = $cutoff === '1st'
-            ? \Carbon\Carbon::create($year, $month, 15)
-            : \Carbon\Carbon::create($year, $month)->endOfMonth();
+            $periodEnd = $cutoff === '1st'
+                ? \Carbon\Carbon::create($year, $month, 15)
+                : \Carbon\Carbon::create($year, $month)->endOfMonth();
+        }
 
         $batch = PayrollBatch::create([
             'period_year'  => $year,
@@ -272,7 +279,9 @@ class PayrollController extends Controller
         $attendanceService = app(AttendanceService::class);
         $snapshotCount     = $attendanceService->snapshotCount($payroll);
         $correctedCount    = $attendanceService->correctedCount($payroll);
-        $activeCount       = \App\SharedKernel\Models\Employee::where('status', 'active')->count();
+        $activeCount       = \App\SharedKernel\Models\Employee::where('status', 'active')
+            ->where('is_excluded', false)
+            ->count();
 
         $snapshots = in_array($payroll->status, ['draft', 'computed'])
             ? AttendanceSnapshot::where('payroll_batch_id', $payroll->id)
@@ -417,14 +426,32 @@ class PayrollController extends Controller
 
         $old = $payroll->status;
         $payroll->update([
-            'status'      => 'pending_accountant',
+            'status'      => 'pending_hr',
             'prepared_at' => now(),
             'remarks'     => $request->input('remarks'),
         ]);
-        $this->log($payroll, 'Submitted for Accountant Review', $old, 'pending_accountant');
+        $this->log($payroll, 'Submitted for HR Approval', $old, 'pending_hr');
 
         return redirect()->route('payroll.show', $payroll)
-            ->with('success', 'Payroll batch submitted to the Accountant for review.');
+            ->with('success', 'Payroll batch submitted to HR for approval.');
+    }
+
+    public function hrApprove(Request $request, PayrollBatch $payroll)
+    {
+        $this->authorize('hr_approve', $payroll);
+        $request->validate(['remarks' => ['nullable', 'string', 'max:500']]);
+
+        $old = $payroll->status;
+        $payroll->update([
+            'status'         => 'pending_accountant',
+            'hr_approved_by' => Auth::id(),
+            'hr_approved_at' => now(),
+            'remarks'        => $request->input('remarks') ?? $payroll->remarks,
+        ]);
+        $this->log($payroll, 'HR Approved — Forwarded to Accountant', $old, 'pending_accountant');
+
+        return redirect()->route('payroll.show', $payroll)
+            ->with('success', 'Payroll approved by HR. Forwarded to Accountant for review.');
     }
 
     public function certify(Request $request, PayrollBatch $payroll)
@@ -580,7 +607,8 @@ class PayrollController extends Controller
             abort(403, 'Payslips are only available after the batch has been released.');
         }
 
-        $mode    = $request->input('mode', 'consolidated');
+        // Monthly-first: always generate whole-month consolidated payslip.
+        $mode    = 'consolidated';
         $entryId = $request->input('entry_id');
 
         $siblingCutoff = $payroll->cutoff === '1st' ? '2nd' : '1st';

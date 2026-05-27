@@ -42,6 +42,12 @@ class StoreEmployeeRequest extends FormRequest
             'tin'               => ['nullable', 'string', 'max:50'],
             'gsis_bp_no'           => ['nullable', 'string', 'max:50'],
             'pagibig_no'        => ['nullable', 'string', 'max:50'],
+            'pagibig_id'        => ['nullable', 'string', 'max:50'],
+            'pagibig_mid_no'    => ['nullable', 'string', 'max:50'],
+            'mp2_account_no'    => ['nullable', 'string', 'max:50'],
+            'hdmf_mpl_app_no'   => ['nullable', 'string', 'max:80'],
+            'hdmf_cal_app_no'   => ['nullable', 'string', 'max:80'],
+            'hdmf_housing_app_no' => ['nullable', 'string', 'max:80'],
             'philhealth_no'     => ['nullable', 'string', 'max:50'],
             'sss_no'            => ['nullable', 'string', 'max:50'],
         ];
@@ -75,6 +81,12 @@ class StoreEmployeeRequest extends FormRequest
             'sit_year'          => 'SIT Year',
             'gsis_bp_no'           => 'GSIS Number',
             'pagibig_no'        => 'Pag-IBIG Number',
+            'pagibig_id'        => 'Pag-IBIG ID',
+            'pagibig_mid_no'    => 'Pag-IBIG MID Number',
+            'mp2_account_no'    => 'MP2 Account Number',
+            'hdmf_mpl_app_no'   => 'HDMF MPL Application Number',
+            'hdmf_cal_app_no'   => 'HDMF Calamity Application Number',
+            'hdmf_housing_app_no' => 'HDMF Housing Application Number',
             'philhealth_no'     => 'PhilHealth Number',
         ];
     }

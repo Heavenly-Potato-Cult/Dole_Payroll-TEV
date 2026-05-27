@@ -87,10 +87,10 @@
                         Category <span style="color:#dc2626;">*</span>
                     </label>
                     <select id="category" name="category" required>
-                        @foreach ($categories as $cat)
-                            <option value="{{ $cat->key }}"
-                                    {{ old('category', $deductionType->category) === $cat->key ? 'selected' : '' }}>
-                                {{ $cat->label }}
+                        @foreach ($categoryLabels as $key => $label)
+                            <option value="{{ $key }}"
+                                    {{ old('category', $deductionType->category) === $key ? 'selected' : '' }}>
+                                {{ $label }}
                             </option>
                         @endforeach
                     </select>
@@ -196,6 +196,27 @@
                             When <strong>Unlocked</strong>, it pre-fills the per-employee enrollment form.
                         </div>
                     </div>
+
+                    {{-- Percentage --}}
+                    <div style="margin-bottom:14px;">
+                        <label for="percentage" style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                            Percentage of Basic Salary (%)
+                        </label>
+                        <input type="number"
+                               id="percentage"
+                               name="percentage"
+                               value="{{ old('percentage', $deductionType->percentage) }}"
+                               min="0" max="100" step="0.01"
+                               placeholder="e.g. 5.00"
+                               style="max-width:180px;">
+                        @error('percentage')
+                            <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                        @enderror
+                        <div style="font-size:0.72rem;color:var(--text-light);margin-top:4px;">
+                            If set, deduction is calculated as this percentage of the employee's basic salary.
+                            Overrides the fixed amount above. Leave blank to use fixed amount instead.
+                        </div>
+                    </div>
                     @endif
 
                     {{-- ── Lock toggle — shown for ALL types ──────────────────── --}}
@@ -232,7 +253,7 @@
                                             background:#fef9c3;border:1px solid #fbbf24;border-radius:6px;
                                             font-size:0.78rem;color:#854d0e;">
                                     ⚠ <strong>Loan category:</strong> This type is always treated as
-                                    per-employee even when locked, because loan amortisation amounts
+                                    per-employee even when locked, because loan amortization amounts
                                     differ per employee.
                                 </div>
                                 @endif
@@ -303,11 +324,48 @@ if (ordEl) ordEl.addEventListener('input', checkOrderConflict);
 // Run on load
 checkOrderConflict();
 
-// ── Disable save while submitting ────────────────────────────────────────
-document.getElementById('editTypeForm').addEventListener('submit', function () {
-    const btn = document.getElementById('submitBtn');
-    btn.disabled    = true;
-    btn.textContent = 'Saving…';
+// ── Confirm + saving alert (SweetAlert2) ─────────────────────────────────
+// Fix: Save button had no alert message/confirmation.
+let __deductionTypeSubmitting = false;
+document.getElementById('editTypeForm').addEventListener('submit', function (e) {
+    if (__deductionTypeSubmitting) return;
+    e.preventDefault();
+
+    const form = this;
+    const btn  = document.getElementById('submitBtn');
+
+    Swal.fire({
+        title: 'Save changes?',
+        html: `<div style="text-align:left;">
+            <div style="font-weight:700;color:#0F1B4C;margin-bottom:6px;">{{ $deductionType->name }}</div>
+            <div style="font-size:0.9rem;color:#6b7280;">This will update the deduction type settings.</div>
+        </div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Save',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#0F1B4C',
+        cancelButtonColor: '#6B7280',
+        reverseButtons: true,
+        focusCancel: true
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+
+        __deductionTypeSubmitting = true;
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+
+        Swal.fire({
+            title: '<span style="color:#0F1B4C;">Saving…</span>',
+            html: '<div style="color:#6b7280;font-size:0.9rem;">Please wait.</div>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        form.submit();
+    });
 });
 </script>
 @endsection

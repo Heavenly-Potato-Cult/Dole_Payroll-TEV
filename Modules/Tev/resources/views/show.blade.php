@@ -772,6 +772,69 @@
                 <a href="{{ route('reports.tev-itinerary', $tev->id) }}" target="_blank" class="btn btn-outline" style="justify-content:flex-start; gap:8px; text-align:left;">📄 Itinerary of Travel (Appendix A)</a>
                 <a href="{{ route('reports.tev-travel-completed', $tev->id) }}" target="_blank" class="btn btn-outline" style="justify-content:flex-start; gap:8px; text-align:left;">📄 Certification of Travel Completed</a>
                 <a href="{{ route('reports.tev-annex-a', $tev->id) }}" target="_blank" class="btn btn-outline" style="justify-content:flex-start; gap:8px; text-align:left;">📄 Annex A — Expenses Not Requiring Receipts</a>
+                
+                {{-- Supporting Documents --}}
+                @if ($tev->documents && $tev->documents->count() > 0)
+                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+                        <div style="font-size:0.78rem; font-weight:700; color:var(--navy); margin-bottom:8px;">📎 Supporting Documents</div>
+                        @foreach ($tev->documents as $doc)
+                            <a href="{{ asset($doc->file_path) }}" target="_blank" class="btn btn-outline" style="justify-content:flex-start; gap:8px; text-align:left; font-size:0.78rem;">
+                                📎 {{ $doc->file_name }}
+                                <span style="margin-left:auto; color:var(--text-light); font-size:0.73rem;">
+                                    {{ number_format($doc->file_size / 1024, 1) }} KB
+                                </span>
+                            </a>
+                        @endforeach
+                    </div>
+                @endif
+
+                {{-- Liquidation Requirements (Cash Advance only) --}}
+                @if ($tev->track === 'cash_advance')
+                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+                        <div style="font-size:0.78rem; font-weight:700; color:var(--navy); margin-bottom:8px;">📋 Liquidation Requirements</div>
+                        <div style="font-size:0.76rem; color:var(--text-mid);">
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                <span>{{ $tev->has_receipt ? '✅' : '❌' }}</span>
+                                <span>Receipt</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                <span>{{ $tev->has_boarding_pass ? '✅' : '❌' }}</span>
+                                <span>Boarding Pass</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                <span>{{ $tev->has_cert_complete ? '✅' : '❌' }}</span>
+                                <span>Certificate of Completion</span>
+                            </div>
+                            @if ($tev->liquidation_remarks)
+                                <div style="margin-top:8px; padding:8px; background:#f5f5f5; border-radius:4px; font-style:italic;">
+                                    {{ $tev->liquidation_remarks }}
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                @endif
+
+                {{-- Reimbursement Requirements (Reimbursement only) --}}
+                @if ($tev->track === 'reimbursement')
+                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+                        <div style="font-size:0.78rem; font-weight:700; color:var(--navy); margin-bottom:8px;">📋 Reimbursement Requirements</div>
+                        <div style="font-size:0.76rem; color:var(--text-mid);">
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                <span>{{ $tev->has_proof_payment ? '✅' : '❌' }}</span>
+                                <span>Proof of Payment (Receipts/Invoices)</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                <span>{{ $tev->has_travel_cert ? '✅' : '❌' }}</span>
+                                <span>Travel Completion Certificate</span>
+                            </div>
+                            @if ($tev->reimbursement_remarks)
+                                <div style="margin-top:8px; padding:8px; background:#f5f5f5; border-radius:4px; font-style:italic;">
+                                    {{ $tev->reimbursement_remarks }}
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                @endif
                 @if ($showDvPdf)
                 <a href="{{ route('reports.tev-liquidation-dv', $tev->id) }}" target="_blank" class="btn btn-outline" style="justify-content:flex-start; gap:8px; text-align:left;">📄 Liquidation / Disbursement Voucher</a>
                 @endif

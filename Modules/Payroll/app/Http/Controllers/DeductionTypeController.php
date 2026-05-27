@@ -4,7 +4,6 @@ namespace Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Modules\Payroll\Models\DeductionType;
-use Modules\Payroll\Models\DeductionCategory;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -55,8 +54,7 @@ class DeductionTypeController extends Controller
     /** Show the create form. */
     public function create()
     {
-        $categories     = DeductionCategory::active()->ordered()->get();
-        $categoryLabels = $categories->pluck('label', 'key')->all();
+        $categoryLabels = self::fallbackCategoryLabels();
         $nextOrder      = DeductionType::max('display_order') + 1;
 
         $existingOrders = DeductionType::all()
@@ -68,7 +66,7 @@ class DeductionTypeController extends Controller
         $loanCategories = DeductionType::LOAN_CATEGORIES;
 
         return view('payroll::deduction-types.create',
-            compact('categories', 'categoryLabels', 'nextOrder', 'existingOrders', 'loanCategories'));
+            compact('categoryLabels', 'nextOrder', 'existingOrders', 'loanCategories'));
     }
 
     /**
@@ -79,7 +77,7 @@ class DeductionTypeController extends Controller
      */
     public function store(Request $request)
     {
-        $validKeys = DeductionCategory::active()->pluck('key')->all();
+        $validKeys = array_keys(self::fallbackCategoryLabels());
 
         $data = $request->validate([
             'code'           => [
@@ -105,8 +103,9 @@ class DeductionTypeController extends Controller
                 },
             ],
             'notes'          => 'nullable|string|max:500',
-            'default_amount' => 'nullable|numeric|min:0',
+            'default_amount' => ['nullable', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
             'is_locked'      => 'nullable|boolean',
+            'percentage'     => ['nullable', 'numeric', 'min:0', 'max:100', 'regex:/^\d+(\.\d{1,2})?$/'],
         ]);
 
         $data['is_computed'] = false;
@@ -123,8 +122,7 @@ class DeductionTypeController extends Controller
     /** Show the edit form. */
     public function edit(DeductionType $deductionType)
     {
-        $categories     = DeductionCategory::active()->ordered()->get();
-        $categoryLabels = $categories->pluck('label', 'key')->all();
+        $categoryLabels = self::fallbackCategoryLabels();
 
         $existingOrders = DeductionType::where('id', '!=', $deductionType->id)
             ->get()
@@ -136,7 +134,7 @@ class DeductionTypeController extends Controller
         $loanCategories     = DeductionType::LOAN_CATEGORIES;
 
         return view('payroll::deduction-types.edit',
-            compact('deductionType', 'categories', 'categoryLabels',
+            compact('deductionType', 'categoryLabels',
                     'existingOrders', 'formulaDescription', 'loanCategories'));
     }
 
@@ -150,7 +148,7 @@ class DeductionTypeController extends Controller
      */
     public function update(Request $request, DeductionType $deductionType)
     {
-        $validKeys = DeductionCategory::active()->pluck('key')->all();
+        $validKeys = array_keys(self::fallbackCategoryLabels());
 
         $data = $request->validate([
             'name'            => 'required|string|max:200',
@@ -171,11 +169,13 @@ class DeductionTypeController extends Controller
             ],
             'notes'           => 'nullable|string|max:500',
             // Global amount + lock
-            'default_amount'  => 'nullable|numeric|min:0',
+            'default_amount'  => ['nullable', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
             'is_locked'       => 'nullable|boolean',
+            // Percentage-based deduction
+            'percentage'      => ['nullable', 'numeric', 'min:0', 'max:100', 'regex:/^\d+(\.\d{1,2})?$/'],
             // Tier 1 formula override (is_computed types only)
             'is_computed'     => 'nullable|boolean',
-            'override_amount' => 'nullable|numeric|min:0',
+            'override_amount' => ['nullable', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
             'override_note'   => 'nullable|string|max:300',
             'clear_override'  => 'nullable|boolean',
         ]);
@@ -191,6 +191,7 @@ class DeductionTypeController extends Controller
             'is_computed'    => $newIsComputed,
             'is_locked'      => $newIsLocked,
             'default_amount' => isset($data['default_amount']) ? $data['default_amount'] : null,
+            'percentage'     => isset($data['percentage']) ? $data['percentage'] : null,
         ];
 
         // ── Tier 1: formula override handling ────────────────────────────
@@ -264,15 +265,6 @@ class DeductionTypeController extends Controller
 
     public static function categoryLabels(): array
     {
-        try {
-            $labels = DeductionCategory::labelsMap();
-            if (! empty($labels)) {
-                return $labels;
-            }
-        } catch (\Throwable) {
-            // Table doesn't exist yet (pre-migration) — fall back gracefully
-        }
-
         return self::fallbackCategoryLabels();
     }
 
@@ -283,6 +275,7 @@ class DeductionTypeController extends Controller
             'philhealth' => 'PhilHealth',
             'gsis'       => 'GSIS',
             'other_gov'  => 'Government / Tax',
+            'other'      => 'Other Deductions',
             'loan'       => 'Bank Loans',
             'caress'     => 'CARESS IX',
             'misc'       => 'Miscellaneous',

@@ -7,6 +7,13 @@ use App\Models\User;
 class RoleService
 {
     /**
+     * Base role names.
+     */
+    const EMPLOYEE_ROLES = [
+        'employee',
+    ];
+
+    /**
      * Roles that can access payroll management features
      */
     const PAYROLL_ROLES = [
@@ -119,5 +126,34 @@ class RoleService
     public static function canAccessTev(User $user): bool
     {
         return self::hasRoleGroup($user, 'tev');
+    }
+
+    /**
+     * Check if user is a pure employee (non-officer account).
+     *
+     * NOTE: Some users may have multiple roles; this only checks the existence
+     * of the `employee` role.
+     */
+    public static function isEmployee(User $user): bool
+    {
+        return $user->hasAnyRole(self::EMPLOYEE_ROLES);
+    }
+
+    /**
+     * Check if user is a cashier.
+     */
+    public static function isCashier(User $user): bool
+    {
+        return $user->hasRole('cashier');
+    }
+
+    /**
+     * Generic module access checker used by legacy code paths.
+     *
+     * @param string $module Role group key (e.g. `payroll`, `special_payroll`, `tev`)
+     */
+    public static function canAccessModule(User $user, string $module): bool
+    {
+        return self::hasRoleGroup($user, $module);
     }
 }

@@ -16,6 +16,7 @@ use Modules\Payroll\Http\Controllers\UserController;
 use Modules\Payroll\Http\Controllers\SalaryIndexTableController;
 use Modules\Payroll\Http\Controllers\SignatoryController;
 use Modules\Tev\Http\Controllers\TevReportController;
+use App\Http\Controllers\Modules\Payroll\Http\Controllers\AllowanceTypeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,6 +44,7 @@ Route::middleware(['auth'])->group(function () {
         ->group(function () {
             Route::resource('employees', EmployeeController::class);
             Route::post('/employees/pull-from-api', [EmployeeController::class, 'pullFromApi'])->name('employees.pullFromApi');
+            Route::post('/employees/{employee}/toggle-exclusion', [EmployeeController::class, 'toggleExclusion'])->name('employees.toggle-exclusion');
 
             Route::get( '/employees/{employee}/deductions',
                         [EmployeeDeductionController::class, 'index'])->name('employees.deductions');
@@ -80,6 +82,19 @@ Route::middleware(['auth'])->group(function () {
                 '/deduction-types/reorder',
                 [DeductionTypeController::class, 'reorder']
             )->name('deduction-types.reorder');
+        });
+
+    // ── Allowance Types CMS ──────────────────────────────────────
+    Route::middleware(['role:payroll_officer|super_admin'])
+        ->group(function () {
+            Route::resource('allowance-types', AllowanceTypeController::class)
+                ->except(['show']);
+
+            // Toggle active/inactive
+            Route::patch(
+                '/allowance-types/{allowanceType}/toggle',
+                [AllowanceTypeController::class, 'toggle']
+            )->name('allowance-types.toggle');
         });
 
     // ── Divisions ────────────────────────────────────────────────
@@ -168,6 +183,37 @@ Route::middleware(['auth'])->group(function () {
             Route::delete( '/special-payroll/nosi-nosa/{id}',
                            [SpecialPayrollController::class, 'nosiNosaDestroy'])
                 ->name('special-payroll.nosi-nosa.destroy')
+                ->where('id', '[0-9]+');
+        });
+
+    // ── Special Payroll — Generic Special ─────────────────────────
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getRoleGroup('special_payroll'))])
+        ->group(function () {
+            Route::get(    '/special-payroll/generic',
+                           [SpecialPayrollController::class, 'genericIndex'])
+                ->name('special-payroll.generic.index');
+
+            Route::get(    '/special-payroll/generic/create',
+                           [SpecialPayrollController::class, 'genericCreate'])
+                ->name('special-payroll.generic.create');
+
+            Route::post(   '/special-payroll/generic',
+                           [SpecialPayrollController::class, 'genericStore'])
+                ->name('special-payroll.generic.store');
+
+            Route::get(    '/special-payroll/generic/{id}',
+                           [SpecialPayrollController::class, 'genericShow'])
+                ->name('special-payroll.generic.show')
+                ->where('id', '[0-9]+');
+
+            Route::post(   '/special-payroll/generic/{id}/approve',
+                           [SpecialPayrollController::class, 'genericApprove'])
+                ->name('special-payroll.generic.approve')
+                ->where('id', '[0-9]+');
+
+            Route::delete( '/special-payroll/generic/{id}',
+                           [SpecialPayrollController::class, 'genericDestroy'])
+                ->name('special-payroll.generic.destroy')
                 ->where('id', '[0-9]+');
         });
 

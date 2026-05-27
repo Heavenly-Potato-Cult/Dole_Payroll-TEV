@@ -162,6 +162,8 @@ class EmployeeController extends Controller
                     'gsis_bp_no'                => $empData['gsis_bp_no']                ?? null,
                     'gsis_crn'                  => $empData['gsis_crn']                  ?? null,
                     'pagibig_no'                => $empData['pagibig_mid_no']            ?? null,
+                    'pagibig_mid_no'            => $empData['pagibig_mid_no']            ?? null,
+                    'pagibig_id'                => $empData['pagibig_id']                ?? ($empData['pagibig_mid_no'] ?? null),
                     'philhealth_no'             => $empData['philhealth_no']             ?? null,
                     'tin'                       => $empData['tin']                       ?? null,
                     'status'                    => 'active',
@@ -247,5 +249,27 @@ class EmployeeController extends Controller
     {
         return redirect()->route('employees.show', $employee)
             ->with('success', 'Deductions updated.');
+    }
+
+    /**
+     * Toggle employee exclusion from payroll processing.
+     * 
+     * HR can exclude employees from payroll computation without deleting them.
+     * This is useful for employees on leave, suspended, or other special cases.
+     */
+    public function toggleExclusion(Request $request, Employee $employee)
+    {
+        $request->validate([
+            'is_excluded' => ['required', 'boolean'],
+        ]);
+
+        $employee->update([
+            'is_excluded' => $request->is_excluded,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $employee->full_name . ' has been ' . ($request->is_excluded ? 'excluded from' : 'included in') . ' payroll processing.',
+        ]);
     }
 }

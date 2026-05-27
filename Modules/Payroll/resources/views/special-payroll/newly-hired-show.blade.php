@@ -531,7 +531,7 @@
                 <span class="value">{{ $employee->plantilla_item_no ?? '—' }}</span>
             </div>
             <div class="doc-meta-item">
-                <span class="label">Effectivity Date</span>
+                <span class="label">Assumption to Duty</span>
                 <span class="value">{{ $effectivityFmt }}</span>
             </div>
             <div class="doc-meta-item">
@@ -602,7 +602,7 @@
                         <th style="width:32px;">#</th>
                         <th>Name</th>
                         <th>Position</th>
-                        <th>Effectivity Date</th>
+                        <th>Assumption to Duty</th>
                         <th class="text-right">Basic Salary</th>
                         <th class="text-right">Salary Earned</th>
                         <th class="text-right">PERA Allowance</th>

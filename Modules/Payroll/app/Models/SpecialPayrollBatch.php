@@ -8,12 +8,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * SpecialPayrollBatch
  * 
- * Covers: newly_hired, salary_differential, nosi, nosa, step_increment
+ * Covers: newly_hired, salary_differential, nosi, nosa, step_increment, generic_special
  * 
  * Table columns (from migration 2026_03_20_200011_create_special_payroll_batches_table):
  *   id, type, title, year, month, effectivity_date,
  *   period_start, period_end, employee_id,
- *   old_basic_salary, new_basic_salary, differential_amount, pro_rated_days,
+ *   old_basic_salary, new_basic_salary, differential_amount,
+ *   old_step, new_step, old_salary_grade, new_salary_grade,
+ *   old_position, new_position, pro_rated_days,
  *   gross_amount, deductions_amount, net_amount,
  *   status, approved_by, approved_at, remarks, timestamps
  * 
@@ -58,6 +60,12 @@ class SpecialPayrollBatch extends Model
         'old_basic_salary',
         'new_basic_salary',
         'differential_amount',
+        'old_step',
+        'new_step',
+        'old_salary_grade',
+        'new_salary_grade',
+        'old_position',
+        'new_position',
         'pro_rated_days',
         'gross_amount',
         'deductions_amount',

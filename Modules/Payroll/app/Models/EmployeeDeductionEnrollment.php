@@ -11,6 +11,7 @@ class EmployeeDeductionEnrollment extends Model
         'employee_id',
         'deduction_type_id',
         'amount',
+        'percentage_override',
         'effective_from',
         'effective_to',
         'is_active',
@@ -18,10 +19,11 @@ class EmployeeDeductionEnrollment extends Model
     ];
 
     protected $casts = [
-        'amount'         => 'decimal:2',
-        'effective_from' => 'date',
-        'effective_to'   => 'date',
-        'is_active'      => 'boolean',
+        'amount'             => 'decimal:2',
+        'percentage_override' => 'decimal:2',
+        'effective_from'     => 'date',
+        'effective_to'       => 'date',
+        'is_active'          => 'boolean',
     ];
 
     // ── Relationships ─────────────────────────────────────────────

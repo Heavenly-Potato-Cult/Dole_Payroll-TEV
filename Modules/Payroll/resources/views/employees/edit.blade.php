@@ -189,7 +189,6 @@
                              display:flex;gap:16px;flex-wrap:wrap;">
                     <span><strong>Daily:</strong> ₱{{ number_format($employee->daily_rate, 4) }}</span>
                     <span><strong>Hourly:</strong> ₱{{ number_format($employee->hourly_rate, 4) }}</span>
-                    <span><strong>Semi-monthly gross:</strong> ₱{{ number_format($employee->semi_monthly_gross, 2) }}</span>
                 </div>
             </div>
         </div>
@@ -235,6 +234,36 @@
                     <label for="pagibig_no">Pag-IBIG Number</label>
                     <input type="text" id="pagibig_no" name="pagibig_no"
                            value="{{ old('pagibig_no', $employee->pagibig_no) }}" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="pagibig_id">Pag-IBIG ID / RTN</label>
+                    <input type="text" id="pagibig_id" name="pagibig_id"
+                           value="{{ old('pagibig_id', $employee->pagibig_id) }}" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="pagibig_mid_no">Pag-IBIG MID Number</label>
+                    <input type="text" id="pagibig_mid_no" name="pagibig_mid_no"
+                           value="{{ old('pagibig_mid_no', $employee->pagibig_mid_no) }}" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="mp2_account_no">MP2 Account Number</label>
+                    <input type="text" id="mp2_account_no" name="mp2_account_no"
+                           value="{{ old('mp2_account_no', $employee->mp2_account_no) }}" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="hdmf_mpl_app_no">HDMF MPL Application Number</label>
+                    <input type="text" id="hdmf_mpl_app_no" name="hdmf_mpl_app_no"
+                           value="{{ old('hdmf_mpl_app_no', $employee->hdmf_mpl_app_no) }}" maxlength="80">
+                </div>
+                <div class="form-group">
+                    <label for="hdmf_cal_app_no">HDMF Calamity Application Number</label>
+                    <input type="text" id="hdmf_cal_app_no" name="hdmf_cal_app_no"
+                           value="{{ old('hdmf_cal_app_no', $employee->hdmf_cal_app_no) }}" maxlength="80">
+                </div>
+                <div class="form-group">
+                    <label for="hdmf_housing_app_no">HDMF Housing Application Number</label>
+                    <input type="text" id="hdmf_housing_app_no" name="hdmf_housing_app_no"
+                           value="{{ old('hdmf_housing_app_no', $employee->hdmf_housing_app_no) }}" maxlength="80">
                 </div>
                 <div class="form-group">
                     <label for="philhealth_no">PhilHealth Number</label>

@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('special_payroll_batches', function (Blueprint $table) {
             $table->id();
             $table->string('type', 30)
-                  ->comment('newly_hired, salary_differential, nosi, nosa, step_increment');
+                  ->comment('newly_hired, salary_differential, nosi, nosa, step_increment, generic_special');
             $table->string('title');
             $table->unsignedSmallInteger('year');
             $table->unsignedTinyInteger('month');

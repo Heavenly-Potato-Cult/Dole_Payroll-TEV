@@ -110,4 +110,20 @@ class TevComputationService
 
         return "TEV-{$year}-{$sequence}";
     }
+
+    /**
+     * Generate a unique TEV series number.
+     *
+     * This is a separate series that increments independently for all TEV requests,
+     * providing a continuous sequence number regardless of year.
+     *
+     * @return int  e.g. 1234
+     */
+    public function generateTevSeriesNo(): int
+    {
+        $lastSeries = \Modules\Tev\Models\TevRequest::withTrashed()
+            ->max('tev_series_no');
+
+        return ($lastSeries ?? 0) + 1;
+    }
 }
