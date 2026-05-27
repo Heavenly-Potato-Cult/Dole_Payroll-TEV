@@ -133,7 +133,7 @@ class DeductionType extends Model
         if (in_array($this->category, self::LOAN_CATEGORIES)) {
             return false;
         }
-        return $this->is_locked;
+        return (bool) $this->is_locked;
     }
 
     /**

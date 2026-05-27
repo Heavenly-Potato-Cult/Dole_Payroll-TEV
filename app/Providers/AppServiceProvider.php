@@ -8,6 +8,7 @@ use Modules\Payroll\Models\PayrollBatch;
 use Modules\Payroll\Policies\PayrollPolicy;
 use Illuminate\Support\Facades\Blade;
 
+
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
@@ -17,6 +18,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Gate::before(function ($user, $ability) {
+            return $user->hasRole('super_admin') ? true : null;
+        });
         Gate::policy(PayrollBatch::class, PayrollPolicy::class);
     }
 }

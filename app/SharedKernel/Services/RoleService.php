@@ -332,4 +332,20 @@ class RoleService
     {
         return $user->hasAnyRole($roles);
     }
+
+    /**
+     * Check if user can access payroll module
+     */
+    public static function canAccessPayroll(User $user): bool
+    {
+        return self::canAccessModule($user, 'payroll');
+    }
+
+    /**
+     * Check if user can create payroll batches
+     */
+    public static function canCreatePayroll(User $user): bool
+    {
+        return self::canAccessModule($user, 'payroll_create');
+    }
 }

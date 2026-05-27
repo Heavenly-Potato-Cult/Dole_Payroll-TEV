@@ -748,7 +748,7 @@
     </div>
 
     {{-- Card 2: Current Cut-off — payroll roles only --}}
-    @can(\App\SharedKernel\Enums\Permission::PAYROLL_VIEW->value)
+    @role('payroll_officer|hrmo|accountant|ard|chief_admin_officer')
     <div class="db-stat neutral">
         <div class="db-stat-left">
             <div>
@@ -763,7 +763,7 @@
         </div>
     </div>
     @endrole
-    @can(\App\SharedKernel\Enums\Permission::PAYROLL_VIEW->value)
+    @role('cashier|budget_officer|super_admin')
     <div class="db-stat neutral">
         <div class="db-stat-left">
             <div>
@@ -801,7 +801,7 @@
     </div>
 
     {{-- Card 4: Role-specific 4th stat --}}
-    @can(\App\SharedKernel\Enums\Permission::PAYROLL_DELETE_DRAFT->value)
+    @role('payroll_officer')
     <div class="db-stat neutral">
         <div class="db-stat-left">
             <div>
@@ -817,7 +817,7 @@
         </div>
     </div>
     @endrole
-    @can(\App\SharedKernel\Enums\Permission::PAYROLL_VIEW->value)
+    @role('hrmo')
     <div class="db-stat neutral">
         <div class="db-stat-left">
             <div>
@@ -832,7 +832,7 @@
         </div>
     </div>
     @endrole
-    @can(\App\SharedKernel\Enums\Permission::PAYROLL_VIEW->value)
+    @role('accountant')
     <div class="db-stat neutral">
         <div class="db-stat-left">
             <div>
@@ -847,7 +847,7 @@
         </div>
     </div>
     @endrole
-    @can(\App\SharedKernel\Enums\Permission::PAYROLL_APPROVE->value)
+    @role('ard|chief_admin_officer')
     <div class="db-stat neutral">
         <div class="db-stat-left">
             <div>
@@ -862,7 +862,7 @@
         </div>
     </div>
     @endrole
-    @can(\App\SharedKernel\Enums\Permission::PAYROLL_LOCK->value)
+    @role('cashier')
     <div class="db-stat neutral">
         <div class="db-stat-left">
             <div>
@@ -877,7 +877,7 @@
         </div>
     </div>
     @endrole
-    @can(\App\SharedKernel\Enums\Permission::TEV_ACCESS->value)
+    @role('budget_officer')
     <div class="db-stat neutral">
         <div class="db-stat-left">
             <div>
@@ -892,7 +892,7 @@
         </div>
     </div>
     @endrole
-    @can(\App\SharedKernel\Enums\Permission::ADMINISTRATION_ACCESS->value)
+    @role('super_admin')
     <div class="db-stat purple">
         <div class="db-stat-left">
             <div>
@@ -927,7 +927,7 @@
      Row 1: Recent Payroll (all statuses) | Recent TEV (all statuses)
      Row 2: Payroll Pipeline Chart | System-wide TEV Status + Quick Actions
      ───────────────────────────────────────────────────────────── --}}
-@can(\App\SharedKernel\Enums\Permission::ADMINISTRATION_ACCESS->value)
+@role('super_admin')
 
     {{-- Pipeline Overview: queue counters — 2-col on mobile, inline strips on desktop --}}
     @php
@@ -944,7 +944,7 @@
     <div class="db-queue-grid">
 
         {{-- Payroll Queue Section --}}
-        @can(\App\SharedKernel\Enums\Permission::PAYROLL_VIEW->value)
+        @role('payroll_officer|hrmo|accountant|ard|cashier|chief_admin_officer|super_admin')
         <div class="db-queue-section">
             <div class="db-queue-header">
                 <span class="db-queue-label">Payroll Queue</span>
@@ -985,7 +985,7 @@
             </a>
         </div>
         @endrole
-        @can(\App\SharedKernel\Enums\Permission::TEV_ACCESS->value)
+        @role('budget_officer')
         <div class="db-queue-section">
             <div class="db-queue-header">
                 <span class="db-queue-label">Payroll Status</span>
@@ -1080,7 +1080,7 @@
      Row 1: Recent Payroll Batches (full width)
      Row 2: Chart + Quick Actions
      ───────────────────────────────────────────────────────────── --}}
-@can(\App\SharedKernel\Enums\Permission::PAYROLL_VIEW->value)
+@role('hrmo')
 
     <div class="db-row" style="grid-template-columns: 1fr;">
 
@@ -1170,7 +1170,7 @@
      Row 1: Recent Payroll | Special Payroll summary
      Row 2: Chart (2fr) + Quick Actions 3-col (1fr)
      ───────────────────────────────────────────────────────────── --}}
-@can(\App\SharedKernel\Enums\Permission::PAYROLL_DELETE_DRAFT->value)
+@role('payroll_officer')
 
     <div class="db-row">
 
@@ -1320,7 +1320,7 @@
      Row 1: Pending Payroll (focus) | TEV Certifications queue
      Row 2: Recent Payroll list | Chart
      ───────────────────────────────────────────────────────────── --}}
-@can(\App\SharedKernel\Enums\Permission::PAYROLL_VIEW->value)
+@role('accountant')
 
     <div class="db-row">
 
@@ -1435,7 +1435,7 @@
      Row 1: Payroll awaiting RD | TEV awaiting RD approval
      Row 2: Chart + Quick Actions
      ───────────────────────────────────────────────────────────── --}}
-@can(\App\SharedKernel\Enums\Permission::PAYROLL_APPROVE->value)
+@role('ard|chief_admin_officer')
 
     <div class="db-row">
 
@@ -1545,7 +1545,7 @@
      Row 1: TEV for Release | Liquidations Pending
      Row 2: Quick Actions (full width or narrow)
      ───────────────────────────────────────────────────────────── --}}
-@can(\App\SharedKernel\Enums\Permission::PAYROLL_LOCK->value)
+@role('cashier')
 
     <div class="db-row">
 
@@ -1655,7 +1655,7 @@
      BUDGET OFFICER LAYOUT
      Monitors TEV submissions, no payroll access
      ───────────────────────────────────────────────────────────── --}}
-@can(\App\SharedKernel\Enums\Permission::TEV_ACCESS->value)
+@role('budget_officer')
 
     <div class="db-row">
 

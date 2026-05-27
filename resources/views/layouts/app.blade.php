@@ -300,13 +300,13 @@
         </nav>
 
         {{-- ═══ SIDEBAR FOOTER ═══ --}}
-        @cannot(\App\SharedKernel\Enums\Permission::PAYROLL_ACCESS->value)
+        @unless(auth()->user()->hasRole('payroll_officer'))
         <div class="sidebar-footer">
             <a href="{{ route('tev.dashboard') }}" class="btn-switch" title="Go to TEV">
                 Go to TEV
             </a>
         </div>
-        @endcannot
+        @endunless
 
     </aside>
 

@@ -276,11 +276,11 @@ div#tab-active.active {
         <h1>Regular Payroll Batches</h1>
         <p>Semi-monthly payroll for all DOLE RO9 regular employees.</p>
     </div>
-@canCreatePayroll
+@can(\App\SharedKernel\Enums\Permission::PAYROLL_CREATE->value)
 <a href="{{ route('payroll.create') }}" class="btn btn-primary">
     + New Payroll Batch
 </a>
-@endcanCreatePayroll
+@endcan
 </div>
 
 {{-- ── Filter bar ──────────────────────────────────────────── --}}
@@ -447,7 +447,7 @@ div#tab-active.active {
                                                         onclick="event.stopPropagation(); confirmDeletePayroll({{ $batch->id }}, '{{ $batch->period_year }}-{{ str_pad($batch->period_month, 2, '0', STR_PAD_LEFT) }}-{{ $batch->cutoff }}')">Delete</button>
                                             </form>
                                         @endif
-                                    @endrole
+                                    @endcan
                                 </div>
                                 <span class="pr-expand-btn" aria-label="Expand">▼</span>
                             </td>
@@ -491,11 +491,11 @@ div#tab-active.active {
                                 <div class="pr-detail-actions">
                                     <a href="{{ route('payroll.show', $batch) }}"
                                        class="btn btn-outline btn-sm">View</a>
-                                    @canCreatePayroll
+                                    @can(\App\SharedKernel\Enums\Permission::PAYROLL_DELETE_DRAFT->value)
                                         @if ($batch->status === 'draft')
                                             <button type="button" class="btn btn-danger btn-sm" style="width:100%;" onclick="confirmDeletePayroll({{ $batch->id }}, '{{ $batch->period_year }}-{{ str_pad($batch->period_month, 2, '0', STR_PAD_LEFT) }}-{{ $batch->cutoff }}')">Delete</button>
                                         @endif
-                                    @endcanCreatePayroll
+                                    @endcan
                                 </div>
                             </td>
                         </tr>
@@ -504,9 +504,9 @@ div#tab-active.active {
                         <tr>
                             <td colspan="9" style="text-align:center; padding:40px; color:var(--text-light);">
                                 No active payroll batches found.
-                                @canCreatePayroll
+                                @can(\App\SharedKernel\Enums\Permission::PAYROLL_CREATE->value)
                                     <a href="{{ route('payroll.create') }}">Create one now →</a>
-                                @endcanCreatePayroll
+                                @endcan
                             </td>
                         </tr>
                     @endforelse

@@ -29,7 +29,7 @@ class PayrollReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function payrollRegister(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         $query = \Modules\Payroll\Models\PayrollBatch::with(['entries.employee'])
             ->orderByDesc('period_start')
@@ -57,7 +57,7 @@ class PayrollReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         $tab = $request->get('tab', 'gsis');
         $year = (int) $request->get('year', now()->year);
@@ -186,7 +186,7 @@ class PayrollReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function gsisIndex(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         $year   = (int) $request->get('year',   now()->year);
         $month  = (int) $request->get('month',  now()->month);
@@ -227,7 +227,7 @@ class PayrollReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function gsisSummary(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         $request->validate([
             'year'   => ['required', 'integer', 'min:2020', 'max:2099'],
@@ -250,7 +250,7 @@ class PayrollReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function gsisDetailed(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         $request->validate([
             'year'   => ['required', 'integer', 'min:2020', 'max:2099'],
@@ -273,7 +273,7 @@ class PayrollReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function hdmfIndex(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         $year   = (int) $request->get('year',   now()->year);
         $month  = (int) $request->get('month',  now()->month);
@@ -313,7 +313,7 @@ class PayrollReportController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function hdmf(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         $request->validate([
             'year'   => ['required', 'integer', 'min:2020', 'max:2099'],
@@ -351,7 +351,7 @@ class PayrollReportController extends Controller
     // ────────────────────────────────────────────────────────────────────────
     public function remittancesHub()
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         [$year, $month, $cutoff] = $this->remittanceFilters();
 
@@ -369,7 +369,7 @@ class PayrollReportController extends Controller
     // ────────────────────────────────────────────────────────────────────────
     public function phicCsv()
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         [$year, $month, $cutoff] = $this->remittanceFilters();
         $monthName = date('F', mktime(0, 0, 0, $month, 1));
@@ -435,7 +435,7 @@ class PayrollReportController extends Controller
     // ────────────────────────────────────────────────────────────────────────
     public function sssVoluntary()
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         [$year, $month, $cutoff] = $this->remittanceFilters();
         $monthName = date('F', mktime(0, 0, 0, $month, 1));
@@ -496,7 +496,7 @@ class PayrollReportController extends Controller
     // ────────────────────────────────────────────────────────────────────────
     public function lbpLoan(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         [$year, $month, $cutoff] = $this->remittanceFilters();
         $monthName = date('F', mktime(0, 0, 0, $month, 1));
@@ -547,7 +547,7 @@ class PayrollReportController extends Controller
     // ────────────────────────────────────────────────────────────────────────
     public function caressUnion(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         [$year, $month, $cutoff] = $this->remittanceFilters();
         $monthName = date('F', mktime(0, 0, 0, $month, 1));
@@ -596,7 +596,7 @@ class PayrollReportController extends Controller
     // ────────────────────────────────────────────────────────────────────────
     public function caressMortuary(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         [$year, $month, $cutoff] = $this->remittanceFilters();
         $monthName = date('F', mktime(0, 0, 0, $month, 1));
@@ -645,7 +645,7 @@ class PayrollReportController extends Controller
     // ────────────────────────────────────────────────────────────────────────
     public function mass(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         [$year, $month, $cutoff] = $this->remittanceFilters();
         $monthName = date('F', mktime(0, 0, 0, $month, 1));
@@ -694,7 +694,7 @@ class PayrollReportController extends Controller
     // ────────────────────────────────────────────────────────────────────────
     public function providentFund(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         [$year, $month, $cutoff] = $this->remittanceFilters();
         $monthName = date('F', mktime(0, 0, 0, $month, 1));
@@ -743,7 +743,7 @@ class PayrollReportController extends Controller
     // ────────────────────────────────────────────────────────────────────────
     public function btrRefund(Request $request)
     {
-        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant']);
+        $this->authorize('viewAny', \Modules\Payroll\Models\PayrollBatch::class);
 
         [$year, $month, $cutoff] = $this->remittanceFilters();
         $monthName = date('F', mktime(0, 0, 0, $month, 1));

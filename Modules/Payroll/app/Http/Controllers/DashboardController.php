@@ -5,6 +5,7 @@ namespace Modules\Payroll\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\SharedKernel\Models\Employee;
 use Modules\Payroll\Models\PayrollBatch;
+use Modules\Tev\Models\TevRequest;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
@@ -90,6 +91,11 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
+        $recentTev = TevRequest::with('employee')
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
         // ----------------------------------------------------------------
         // Chart datasets
         // Pre-aggregated for the dashboard charts. Keeping this in the
@@ -119,6 +125,7 @@ class DashboardController extends Controller
             'pendingTev',
             'pendingLiquidation',
             'recentPayroll',
+            'recentTev',
             'payrollStatusData',
         ));
     }

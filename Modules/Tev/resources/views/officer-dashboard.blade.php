@@ -564,7 +564,7 @@
     </div>
 
     {{-- Card 4: Role-specific TEV stat --}}
-    @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CERTIFY->value)
+    @role('accountant')
     <div class="tod-stat neutral">
         <div class="tod-stat-left">
             <div>
@@ -578,8 +578,8 @@
             <div class="tod-stat-value">{{ $pendingTev }}</div>
         </div>
     </div>
-    @endcan
-    @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_APPROVE->value)
+    @endrole
+    @role('ard|chief_admin_officer')
     <div class="tod-stat neutral">
         <div class="tod-stat-left">
             <div>
@@ -593,8 +593,8 @@
             <div class="tod-stat-value">{{ $pendingTev }}</div>
         </div>
     </div>
-    @endcan
-    @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_DISBURSE->value)
+    @endrole
+    @role('cashier')
     <div class="tod-stat neutral">
         <div class="tod-stat-left">
             <div>
@@ -608,8 +608,8 @@
             <div class="tod-stat-value">{{ $pendingLiquidation }}</div>
         </div>
     </div>
-    @endcan
-    @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_VIEW->value)
+    @endrole
+    @role('budget_officer')
     <div class="tod-stat neutral">
         <div class="tod-stat-left">
             <div>
@@ -623,8 +623,8 @@
             <div class="tod-stat-value">{{ $pendingTev }}</div>
         </div>
     </div>
-    @endcan
-    @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CREATE->value)
+    @endrole
+    @role('hrmo')
     <div class="tod-stat neutral">
         <div class="tod-stat-left">
             <div>
@@ -638,8 +638,8 @@
             <div class="tod-stat-value">{{ $pendingTev }}</div>
         </div>
     </div>
-    @endcan
-    @can(\App\SharedKernel\Enums\Permission::USERS_MANAGE->value)
+    @endrole
+    @role('super_admin')
     <div class="tod-stat purple">
         <div class="tod-stat-left">
             <div>
@@ -659,7 +659,7 @@
             <div class="tod-stat-value">{{ $totalUsers }}</div>
         </div>
     </div>
-    @endcan
+    @endrole
 
 </div>{{-- /.tod-stat-grid --}}
     
@@ -802,7 +802,7 @@
             <h3>⚡ Quick Actions</h3>
         </div>
         <div class="tod-actions">
-            @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CERTIFY->value)
+            @role('accountant')
             <a href="{{ route('tev.requests.index') }}?status=submitted" class="tod-action-btn">
                 <div class="tod-action-left">
                     <span>📝</span>
@@ -812,9 +812,9 @@
                 <span class="tod-action-count">{{ $tevSubmitted }}</span>
                 @endif
             </a>
-            @endcan
+            @endrole
             
-            @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_APPROVE->value)
+            @role('ard|chief_admin_officer')
             <a href="{{ route('tev.requests.index') }}?status=accountant_certified" class="tod-action-btn">
                 <div class="tod-action-left">
                     <span>✅</span>
@@ -824,9 +824,9 @@
                 <span class="tod-action-count">{{ $tevCertified }}</span>
                 @endif
             </a>
-            @endcan
+            @endrole
             
-            @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_DISBURSE->value)
+            @role('cashier')
             <a href="{{ route('tev.requests.index') }}?status=rd_approved" class="tod-action-btn primary">
                 <div class="tod-action-left">
                     <span>💰</span>
@@ -845,9 +845,9 @@
                 <span class="tod-action-count">{{ $tevLiqFiled }}</span>
                 @endif
             </a>
-            @endcan
+            @endrole
             
-            @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_CREATE->value)
+            @role('hrmo')
             <a href="{{ route('tev.requests.index') }}?status=cashier_released&track=cash_advance" class="tod-action-btn">
                 <div class="tod-action-left">
                     <span>📋</span>
@@ -857,18 +857,18 @@
                 <span class="tod-action-count">{{ $tevCashReleased }}</span>
                 @endif
             </a>
-            @endcan
+            @endrole
             
-            @can(\App\SharedKernel\Enums\Permission::TEV_VOUCHERS_VIEW->value)
+            @role('budget_officer')
             <a href="{{ route('tev.requests.index') }}" class="tod-action-btn">
                 <div class="tod-action-left">
                     <span>📊</span>
                     <span>Monitor All TEVs</span>
                 </div>
             </a>
-            @endcan
+            @endrole
             
-            @can(\App\SharedKernel\Enums\Permission::USERS_MANAGE->value)
+            @role('super_admin')
             <a href="{{ route('tev.requests.index') }}" class="tod-action-btn">
                 <div class="tod-action-left">
                     <span>🔍</span>
@@ -881,7 +881,7 @@
                     <span>Office Orders</span>
                 </div>
             </a>
-            @endcan
+            @endrole
             
             <a href="{{ route('reports.tev-register') }}" class="tod-action-btn">
                 <div class="tod-action-left">
