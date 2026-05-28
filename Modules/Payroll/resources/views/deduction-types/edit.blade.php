@@ -42,6 +42,292 @@
     </div>
     @endif
 
+    {{-- ══════════════════════════════════════════════════════════════════
+         ── Formula Rate Settings  (Tier 1 / is_computed only) ───────────
+         Shows configurable rate fields for PAG-IBIG, PhilHealth, GSIS.
+         WHT shows a read-only developer notice instead.
+         ══════════════════════════════════════════════════════════════════ --}}
+    @if ($deductionType->is_computed)
+    <div class="card" style="border-left:4px solid #059669;margin-bottom:20px;">
+        <div class="card-header" style="background:#ecfdf5;">
+            <h3 style="color:#065f46;">📐 Formula Rate Settings</h3>
+        </div>
+        <div class="card-body">
+
+            @php
+                $code = $deductionType->code;
+                $isPagibig    = in_array($code, ['PAG_IBIG_1', 'PAGIBIG_1']);
+                $isPhilhealth = $code === 'PHILHEALTH';
+                $isGsis       = in_array($code, ['GSIS_LIFE_RETIREMENT', 'GSIS_LIFE_RET']);
+                $isWht        = in_array($code, ['WITHHOLDING_TAX', 'WHT']);
+            @endphp
+
+            {{-- ── WHT: read-only notice ───────────────────────────────── --}}
+            @if ($isWht)
+            <div style="padding:14px 16px;background:#fef9c3;border:1px solid #fbbf24;border-radius:8px;font-size:0.85rem;color:#78350f;">
+                <div style="font-weight:700;margin-bottom:6px;">⚠ Developer-only configuration</div>
+                Withholding Tax uses the BIR TRAIN Law graduated tax table — six linked brackets
+                where changing one number requires adjusting all the others consistently.
+                Exposing these in a form risks silent miscalculations that would affect
+                <strong>every employee's tax deduction</strong>.
+                <br><br>
+                To update the tax table (e.g. for new TRAIN Law amendments), please ask a
+                developer to update <code>DeductionService::birGraduatedTax()</code> and
+                re-test the affected salary ranges before deploying.
+            </div>
+
+            {{-- ── PAG-IBIG I ─────────────────────────────────────────── --}}
+            @elseif ($isPagibig)
+            <div style="font-size:0.82rem;color:var(--text-mid);margin-bottom:18px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
+                These are the contribution rates used to compute each employee's PAG-IBIG I
+                deduction. The system will automatically apply the <strong>Low-Salary Rate</strong>
+                when an employee's monthly basic pay is at or below the <strong>Salary Threshold</strong>,
+                and the <strong>Main Rate</strong> for all others.
+                The <strong>Monthly Cap</strong> sets the maximum amount an employee can be
+                charged per month before dividing by 2 for the cut-off.
+                <br><br>
+                Current statutory values: <strong>2%</strong> (main) · <strong>1%</strong> (low) ·
+                threshold ₱1,500 · cap ₱100/month.
+                Update these only when HDMF issues a new circular changing the rates or caps.
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+                <div>
+                    <label for="formula_rate"
+                           style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                        Main Rate (%)
+                    </label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input type="number"
+                               id="formula_rate"
+                               name="formula_rate"
+                               value="{{ old('formula_rate', $deductionType->formula_rate !== null ? number_format((float)$deductionType->formula_rate * 100, 2, '.', '') : '') }}"
+                               min="0" max="100" step="0.01"
+                               placeholder="2.00"
+                               style="max-width:110px;">
+                        <span style="font-size:0.82rem;color:var(--text-mid);">%</span>
+                    </div>
+                    @error('formula_rate')
+                        <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
+                        Applied when salary &gt; threshold.<br>Statutory: <strong>2.00%</strong>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="formula_rate_low"
+                           style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                        Low-Salary Rate (%)
+                    </label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input type="number"
+                               id="formula_rate_low"
+                               name="formula_rate_low"
+                               value="{{ old('formula_rate_low', $deductionType->formula_rate_low !== null ? number_format((float)$deductionType->formula_rate_low * 100, 2, '.', '') : '') }}"
+                               min="0" max="100" step="0.01"
+                               placeholder="1.00"
+                               style="max-width:110px;">
+                        <span style="font-size:0.82rem;color:var(--text-mid);">%</span>
+                    </div>
+                    @error('formula_rate_low')
+                        <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
+                        Applied when salary ≤ threshold.<br>Statutory: <strong>1.00%</strong>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="formula_rate_threshold"
+                           style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                        Salary Threshold (₱/month)
+                    </label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:0.82rem;color:var(--text-mid);">₱</span>
+                        <input type="number"
+                               id="formula_rate_threshold"
+                               name="formula_rate_threshold"
+                               value="{{ old('formula_rate_threshold', $deductionType->formula_rate_threshold !== null ? number_format((float)$deductionType->formula_rate_threshold, 2, '.', '') : '') }}"
+                               min="0" step="0.01"
+                               placeholder="1500.00"
+                               style="max-width:130px;">
+                    </div>
+                    @error('formula_rate_threshold')
+                        <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
+                        Salaries at or below this amount use the Low-Salary Rate.<br>
+                        Statutory: <strong>₱1,500.00</strong>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="formula_monthly_cap"
+                           style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                        Monthly Cap on Employee Share (₱)
+                    </label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:0.82rem;color:var(--text-mid);">₱</span>
+                        <input type="number"
+                               id="formula_monthly_cap"
+                               name="formula_monthly_cap"
+                               value="{{ old('formula_monthly_cap', $deductionType->formula_monthly_cap !== null ? number_format((float)$deductionType->formula_monthly_cap, 2, '.', '') : '') }}"
+                               min="0" step="0.01"
+                               placeholder="100.00"
+                               style="max-width:130px;">
+                    </div>
+                    @error('formula_monthly_cap')
+                        <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
+                        No employee's monthly contribution can exceed this.<br>
+                        Statutory: <strong>₱100.00/month</strong>
+                    </div>
+                </div>
+
+            </div>
+
+            {{-- ── PhilHealth ──────────────────────────────────────────── --}}
+            @elseif ($isPhilhealth)
+            <div style="font-size:0.82rem;color:var(--text-mid);margin-bottom:18px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
+                These values set how PhilHealth premiums are calculated. The <strong>Premium Rate</strong>
+                is multiplied by the employee's monthly basic salary to get the total monthly premium.
+                The total is then clamped between the <strong>Minimum</strong> and <strong>Maximum</strong>
+                monthly amounts. The employee pays <strong>half</strong> of the total premium,
+                then that amount is divided by 2 for the cut-off deduction.
+                <br><br>
+                Current statutory values: <strong>5%</strong> rate · floor ₱500 · ceiling ₱5,000/month.
+                Update only when PhilHealth issues a new premium circular.
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;">
+
+                <div>
+                    <label for="formula_rate"
+                           style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                        Premium Rate (%)
+                    </label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input type="number"
+                               id="formula_rate"
+                               name="formula_rate"
+                               value="{{ old('formula_rate', $deductionType->formula_rate !== null ? number_format((float)$deductionType->formula_rate * 100, 2, '.', '') : '') }}"
+                               min="0" max="100" step="0.01"
+                               placeholder="5.00"
+                               style="max-width:100px;">
+                        <span style="font-size:0.82rem;color:var(--text-mid);">%</span>
+                    </div>
+                    @error('formula_rate')
+                        <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
+                        % of basic monthly salary.<br>Statutory: <strong>5.00%</strong>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="formula_monthly_floor"
+                           style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                        Minimum Monthly Premium (₱)
+                    </label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:0.82rem;color:var(--text-mid);">₱</span>
+                        <input type="number"
+                               id="formula_monthly_floor"
+                               name="formula_monthly_floor"
+                               value="{{ old('formula_monthly_floor', $deductionType->formula_monthly_floor !== null ? number_format((float)$deductionType->formula_monthly_floor, 2, '.', '') : '') }}"
+                               min="0" step="0.01"
+                               placeholder="500.00"
+                               style="max-width:110px;">
+                    </div>
+                    @error('formula_monthly_floor')
+                        <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
+                        Lowest possible total monthly premium.<br>Statutory: <strong>₱500.00</strong>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="formula_monthly_ceiling"
+                           style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                        Maximum Monthly Premium (₱)
+                    </label>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:0.82rem;color:var(--text-mid);">₱</span>
+                        <input type="number"
+                               id="formula_monthly_ceiling"
+                               name="formula_monthly_ceiling"
+                               value="{{ old('formula_monthly_ceiling', $deductionType->formula_monthly_ceiling !== null ? number_format((float)$deductionType->formula_monthly_ceiling, 2, '.', '') : '') }}"
+                               min="0" step="0.01"
+                               placeholder="5000.00"
+                               style="max-width:110px;">
+                    </div>
+                    @error('formula_monthly_ceiling')
+                        <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
+                        Highest possible total monthly premium.<br>Statutory: <strong>₱5,000.00</strong>
+                    </div>
+                </div>
+
+            </div>
+
+            {{-- ── GSIS Life & Retirement ──────────────────────────────── --}}
+            @elseif ($isGsis)
+            <div style="font-size:0.82rem;color:var(--text-mid);margin-bottom:18px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
+                The <strong>Personal Share Rate</strong> is applied to the employee's monthly basic salary
+                to get their monthly GSIS contribution. The result is divided by 2 for the cut-off deduction.
+                For employees who worked fewer days than the full period, the system automatically prorates
+                the deduction.
+                <br><br>
+                Current statutory value: <strong>9%</strong> (RA 8291, personal share).
+                Update only when GSIS or Congress amends the contribution rate.
+            </div>
+
+            <div style="margin-bottom:16px;">
+                <label for="formula_rate"
+                       style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                    Personal Share Rate (%)
+                </label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <input type="number"
+                           id="formula_rate"
+                           name="formula_rate"
+                           value="{{ old('formula_rate', $deductionType->formula_rate !== null ? number_format((float)$deductionType->formula_rate * 100, 2, '.', '') : '') }}"
+                           min="0" max="100" step="0.01"
+                           placeholder="9.00"
+                           style="max-width:120px;">
+                    <span style="font-size:0.82rem;color:var(--text-mid);">% of basic monthly salary</span>
+                </div>
+                @error('formula_rate')
+                    <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
+                @enderror
+                <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
+                    Statutory personal share: <strong>9.00%</strong> (RA 8291).
+                    The government's counterpart share is not deducted from the employee's pay and is not set here.
+                </div>
+            </div>
+
+            @endif
+
+            {{-- Shared advisory footer (not shown for WHT) --}}
+            @if (!$isWht)
+            <div style="margin-top:4px;padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:0.78rem;color:#92400e;">
+                <strong>⚠ Important:</strong>
+                These rate fields affect <strong>every employee</strong> on the next payroll run.
+                Double-check the values before saving. If you are unsure, contact your payroll consultant
+                or verify against the latest government circular before making changes.
+            </div>
+            @endif
+
+        </div>
+    </div>
+    @endif
+    {{-- end Formula Rate Settings --}}
+
     <div class="card">
         <div class="card-header"><h3>Deduction Details</h3></div>
         <div class="card-body">
@@ -321,11 +607,9 @@ const ordEl = document.getElementById('display_order');
 if (catEl) catEl.addEventListener('change', checkOrderConflict);
 if (ordEl) ordEl.addEventListener('input', checkOrderConflict);
 
-// Run on load
 checkOrderConflict();
 
 // ── Confirm + saving alert (SweetAlert2) ─────────────────────────────────
-// Fix: Save button had no alert message/confirmation.
 let __deductionTypeSubmitting = false;
 document.getElementById('editTypeForm').addEventListener('submit', function (e) {
     if (__deductionTypeSubmitting) return;

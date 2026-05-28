@@ -30,10 +30,42 @@ use Carbon\Carbon;
  *    If found and enrollment has amount → use enrollment.amount.
  *    If found but enrollment has no amount and type has percentage → calculate as percentage.
  *    Otherwise 0.
+ *
+ * ── Formula Rate Columns ─────────────────────────────────────────────────
+ *
+ *  computePagibig1(), computePhilHealth(), and computeGsisLife() now accept
+ *  the DeductionType model and read their rates from the formula_rate_*
+ *  columns added by the 2026_05_28_000001 migration.
+ *
+ *  If a column is null the method falls back to the hardcoded constant below
+ *  so that existing installations with no seeded values continue to work
+ *  without any data changes.
+ *
+ *  Withholding Tax (computeWithholdingTax) remains fully hardcoded — the
+ *  BIR graduated table has too many interdependent brackets to expose safely
+ *  in a UI. A developer must update those brackets directly in this class.
  * ─────────────────────────────────────────────────────────────────────────
  */
 class DeductionService
 {
+    // ── Hardcoded fallback constants ──────────────────────────────────────
+    // Used when the corresponding formula_rate_* column on DeductionType is null.
+    // These match the statutory rates in effect as of May 2026.
+
+    // PAG-IBIG I
+    const PAGIBIG_RATE          = 0.02;    // 2 % standard rate
+    const PAGIBIG_RATE_LOW      = 0.01;    // 1 % for salary ≤ threshold
+    const PAGIBIG_THRESHOLD     = 1500.00; // ₱1,500 salary threshold
+    const PAGIBIG_MONTHLY_CAP   = 100.00;  // EE share capped at ₱100/month
+
+    // PhilHealth
+    const PHILHEALTH_RATE           = 0.05;    // 5 % total premium rate
+    const PHILHEALTH_MONTHLY_FLOOR  = 500.00;  // ₱500 minimum monthly premium
+    const PHILHEALTH_MONTHLY_CEILING= 5000.00; // ₱5,000 maximum monthly premium
+
+    // GSIS Life & Retirement
+    const GSIS_RATE = 0.09; // 9 % personal share
+
     const DENOMINATOR = 22;
 
     /**
@@ -46,8 +78,13 @@ class DeductionService
      * @param  int          $totalDays  Total working days in the period (default 22)
      * @return array        Each element: [deduction_type_id, code, name, amount, is_overridden, is_global]
      */
-    public function resolveDeductions(Employee $employee, PayrollBatch $batch, float $ytdGross = 0.0, ?int $daysWorked = null, int $totalDays = 22): array
-    {
+    public function resolveDeductions(
+        Employee     $employee,
+        PayrollBatch $batch,
+        float        $ytdGross  = 0.0,
+        ?int         $daysWorked = null,
+        int          $totalDays  = 22
+    ): array {
         $basicMonthly = (float) $employee->basic_monthly_salary;
         $peraMonthly  = (float) $employee->pera_amount;
         $payrollDate  = Carbon::create($batch->period_year, $batch->period_month, 1)->toDateString();
@@ -62,15 +99,37 @@ class DeductionService
             ->keyBy(fn ($e) => $e->deductionType->code);
 
         // ── Pre-compute formula amounts ───────────────────────────────────
-        // These are computed once and used only when the formula path is taken.
+        // Computed per type so each method can read its own DB-configured rates.
+        $computedTypes = $allTypes->keyBy('code');
+
         $formulaAmounts = [
-            'PAG_IBIG_1'           => $this->computePagibig1($basicMonthly),
-            'PHILHEALTH'           => $this->computePhilHealth($basicMonthly),
-            'GSIS_LIFE_RETIREMENT' => $this->computeGsisLife($basicMonthly, $daysWorked, $totalDays),
-            'WITHHOLDING_TAX'      => $this->computeWithholdingTax(
-                                          $employee, $basicMonthly, $peraMonthly,
-                                          $ytdGross, $batch
-                                      ),
+            'PAG_IBIG_1' => $this->computePagibig1(
+                $basicMonthly,
+                $computedTypes->get('PAG_IBIG_1') ?? $computedTypes->get('PAGIBIG_1')
+            ),
+            'PAGIBIG_1' => $this->computePagibig1(
+                $basicMonthly,
+                $computedTypes->get('PAGIBIG_1') ?? $computedTypes->get('PAG_IBIG_1')
+            ),
+            'PHILHEALTH' => $this->computePhilHealth(
+                $basicMonthly,
+                $computedTypes->get('PHILHEALTH')
+            ),
+            'GSIS_LIFE_RETIREMENT' => $this->computeGsisLife(
+                $basicMonthly,
+                $computedTypes->get('GSIS_LIFE_RETIREMENT') ?? $computedTypes->get('GSIS_LIFE_RET'),
+                $daysWorked,
+                $totalDays
+            ),
+            'GSIS_LIFE_RET' => $this->computeGsisLife(
+                $basicMonthly,
+                $computedTypes->get('GSIS_LIFE_RET') ?? $computedTypes->get('GSIS_LIFE_RETIREMENT'),
+                $daysWorked,
+                $totalDays
+            ),
+            'WITHHOLDING_TAX' => $this->computeWithholdingTax(
+                $employee, $basicMonthly, $peraMonthly, $ytdGross, $batch
+            ),
         ];
 
         $lines = [];
@@ -92,14 +151,13 @@ class DeductionService
                     $amount       = (float) $type->override_amount;
                     $isOverridden = true;
                 } else {
-                    // Normal formula path
+                    // Normal formula path — uses DB-configured rates with hardcoded fallbacks
                     $amount = $formulaAmounts[$type->code] ?? 0.00;
                 }
 
             // ── Tier 2: Locked global manual ─────────────────────────────
             } elseif ($type->isEffectivelyLocked()) {
                 if ($type->percentage !== null) {
-                    // Calculate as percentage of basic salary per cut-off
                     $monthlyAmount = round($basicMonthly * ($type->percentage / 100), 2);
                     $amount        = round($monthlyAmount / 2, 2);
                     $isGlobal      = true;
@@ -107,7 +165,6 @@ class DeductionService
                     $amount   = (float) $type->default_amount;
                     $isGlobal = true;
                 }
-                // If no percentage or default_amount configured → amount stays 0, skip.
 
             // ── Tier 3: Per-employee enrollment ──────────────────────────
             } elseif (isset($enrollments[$type->code])) {
@@ -115,11 +172,9 @@ class DeductionService
                 if ($enrollment->amount > 0) {
                     $amount = (float) $enrollment->amount;
                 } elseif ($enrollment->percentage_override !== null) {
-                    // Use individual percentage override if set
                     $monthlyAmount = round($basicMonthly * ($enrollment->percentage_override / 100), 2);
                     $amount        = round($monthlyAmount / 2, 2);
                 } elseif ($type->percentage !== null) {
-                    // Enrollment exists but no amount or override - use type-level percentage
                     $monthlyAmount = round($basicMonthly * ($type->percentage / 100), 2);
                     $amount        = round($monthlyAmount / 2, 2);
                 }
@@ -131,10 +186,7 @@ class DeductionService
                     'code'              => $type->code,
                     'name'              => $type->name,
                     'amount'            => round($amount, 2),
-                    // is_overridden: payslip view shows asterisk for manual overrides
                     'is_overridden'     => $isOverridden,
-                    // is_global: payslip view may show a different indicator for
-                    // globally-applied amounts (e.g. a globe icon)
                     'is_global'         => $isGlobal,
                 ];
             }
@@ -145,35 +197,107 @@ class DeductionService
 
     // ═══════════════════════════════════════════════════════════════════
     //  Computed Government-Mandatory Deduction Helpers
+    //
+    //  Each method accepts a nullable ?DeductionType $type parameter.
+    //  When $type is provided, rates are read from its formula_rate_*
+    //  columns. A null column falls back to this class's hardcoded
+    //  constants (see top of file). When $type is null entirely, all
+    //  constants are used — this preserves unit-test compatibility.
+    //
     //  All return the PER CUT-OFF (semi-monthly) amount.
     // ═══════════════════════════════════════════════════════════════════
 
-    public function computePagibig1(float $basicMonthly): float
+    /**
+     * PAG-IBIG I (HDMF Mandatory) — per cut-off EE share.
+     *
+     * Rate logic:
+     *   • If basicMonthly ≤ threshold → apply rate_low
+     *   • Otherwise → apply rate
+     *   • Cap the monthly EE share at monthly_cap
+     *   • Divide by 2 for the cut-off amount
+     *
+     * DB columns used: formula_rate, formula_rate_low,
+     *                  formula_rate_threshold, formula_monthly_cap
+     */
+    public function computePagibig1(float $basicMonthly, ?DeductionType $type = null): float
     {
-        $rate      = $basicMonthly <= 1_500.00 ? 0.01 : 0.02;
-        $monthlyEE = min(round($basicMonthly * $rate, 2), 100.00);
+        $rate      = (float) ($type?->formula_rate           ?? self::PAGIBIG_RATE);
+        $rateLow   = (float) ($type?->formula_rate_low       ?? self::PAGIBIG_RATE_LOW);
+        $threshold = (float) ($type?->formula_rate_threshold ?? self::PAGIBIG_THRESHOLD);
+        $cap       = (float) ($type?->formula_monthly_cap    ?? self::PAGIBIG_MONTHLY_CAP);
+
+        $appliedRate  = $basicMonthly <= $threshold ? $rateLow : $rate;
+        $monthlyEE    = min(round($basicMonthly * $appliedRate, 2), $cap);
+
         return round($monthlyEE / 2, 2);
     }
 
-    public function computePhilHealth(float $basicMonthly): float
+    /**
+     * PhilHealth Mandatory Premium — per cut-off EE share.
+     *
+     * Rate logic:
+     *   • total monthly premium = basicMonthly × rate
+     *   • clamp to [floor, ceiling]
+     *   • EE share = total × 0.5  (employee pays half)
+     *   • Divide by 2 for the cut-off amount
+     *
+     * DB columns used: formula_rate, formula_monthly_floor,
+     *                  formula_monthly_ceiling
+     */
+    public function computePhilHealth(float $basicMonthly, ?DeductionType $type = null): float
     {
-        $monthlyPremium = max(500.00, min(round($basicMonthly * 0.05, 2), 5_000.00));
-        $monthlyEE      = round($monthlyPremium / 2, 2);
+        $rate    = (float) ($type?->formula_rate            ?? self::PHILHEALTH_RATE);
+        $floor   = (float) ($type?->formula_monthly_floor   ?? self::PHILHEALTH_MONTHLY_FLOOR);
+        $ceiling = (float) ($type?->formula_monthly_ceiling ?? self::PHILHEALTH_MONTHLY_CEILING);
+
+        $totalMonthly = round($basicMonthly * $rate, 2);
+        $totalMonthly = max($floor, min($totalMonthly, $ceiling));
+        $monthlyEE    = round($totalMonthly / 2, 2); // EE pays 50%
+
         return round($monthlyEE / 2, 2);
     }
 
-    public function computeGsisLife(float $basicMonthly, ?int $daysWorked = null, ?int $totalDays = 22): float
-    {
-        $monthlyPS = round($basicMonthly * 0.09, 2);
-        
-        // Prorate for incomplete months if daysWorked is provided
+    /**
+     * GSIS Life & Retirement (Personal Share) — per cut-off EE share.
+     *
+     * Rate logic:
+     *   • monthly personal share = basicMonthly × rate
+     *   • Prorate if daysWorked < totalDays
+     *   • Divide by 2 for the cut-off amount
+     *
+     * DB columns used: formula_rate
+     */
+    public function computeGsisLife(
+        float         $basicMonthly,
+        ?DeductionType $type       = null,
+        ?int          $daysWorked  = null,
+        ?int          $totalDays   = 22
+    ): float {
+        $rate = (float) ($type?->formula_rate ?? self::GSIS_RATE);
+
+        $monthlyPS = round($basicMonthly * $rate, 2);
+
+        // Prorate for incomplete months when daysWorked is provided
         if ($daysWorked !== null && $totalDays > 0 && $daysWorked < $totalDays) {
-            $monthlyPS = round($basicMonthly / $totalDays * 0.09 * $daysWorked, 2);
+            $monthlyPS = round($basicMonthly / $totalDays * $rate * $daysWorked, 2);
         }
-        
+
         return round($monthlyPS / 2, 2);
     }
 
+    /**
+     * Withholding Tax (BIR TRAIN Law) — per cut-off amount.
+     *
+     * ⚠ DEVELOPER NOTE — rates intentionally hardcoded:
+     *   The BIR graduated tax table has six interdependent brackets with
+     *   both fixed base amounts and marginal rates. Exposing them in a UI
+     *   risks misconfiguration (e.g. overlapping ranges, wrong base amounts)
+     *   that would silently produce incorrect tax deductions for all employees.
+     *   If the tax table changes (new TRAIN amendments), a developer must
+     *   update birGraduatedTax() below and re-test.
+     *
+     * No DeductionType parameter — this method does not use formula_rate_* columns.
+     */
     public function computeWithholdingTax(
         Employee     $employee,
         float        $basicMonthly,
@@ -188,6 +312,7 @@ class DeductionService
         $accumulatedGross = $ytdGross + $thisGross;
         $projectedAnnual  = round($accumulatedGross / $cutoffNumber * 24, 2);
 
+        // Annual mandatory deductions (hardcoded statutory rates — see note above)
         $annualGSIS = round($basicMonthly * 0.09 * 12, 2);
         $annualPHIC = max(6_000.00, min(round($basicMonthly * 0.05 * 12, 2), 60_000.00));
         $annualHDMF = min(round($basicMonthly * 0.02 * 12, 2), 1_200.00);
@@ -198,6 +323,20 @@ class DeductionService
         return max(0.00, round($annualTax / 24, 2));
     }
 
+    /**
+     * BIR TRAIN Law graduated income tax table.
+     *
+     * ⚠ HARDCODED — do not expose in UI. See computeWithholdingTax() note.
+     * Last updated: TRAIN Law (RA 10963) rates effective 2023 onwards.
+     *
+     * Bracket structure (annual taxable income):
+     *   ≤ ₱250,000            →  0 %
+     *   ₱250,001 – ₱400,000   → 15 % of excess over ₱250,000
+     *   ₱400,001 – ₱800,000   → ₱22,500  + 20 % of excess over ₱400,000
+     *   ₱800,001 – ₱2,000,000 → ₱102,500 + 25 % of excess over ₱800,000
+     *   ₱2,000,001 – ₱8,000,000 → ₱402,500 + 30 % of excess over ₱2,000,000
+     *   > ₱8,000,000           → ₱2,202,500 + 35 % of excess over ₱8,000,000
+     */
     public function birGraduatedTax(float $taxableIncome): float
     {
         return match (true) {
