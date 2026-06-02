@@ -3,6 +3,7 @@
 namespace Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
 use Modules\Payroll\Http\Requests\ComputePayrollRequest;
 use Modules\Payroll\Models\AttendanceSnapshot;
 use Modules\Payroll\Models\PayrollBatch;
@@ -18,10 +19,11 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollController extends Controller
 {
+    // Phase 4: pending_hr removed from the workflow.
+    // New flow: draft → computed → pending_accountant → pending_rd → released → locked
     const STATUS_LABELS = [
         'draft'              => 'Draft',
         'computed'           => 'Computed',
-        'pending_hr'         => 'Pending HR Approval',
         'pending_accountant' => 'Pending Accountant',
         'pending_rd'         => 'Pending RD/ARD',
         'released'           => 'Released',
@@ -30,7 +32,7 @@ class PayrollController extends Controller
 
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user  = Auth::user();
         $query = PayrollBatch::with('creator')
             ->withCount('entries')
             ->withSum('entries', 'gross_income')
@@ -41,7 +43,7 @@ class PayrollController extends Controller
             ->orderByDesc('id');
 
         // Employees can only see released/locked batches
-        if (!\App\SharedKernel\Services\RoleService::canAccessPayroll($user)) {
+        if (! \App\SharedKernel\Services\RoleService::canAccessPayroll($user)) {
             $query->whereIn('status', ['released', 'locked']);
         }
 
@@ -51,7 +53,6 @@ class PayrollController extends Controller
 
         $batches = $query->paginate(15)->withQueryString();
 
-        // Fetch locked batches separately (ignoring status filter for the locked tab)
         $lockedQuery = PayrollBatch::with('creator')
             ->withCount('entries')
             ->withSum('entries', 'gross_income')
@@ -72,25 +73,18 @@ class PayrollController extends Controller
 
     // ═══════════════════════════════════════════════════════════════════
     //  My Payslip — Employee self-service
-    //  Shows the logged-in employee's own entries from
-    //  locked batches only.
     // ═══════════════════════════════════════════════════════════════════
 
     public function myPayslip(Request $request)
     {
-        // resolveHrisEmployeeId() handles the HRIS session lookup.
-        // The HRIS stores employee_no (e.g. "EMP001") in session('hris_employee_id'),
-        // but payroll_entries.employee_id is the integer PK — the helper bridges that gap.
         $employeeId = $this->resolveHrisEmployeeId();
 
         if (! $employeeId) {
-            // Fall back to the user's directly linked employee record
-            $user = Auth::user();
+            $user       = Auth::user();
             $employeeId = $user->employee?->id;
         }
 
         if (! $employeeId) {
-            // No employee association at all — show empty state
             $entries = collect([]);
             return view('payroll::payroll.my-payslip', compact('entries'));
         }
@@ -106,89 +100,54 @@ class PayrollController extends Controller
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  View My Payslip — streams a single employee's own payslip as PDF.
+    //  View My Payslip — streams the logged-in employee's payslip as PDF
     //
-    //  Route: GET /payroll/{payroll}/my-payslip/{entry}
-    //  Name:  payroll.payslip
-    //
-    //  Security:
-    //    - Batch must be released or locked.
-    //    - The entry must belong to the given batch.
-    //    - An HRIS employee can only view their own entry.
+    //  Phase 4 changes:
+    //   - Removed sibling batch / cutoff lookup (no more cutoff field).
+    //   - Monthly entry is the single source of truth.
+    //   - Cutoff breakdown is computed on the fly via computeCutoffSplit().
     // ═══════════════════════════════════════════════════════════════════
 
     public function viewMyPayslip(Request $request, PayrollBatch $payroll, PayrollEntry $entry)
     {
-        // Guard: batch must be released or locked
         if (! in_array($payroll->status, ['released', 'locked'])) {
             abort(403, 'Payslip is not yet available. The payroll batch has not been released.');
         }
 
-        // Guard: entry must belong to this batch
         if ((int) $entry->payroll_batch_id !== (int) $payroll->id) {
             abort(404, 'Payslip entry not found in the specified batch.');
         }
 
-        // Guard: HRIS employees may only view their own payslip.
-        // resolveHrisEmployeeId() converts employee_no → integer PK so the
-        // comparison is always integer vs integer.
         $hrisEmployeeId = $this->resolveHrisEmployeeId();
         if ($hrisEmployeeId && (int) $entry->employee_id !== $hrisEmployeeId) {
             abort(403, 'You are not authorized to view this payslip.');
         }
 
-        // Load all needed relationships
         $entry->load(['employee.division', 'deductions.deductionType']);
 
-        // Resolve the sibling batch (other cut-off of the same month/year).
-        // Only include sibling if it is also released or locked.
-        $siblingCutoff = $payroll->cutoff === '1st' ? '2nd' : '1st';
-        $sibling = PayrollBatch::where('period_year',  $payroll->period_year)
-                               ->where('period_month', $payroll->period_month)
-                               ->where('cutoff',       $siblingCutoff)
-                               ->whereIn('status', ['released', 'locked'])
-                               ->first();
+        // Compute cutoff split on the fly from daily_logs
+        $snapshot = AttendanceSnapshot::where('payroll_batch_id', $payroll->id)
+            ->where('employee_id', $entry->employee_id)
+            ->first();
 
-        // Fetch the sibling entry for this employee (may be null)
-        $siblingEntry = $sibling
-            ? $sibling->entries()
-                      ->with('deductions.deductionType')
-                      ->where('employee_id', $entry->employee_id)
-                      ->first()
+        $cutoffSplit = $snapshot
+            ? app(PayrollComputationService::class)->computeCutoffSplit($entry, $snapshot)
             : null;
 
-        // Helper: build a keyed deduction map from an entry
         $dedMap = fn ($e) => $e
             ? $e->deductions->keyBy(fn ($d) => $d->deductionType->code ?? $d->name)
             : collect();
 
-        // Place entries in the correct 1st / 2nd columns
-        if ($payroll->cutoff === '1st') {
-            $entry1st = $entry;
-            $entry2nd = $siblingEntry;
-        } else {
-            $entry1st = $siblingEntry;
-            $entry2nd = $entry;
-        }
-
-        // Wrap in the same shape that payslip.blade.php expects
         $payslips = collect([[
-            'employee' => $entry->employee,
-            'entry1st' => $entry1st,
-            'entry2nd' => $entry2nd,
-            'ded1st'   => $dedMap($entry1st),
-            'ded2nd'   => $dedMap($entry2nd),
+            'employee'    => $entry->employee,
+            'entry'       => $entry,               // full monthly entry
+            'cutoffSplit' => $cutoffSplit,          // ['first_cutoff' => [...], 'second_cutoff' => [...]]
+            'dedMap'      => $dedMap($entry),
         ]]);
 
-        $months = [
-            '', 'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December',
-        ];
+        $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
         $periodLabel = ($months[$payroll->period_month] ?? '') . ' ' . $payroll->period_year;
-
-        $signatory = Signatory::where('role_type', 'hrmo_designate')
-                              ->where('is_active', true)
-                              ->first();
+        $signatory   = Signatory::where('role_type', 'hrmo_designate')->where('is_active', true)->first();
 
         $pdf = Pdf::loadView('payroll::payroll.payslip', [
             'batch'       => $payroll,
@@ -196,7 +155,7 @@ class PayrollController extends Controller
             'rows'        => $this->payslipRows(),
             'periodLabel' => $periodLabel,
             'signatory'   => $signatory,
-            'mode'        => 'consolidated',
+            'mode'        => 'monthly',
         ])->setPaper('a4', 'portrait');
 
         $employeeName = $entry->employee
@@ -206,6 +165,10 @@ class PayrollController extends Controller
 
         return $pdf->stream($filename);
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Create / Store
+    // ═══════════════════════════════════════════════════════════════════
 
     public function create()
     {
@@ -220,41 +183,30 @@ class PayrollController extends Controller
 
     public function store(ComputePayrollRequest $request)
     {
-        $year   = (int) $request->period_year;
-        $month  = (int) $request->period_month;
-        $cutoff = $request->cutoff;
+        $year  = (int) $request->period_year;
+        $month = (int) $request->period_month;
 
+        // Phase 4: uniqueness check is now per (year, month) only — no cutoff
         $exists = PayrollBatch::where([
             'period_year'  => $year,
             'period_month' => $month,
-            'cutoff'       => $cutoff,
         ])->exists();
 
         if ($exists) {
             return back()->withInput()
-                ->with('error', "A {$cutoff} cut-off payroll batch for {$request->periodLabel()} already exists.");
+                ->with('error', "A payroll batch for {$request->periodLabel()} already exists.");
         }
 
-        // Use custom dates if provided, otherwise use standard cutoff dates
-        if ($request->filled('period_start') && $request->filled('period_end')) {
-            $periodStart = \Carbon\Carbon::parse($request->period_start);
-            $periodEnd = \Carbon\Carbon::parse($request->period_end);
-        } else {
-            $periodStart = $cutoff === '1st'
-                ? \Carbon\Carbon::create($year, $month, 1)
-                : \Carbon\Carbon::create($year, $month, 16);
-
-            $periodEnd = $cutoff === '1st'
-                ? \Carbon\Carbon::create($year, $month, 15)
-                : \Carbon\Carbon::create($year, $month)->endOfMonth();
-        }
+        // Full-month period dates derived from the request helpers (Phase 3 ComputePayrollRequest)
+        $periodStart = $request->resolvedPeriodStart();
+        $periodEnd   = $request->resolvedPeriodEnd();
 
         $batch = PayrollBatch::create([
             'period_year'  => $year,
             'period_month' => $month,
-            'cutoff'       => $cutoff,
-            'period_start' => $periodStart->toDateString(),
-            'period_end'   => $periodEnd->toDateString(),
+            // 'cutoff' no longer stored — removed in Phase 1 migration
+            'period_start' => $periodStart,
+            'period_end'   => $periodEnd,
             'status'       => 'draft',
             'created_by'   => Auth::id(),
         ]);
@@ -264,6 +216,10 @@ class PayrollController extends Controller
         return redirect()->route('payroll.show', $batch)
             ->with('success', "Payroll batch created for {$request->periodLabel()}. Pull attendance first, then click Compute.");
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Show
+    // ═══════════════════════════════════════════════════════════════════
 
     public function show(PayrollBatch $payroll)
     {
@@ -307,6 +263,12 @@ class PayrollController extends Controller
         $this->authorize('compute', $payroll);
 
         if (in_array($payroll->status, ['released', 'locked'])) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot re-pull attendance for a released or locked batch.'
+                ], 403);
+            }
             return back()->with('error', 'Cannot re-pull attendance for a released or locked batch.');
         }
 
@@ -315,14 +277,93 @@ class PayrollController extends Controller
         $message = "Attendance pulled: {$result['pulled']} employee(s) recorded.";
 
         if (! empty($result['errors'])) {
+            $fullMessage = "{$message} Some employees failed: " . implode('; ', $result['errors']);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $fullMessage
+                ]);
+            }
             return redirect()->route('payroll.show', $payroll)
-                ->with('warning', "{$message} Some employees failed: " . implode('; ', $result['errors']));
+                ->with('warning', $fullMessage);
         }
 
         $this->log($payroll, 'attendance_pulled', null, "pulled:{$result['pulled']}");
 
+        $successMessage = "{$message} Review the attendance records below, then click Compute.";
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMessage
+            ]);
+        }
+
         return redirect()->route('payroll.show', $payroll)
-            ->with('success', "{$message} Review the attendance records below, then click Compute.");
+            ->with('success', $successMessage);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Edit Attendance — NEW in Phase 4
+    //
+    //  GET  /payroll/{payroll}/attendance/{snapshot}/edit
+    //  POST /payroll/{payroll}/attendance/{snapshot}
+    //
+    //  Allows the payroll officer to correct one employee's snapshot
+    //  fields (days_present, lwop_days, late_minutes, undertime_minutes,
+    //  leave_credits) before running Compute.
+    //  Only allowed while the batch is in draft or computed status.
+    // ═══════════════════════════════════════════════════════════════════
+
+    public function editAttendance(Request $request, PayrollBatch $payroll, AttendanceSnapshot $snapshot)
+    {
+        $this->authorize('compute', $payroll);
+
+        if (! in_array($payroll->status, ['draft', 'computed'])) {
+            abort(403, 'Attendance can only be edited while the batch is in Draft or Computed status.');
+        }
+
+        // Ensure the snapshot belongs to this batch
+        if ((int) $snapshot->payroll_batch_id !== (int) $payroll->id) {
+            abort(404);
+        }
+
+        $snapshot->load('employee:id,last_name,first_name,employee_no');
+
+        return view('payroll::payroll.attendance-edit', compact('payroll', 'snapshot'));
+    }
+
+    public function updateAttendance(Request $request, PayrollBatch $payroll, AttendanceSnapshot $snapshot)
+    {
+        $this->authorize('compute', $payroll);
+
+        if (! in_array($payroll->status, ['draft', 'computed'])) {
+            abort(403, 'Attendance can only be edited while the batch is in Draft or Computed status.');
+        }
+
+        if ((int) $snapshot->payroll_batch_id !== (int) $payroll->id) {
+            abort(404);
+        }
+
+        $data = $request->validate([
+            'days_present'      => ['required', 'numeric', 'min:0', 'max:31'],
+            'lwop_days'         => ['required', 'numeric', 'min:0', 'max:31'],
+            'late_minutes'      => ['required', 'integer', 'min:0'],
+            'undertime_minutes' => ['required', 'integer', 'min:0'],
+            'leave_credits'     => ['required', 'numeric', 'min:0'],
+            'correction_note'   => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        app(AttendanceService::class)->correctSnapshot($snapshot, $data, Auth::id());
+
+        $this->log(
+            $payroll,
+            'attendance_corrected',
+            null,
+            "Employee #{$snapshot->employee_id}: {$data['correction_note']}"
+        );
+
+        return redirect()->route('payroll.show', $payroll)
+            ->with('success', 'Attendance record updated. Run Compute again to reflect the changes.');
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -336,12 +377,19 @@ class PayrollController extends Controller
         $attendanceService = app(AttendanceService::class);
 
         if ($attendanceService->snapshotCount($payroll) === 0) {
+            $message = 'Attendance has not been pulled yet. Click "Pull Attendance" first.';
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
             return redirect()->route('payroll.show', $payroll)
-                ->with('error', 'Attendance has not been pulled yet. Click "Pull Attendance" first.');
+                ->with('error', $message);
         }
 
         $attendanceMap = $attendanceService->getAttendanceForBatch($payroll);
-        $result = app(PayrollComputationService::class)->computeBatch($payroll, $attendanceMap);
+        $result        = app(PayrollComputationService::class)->computeBatch($payroll, $attendanceMap);
 
         if ($payroll->status === 'draft') {
             $payroll->update(['status' => 'computed']);
@@ -351,72 +399,40 @@ class PayrollController extends Controller
         $message = "Computation complete: {$result['computed']} employee(s) processed.";
 
         if (! empty($result['errors'])) {
+            $fullMessage = "{$message} Errors: " . implode('; ', $result['errors']);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $fullMessage
+                ]);
+            }
             return redirect()->route('payroll.show', $payroll)
-                ->with('warning', "{$message} Errors: " . implode('; ', $result['errors']));
+                ->with('warning', $fullMessage);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message
+            ]);
         }
 
         return redirect()->route('payroll.show', $payroll)->with('success', $message);
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  Pull Attendance & Compute (Combined)
+    //  pullAndCompute() REMOVED — Phase 4
+    //
+    //  The combined pull-and-compute button is gone from the UI (Phase 5).
+    //  Pull and Compute are now always two separate steps so HR can review
+    //  attendance before computation runs.
     // ═══════════════════════════════════════════════════════════════════
-
-    public function pullAndCompute(Request $request, PayrollBatch $payroll)
-    {
-        $this->authorize('compute', $payroll);
-
-        if (in_array($payroll->status, ['released', 'locked'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot process a released or locked batch.'
-            ], 422);
-        }
-
-        try {
-            // Step 1: Pull Attendance
-            $attendanceResult = app(AttendanceService::class)->pullForBatch($payroll);
-            
-            if (! empty($attendanceResult['errors'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Attendance pull failed: ' . implode('; ', $attendanceResult['errors'])
-                ], 422);
-            }
-
-            $this->log($payroll, 'attendance_pulled', null, "pulled:{$attendanceResult['pulled']}");
-
-            // Step 2: Compute Payroll
-            $attendanceMap = app(AttendanceService::class)->getAttendanceForBatch($payroll);
-            $computeResult = app(PayrollComputationService::class)->computeBatch($payroll, $attendanceMap);
-
-            if ($payroll->status === 'draft') {
-                $payroll->update(['status' => 'computed']);
-                $this->log($payroll, 'computed', 'draft', 'computed');
-            }
-
-            if (! empty($computeResult['errors'])) {
-                return response()->json([
-                    'success' => true,
-                    'message' => "Process completed with warnings. Computed: {$computeResult['computed']} employees. Warnings: " . implode('; ', $computeResult['errors'])
-                ]);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => "Process completed successfully! Pulled: {$attendanceResult['pulled']} employees, Computed: {$computeResult['computed']} payroll entries."
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'An error occurred during processing: ' . $e->getMessage()
-            ], 500);
-        }
-    }
 
     // ═══════════════════════════════════════════════════════════════════
     //  Approval pipeline
+    //  Phase 4: pending_hr step removed.
+    //  submit() now goes directly draft/computed → pending_accountant.
+    //  hrApprove() removed entirely.
     // ═══════════════════════════════════════════════════════════════════
 
     public function submit(Request $request, PayrollBatch $payroll)
@@ -424,35 +440,44 @@ class PayrollController extends Controller
         $this->authorize('submit', $payroll);
         $request->validate(['remarks' => ['nullable', 'string', 'max:500']]);
 
+        // Guard: must be computed before submitting
+        if ($payroll->status !== 'computed') {
+            $message = 'Only a computed batch can be submitted for review.';
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message
+                ], 400);
+            }
+            return back()->with('error', $message);
+        }
+
         $old = $payroll->status;
+
+        // Phase 4: skip pending_hr entirely — goes straight to accountant
         $payroll->update([
-            'status'      => 'pending_hr',
+            'status'      => 'pending_accountant',
             'prepared_at' => now(),
             'remarks'     => $request->input('remarks'),
         ]);
-        $this->log($payroll, 'Submitted for HR Approval', $old, 'pending_hr');
+        $this->log($payroll, 'Submitted — Forwarded to Accountant', $old, 'pending_accountant');
+
+        $message = 'Payroll batch submitted. Forwarded to Accountant for certification.';
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message
+            ]);
+        }
 
         return redirect()->route('payroll.show', $payroll)
-            ->with('success', 'Payroll batch submitted to HR for approval.');
+            ->with('success', $message);
     }
 
-    public function hrApprove(Request $request, PayrollBatch $payroll)
-    {
-        $this->authorize('hr_approve', $payroll);
-        $request->validate(['remarks' => ['nullable', 'string', 'max:500']]);
-
-        $old = $payroll->status;
-        $payroll->update([
-            'status'         => 'pending_accountant',
-            'hr_approved_by' => Auth::id(),
-            'hr_approved_at' => now(),
-            'remarks'        => $request->input('remarks') ?? $payroll->remarks,
-        ]);
-        $this->log($payroll, 'HR Approved — Forwarded to Accountant', $old, 'pending_accountant');
-
-        return redirect()->route('payroll.show', $payroll)
-            ->with('success', 'Payroll approved by HR. Forwarded to Accountant for review.');
-    }
+    // hrApprove() REMOVED — Phase 4
+    // HR approval step is no longer part of the workflow.
+    // The hr_approved_by / hr_approved_at columns are kept in the DB
+    // for historical records but are not written by any new workflow.
 
     public function certify(Request $request, PayrollBatch $payroll)
     {
@@ -468,8 +493,16 @@ class PayrollController extends Controller
         ]);
         $this->log($payroll, 'Funds Certified — Forwarded to RD/ARD', $old, 'pending_rd');
 
+        $message = 'Payroll certified. Forwarded to RD/ARD for approval.';
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message
+            ]);
+        }
+
         return redirect()->route('payroll.show', $payroll)
-            ->with('success', 'Payroll certified. Forwarded to RD/ARD for approval.');
+            ->with('success', $message);
     }
 
     public function approve(Request $request, PayrollBatch $payroll)
@@ -487,8 +520,16 @@ class PayrollController extends Controller
         ]);
         $this->log($payroll, 'Approved & Released by RD/ARD', $old, 'released');
 
+        $message = 'Payroll approved and released.';
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message
+            ]);
+        }
+
         return redirect()->route('payroll.show', $payroll)
-            ->with('success', 'Payroll approved and released.');
+            ->with('success', $message);
     }
 
     public function lock(Request $request, PayrollBatch $payroll)
@@ -504,9 +545,21 @@ class PayrollController extends Controller
         ]);
         $this->log($payroll, 'Locked after Disbursement', $old, 'locked');
 
+        $message = 'Payroll batch locked. Disbursement complete.';
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message
+            ]);
+        }
+
         return redirect()->route('payroll.show', $payroll)
-            ->with('success', 'Payroll batch locked. Disbursement complete.');
+            ->with('success', $message);
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Destroy
+    // ═══════════════════════════════════════════════════════════════════
 
     public function destroy(PayrollBatch $payroll)
     {
@@ -526,28 +579,35 @@ class PayrollController extends Controller
             ->with('success', 'Draft payroll batch deleted.');
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    //  Verify
+    //  Phase 4: removed sibling/cutoff lookup — batch is now monthly-only.
+    //  Shows the single monthly batch with net totals per employee.
+    // ═══════════════════════════════════════════════════════════════════
+
     public function verify(PayrollBatch $payroll)
     {
         $this->authorize('view', $payroll);
         $payroll->load(['entries.employee', 'entries.deductions']);
 
-        $siblingCutoff = $payroll->cutoff === '1st' ? '2nd' : '1st';
-        $siblingBatch  = PayrollBatch::with(['entries.employee', 'entries.deductions'])
-            ->where('period_year',  $payroll->period_year)
-            ->where('period_month', $payroll->period_month)
-            ->where('cutoff',       $siblingCutoff)
-            ->first();
-
-        $siblingEntries = $siblingBatch
-            ? $siblingBatch->entries->keyBy('employee_id')
-            : collect();
+        // Phase 4: no sibling batch exists; cutoff split is done on the fly
+        // from daily_logs via computeCutoffSplit() if needed by the view.
+        $computationService = app(PayrollComputationService::class);
+        $snapshots = AttendanceSnapshot::where('payroll_batch_id', $payroll->id)
+            ->get()
+            ->keyBy('employee_id');
 
         $verifyRows = $payroll->entries
             ->sortBy(fn ($e) => optional($e->employee)->last_name . optional($e->employee)->first_name)
-            ->map(function ($entry) use ($siblingEntries) {
-                $sibling    = $siblingEntries->get($entry->employee_id);
-                $netCurrent = (float) $entry->net_amount;
-                $netSibling = $sibling ? (float) $sibling->net_amount : null;
+            ->map(function ($entry) use ($snapshots, $computationService) {
+                $snapshot    = $snapshots->get($entry->employee_id);
+                $netMonthly  = (float) $entry->net_amount;
+                $cutoffSplit = $snapshot
+                    ? $computationService->computeCutoffSplit($entry, $snapshot)
+                    : null;
+
+                $net1st = $cutoffSplit['first_cutoff']['gross_income']  ?? ($netMonthly / 2);
+                $net2nd = $cutoffSplit['second_cutoff']['gross_income'] ?? ($netMonthly / 2);
 
                 $hasLbpLoan = $entry->deductions->contains(
                     fn ($d) => stripos($d->code ?? '', 'lbp') !== false
@@ -557,26 +617,24 @@ class PayrollController extends Controller
                 return (object) [
                     'employee'        => $entry->employee,
                     'entry_current'   => $entry,
-                    'entry_sibling'   => $sibling,
-                    'net_current'     => $netCurrent,
-                    'net_sibling'     => $netSibling,
-                    'total_net'       => $netCurrent + ($netSibling ?? 0),
+                    'entry_sibling'   => null,      // no sibling in monthly model
+                    'net_current'     => $netMonthly,
+                    'net_sibling'     => null,
+                    'net_1st'         => $net1st,
+                    'net_2nd'         => $net2nd,
+                    'total_net'       => $netMonthly,
                     'has_lbp_loan'    => $hasLbpLoan,
-                    'below_threshold' => $netCurrent < 5000 || ($netSibling !== null && $netSibling < 5000),
+                    'below_threshold' => $net1st < 5000 || $net2nd < 5000,
                 ];
             })
             ->values();
 
-        [$totalNet1st, $totalNet2nd] = $payroll->cutoff === '1st'
-            ? [$payroll->entries->sum('net_amount'), $siblingBatch?->entries->sum('net_amount') ?? 0]
-            : [$siblingBatch?->entries->sum('net_amount') ?? 0, $payroll->entries->sum('net_amount')];
-
-        $totalCombined       = $totalNet1st + $totalNet2nd;
+        $totalNetMonthly     = $payroll->entries->sum('net_amount');
         $belowThresholdCount = $verifyRows->filter(fn ($r) => $r->below_threshold)->count();
 
         return view('payroll::payroll.verify', compact(
-            'payroll', 'siblingBatch', 'verifyRows',
-            'totalNet1st', 'totalNet2nd', 'totalCombined', 'belowThresholdCount'
+            'payroll', 'verifyRows',
+            'totalNetMonthly', 'belowThresholdCount'
         ));
     }
 
@@ -596,9 +654,13 @@ class PayrollController extends Controller
     // ═══════════════════════════════════════════════════════════════════
     //  Payslip Generation (bulk — admin/officer use)
     //
+    //  Phase 4 changes:
+    //   - No more sibling batch / cutoff lookup.
+    //   - mode is always 'monthly' — cutoff breakdown computed on the fly.
+    //   - ?entry_id still supported for single-employee generation.
+    //
     //  GET /payroll/{payroll}/payslips/generate
-    //      ?mode      = consolidated (default) | per_batch
-    //      ?entry_id  = <PayrollEntry id>  (optional — single employee only)
+    //      ?entry_id = <PayrollEntry id>  (optional)
     // ═══════════════════════════════════════════════════════════════════
 
     public function generatePayslips(Request $request, PayrollBatch $payroll)
@@ -607,23 +669,15 @@ class PayrollController extends Controller
             abort(403, 'Payslips are only available after the batch has been released.');
         }
 
-        // Monthly-first: always generate whole-month consolidated payslip.
-        $mode    = 'consolidated';
         $entryId = $request->input('entry_id');
 
-        $siblingCutoff = $payroll->cutoff === '1st' ? '2nd' : '1st';
-        $sibling = PayrollBatch::where('period_year',  $payroll->period_year)
-                               ->where('period_month', $payroll->period_month)
-                               ->where('cutoff',       $siblingCutoff)
-                               ->first();
-
         $query = $payroll->entries()
-                         ->with(['employee.division', 'deductions.deductionType'])
-                         ->orderBy(
-                             \App\SharedKernel\Models\Employee::select('last_name')
-                                 ->whereColumn('employees.id', 'payroll_entries.employee_id'),
-                             'asc'
-                         );
+            ->with(['employee.division', 'deductions.deductionType'])
+            ->orderBy(
+                \App\SharedKernel\Models\Employee::select('last_name')
+                    ->whereColumn('employees.id', 'payroll_entries.employee_id'),
+                'asc'
+            );
 
         if ($entryId) {
             $query->where('id', $entryId);
@@ -635,56 +689,44 @@ class PayrollController extends Controller
             abort(404, 'No payroll entries found for the given parameters.');
         }
 
-        $signatory = Signatory::where('role_type', 'hrmo_designate')
-                              ->where('is_active', true)
-                              ->first();
+        // Phase 4: Process in chunks to avoid memory exhaustion with large batches
+        // Limit to 50 employees per PDF to prevent DomPDF memory issues
+        $chunkSize = 50;
+        $totalEmployees = $entries->count();
 
-        $months = [
-            '', 'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December',
-        ];
-        $periodLabel = ($months[$payroll->period_month] ?? '') . ' ' . $payroll->period_year;
+        if ($totalEmployees > $chunkSize && !$entryId) {
+            // For large batches, redirect back with a message to use individual payslip generation
+            return redirect()->route('payroll.show', $payroll)
+                ->with('warning', "This batch has {$totalEmployees} employees. To avoid memory issues, please generate payslips individually by clicking on each employee's payslip link, or reduce the batch size.");
+        }
 
-        $siblingEntriesById = $sibling
-            ? $sibling->entries()
-                       ->with('deductions.deductionType')
-                       ->get()
-                       ->keyBy('employee_id')
-            : collect();
+        // Pre-load all snapshots for cutoff split computation
+        $snapshots = AttendanceSnapshot::where('payroll_batch_id', $payroll->id)
+            ->get()
+            ->keyBy('employee_id');
 
-        $dedMap = fn ($entry) => $entry
+        $computationService = app(PayrollComputationService::class);
+        $dedMap             = fn ($entry) => $entry
             ? $entry->deductions->keyBy(fn ($d) => $d->deductionType->code ?? $d->name)
             : collect();
 
-        $payslips = $entries->map(function ($entry) use ($payroll, $siblingEntriesById, $dedMap, $mode) {
-            $siblingEntry = $siblingEntriesById->get($entry->employee_id);
-
-            if ($mode === 'consolidated') {
-                if ($payroll->cutoff === '1st') {
-                    $entry1st = $entry;
-                    $entry2nd = $siblingEntry;
-                } else {
-                    $entry1st = $siblingEntry;
-                    $entry2nd = $entry;
-                }
-            } else {
-                if ($payroll->cutoff === '1st') {
-                    $entry1st = $entry;
-                    $entry2nd = null;
-                } else {
-                    $entry1st = null;
-                    $entry2nd = $entry;
-                }
-            }
+        $payslips = $entries->map(function ($entry) use ($snapshots, $computationService, $dedMap) {
+            $snapshot    = $snapshots->get($entry->employee_id);
+            $cutoffSplit = $snapshot
+                ? $computationService->computeCutoffSplit($entry, $snapshot)
+                : null;
 
             return [
-                'employee' => $entry->employee,
-                'entry1st' => $entry1st,
-                'entry2nd' => $entry2nd,
-                'ded1st'   => $dedMap($entry1st),
-                'ded2nd'   => $dedMap($entry2nd),
+                'employee'    => $entry->employee,
+                'entry'       => $entry,
+                'cutoffSplit' => $cutoffSplit,
+                'dedMap'      => $dedMap($entry),
             ];
         });
+
+        $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        $periodLabel = ($months[$payroll->period_month] ?? '') . ' ' . $payroll->period_year;
+        $signatory   = Signatory::where('role_type', 'hrmo_designate')->where('is_active', true)->first();
 
         $pdf = Pdf::loadView('payroll::payroll.payslip', [
             'batch'       => $payroll,
@@ -692,11 +734,10 @@ class PayrollController extends Controller
             'rows'        => $this->payslipRows(),
             'periodLabel' => $periodLabel,
             'signatory'   => $signatory,
-            'mode'        => $mode,
+            'mode'        => 'monthly',
         ])->setPaper('a4', 'portrait');
 
-        $cutoffLabel = $mode === 'consolidated' ? 'Monthly' : ucfirst($payroll->cutoff) . 'Cutoff';
-        $filename    = 'Payslips_' . str_replace(' ', '_', $periodLabel) . '_' . $cutoffLabel . '.pdf';
+        $filename = 'Payslips_' . str_replace(' ', '_', $periodLabel) . '_Monthly.pdf';
 
         return $pdf->stream($filename);
     }
@@ -707,15 +748,6 @@ class PayrollController extends Controller
 
     /**
      * Resolve the integer employee PK from the HRIS session token.
-     *
-     * The HRIS passes employee_no (e.g. "EMP001") via session('hris_employee_id').
-     * PayrollEntry.employee_id is the integer PK from the employees table.
-     * This method bridges the two so queries always use the correct integer ID.
-     *
-     * Also handles the edge case where the HRIS already stores the integer PK
-     * directly (e.g. after a future HRIS update), making this forward-compatible.
-     *
-     * @return int|null  Returns null if no HRIS session or employee not found.
      */
     private function resolveHrisEmployeeId(): ?int
     {
@@ -725,13 +757,10 @@ class PayrollController extends Controller
             return null;
         }
 
-        // If the session already holds a plain integer PK, return it directly.
-        // This handles a future HRIS upgrade that stores the PK instead of employee_no.
         if (is_numeric($raw)) {
             return (int) $raw;
         }
 
-        // Otherwise it's a string employee_no like "EMP001" — resolve to the PK.
         $employee = \App\SharedKernel\Models\Employee::where('employee_no', $raw)->first();
 
         return $employee?->id;
@@ -765,11 +794,11 @@ class PayrollController extends Controller
             ['type' => 'income',  'label' => 'ALLOWANCE',             'code' => null],
 
             // ── Mandatory Deductions ──────────────────────────────────────
-            ['type' => 'spacer',     'label' => 'MANDATORY DEDUCTIONS', 'code' => null],
-            ['type' => 'deduction',  'label' => 'GSIS — Life/Retirement', 'code' => 'GSIS_LIFE_RETIREMENT'],
-            ['type' => 'deduction',  'label' => 'PhilHealth',            'code' => 'PHILHEALTH'],
-            ['type' => 'deduction',  'label' => 'Pag-IBIG I',            'code' => 'PAG_IBIG_1'],
-            ['type' => 'deduction',  'label' => 'Withholding Tax',       'code' => 'WITHHOLDING_TAX'],
+            ['type' => 'spacer',     'label' => 'MANDATORY DEDUCTIONS',    'code' => null],
+            ['type' => 'deduction',  'label' => 'GSIS — Life/Retirement',  'code' => 'GSIS_LIFE_RETIREMENT'],
+            ['type' => 'deduction',  'label' => 'PhilHealth',               'code' => 'PHILHEALTH'],
+            ['type' => 'deduction',  'label' => 'Pag-IBIG I',               'code' => 'PAG_IBIG_1'],
+            ['type' => 'deduction',  'label' => 'Withholding Tax',          'code' => 'WITHHOLDING_TAX'],
 
             // ── Loans ─────────────────────────────────────────────────────
             ['type' => 'spacer',     'label' => 'LOANS',              'code' => null],
@@ -803,8 +832,9 @@ class PayrollController extends Controller
 
             // ── Totals & Net ──────────────────────────────────────────────
             ['type' => 'divider', 'label' => 'TOTAL DEDUCTIONS', 'code' => null],
-            ['type' => 'net',     'label' => 'NET PAY 1-15',     'code' => null],
-            ['type' => 'net',     'label' => 'NET PAY 16-31',    'code' => null],
+            ['type' => 'net',     'label' => 'NET PAY 1–15',     'code' => null],
+            ['type' => 'net',     'label' => 'NET PAY 16–31',    'code' => null],
+            ['type' => 'net',     'label' => 'TOTAL NET PAY',    'code' => null],
         ];
     }
 }

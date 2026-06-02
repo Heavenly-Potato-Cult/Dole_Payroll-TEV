@@ -2,6 +2,7 @@
 
 namespace Modules\Payroll\Services;
 
+use Carbon\Carbon;
 use Modules\Payroll\Models\AttendanceSnapshot;
 use App\SharedKernel\Models\Employee;
 use Modules\Payroll\Models\PayrollBatch;
@@ -19,7 +20,6 @@ class AttendanceService
 
     /**
      * Standard work schedule thresholds (DOLE RO9).
-     * Can be customized based on local rules via config if needed.
      */
     const MORNING_START_THRESHOLD = '08:00:00';  // 8:00 AM
     const AFTERNOON_END_THRESHOLD = '17:00:00';  // 5:00 PM
@@ -29,12 +29,17 @@ class AttendanceService
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Fetch attendance for ALL active employees for a batch's cut-off period
+     * Fetch attendance for ALL active employees for a batch's FULL MONTH period
      * and upsert into attendance_snapshots.
      *
+     * Phase 2 changes:
+     *  - Always pulls period_start → period_end (full month; no more per-cutoff logic).
+     *  - Stores parsed daily_logs JSON in the snapshot (keyed by date string).
+     *  - Sets is_first_cutoff = null (full-month snapshot; cutoff split done on the fly).
+     *  - Aggregated fields (days_present, lwop_days, …) still written for backward compat.
+     *
      * Re-pulling is safe — upsert overwrites existing rows for the same
-     * (payroll_batch_id, employee_id) pair. Any HR corrections are reset
-     * on a re-pull, which is intentional so stale corrections don't persist.
+     * (payroll_batch_id, employee_id) pair. HR corrections are reset on re-pull.
      *
      * @param  PayrollBatch $batch
      * @return array  ['pulled' => int, 'errors' => string[]]
@@ -43,7 +48,7 @@ class AttendanceService
     {
         $hris = app(\App\SharedKernel\Services\HrisApiService::class);
 
-        // ONE bulk HTTP call instead of 82
+        // ONE bulk HTTP call for the entire month
         $attendanceMap = $hris->fetchAttendanceBulk(
             $batch->period_start,
             $batch->period_end
@@ -57,9 +62,10 @@ class AttendanceService
             ->where('is_excluded', false)
             ->orderBy('id')
             ->get();
-        $firstId   = $employees->first()->id; // = 8
-        $pulled    = 0;
-        $errors    = [];
+
+        $firstId = $employees->first()->id; // = 8
+        $pulled  = 0;
+        $errors  = [];
 
         foreach ($employees as $employee) {
             try {
@@ -73,8 +79,9 @@ class AttendanceService
                     continue;
                 }
 
-                // Parse raw daily logs to compute metrics
-                $metrics = $this->parseDailyLogs($raw);
+                // Parse raw daily logs into both aggregated metrics AND
+                // the structured daily_logs array (new in Phase 2).
+                $parsed = $this->parseDailyLogs($raw, $batch->period_start, $batch->period_end);
 
                 AttendanceSnapshot::updateOrCreate(
                     [
@@ -82,11 +89,16 @@ class AttendanceService
                         'employee_id'      => $employee->id,
                     ],
                     [
-                        'days_present'      => $metrics['days_present'],
-                        'lwop_days'         => $metrics['lwop_days'],
-                        'late_minutes'      => $metrics['late_minutes'],
-                        'undertime_minutes' => $metrics['undertime_minutes'],
-                        'leave_credits'     => $metrics['leave_credits'],
+                        // ── Aggregated (backward-compatible) ─────────────────
+                        'days_present'      => $parsed['days_present'],
+                        'lwop_days'         => $parsed['lwop_days'],
+                        'late_minutes'      => $parsed['late_minutes'],
+                        'undertime_minutes' => $parsed['undertime_minutes'],
+                        'leave_credits'     => $parsed['leave_credits'],
+                        // ── New: structured daily breakdown ──────────────────
+                        'daily_logs'        => $parsed['daily_logs'],    // JSON array
+                        'is_first_cutoff'   => null,                     // full-month snapshot
+                        // ── Correction tracking (reset on re-pull) ───────────
                         'is_corrected'      => false,
                         'correction_note'   => null,
                         'corrected_by'      => null,
@@ -104,120 +116,167 @@ class AttendanceService
         }
 
         Log::info("Attendance pull complete for batch #{$batch->id}", [
-            'pulled' => $pulled,
-            'errors' => count($errors),
+            'period'  => $batch->period_start . ' → ' . $batch->period_end,
+            'pulled'  => $pulled,
+            'errors'  => count($errors),
         ]);
 
         return compact('pulled', 'errors');
     }
 
     /**
-     * Parse raw daily logs from HRIS API and compute attendance metrics.
+     * Convenience wrapper — semantically clearer alias used by reporting code.
+     *
+     * @param  PayrollBatch $batch  Must already have period_start / period_end set to full month.
+     * @return array  Same as pullForBatch().
+     */
+    public function pullForMonth(PayrollBatch $batch): array
+    {
+        return $this->pullForBatch($batch);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Parsing helpers (HRIS API → structured data)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Parse raw HRIS data and return BOTH aggregated metrics AND the
+     * structured daily_logs array needed by Phase 2.
      *
      * Expected raw structure (production HRIS API):
      * [
-     *   'user_id' => 'EMP001',
-     *   'daily_logs' => [
-     *     [
-     *       'date' => '2026-05-01',
-     *       'am' => ['in' => '07:55:00', 'out' => '12:00:00'],
-     *       'pm' => ['in' => '13:00:00', 'out' => '17:05:00']
-     *     ],
+     *   'user_id'      => 'EMP001',
+     *   'daily_logs'   => [
+     *     ['date' => '2026-05-01', 'am' => ['in' => '07:55:00', 'out' => '12:00:00'],
+     *                              'pm' => ['in' => '13:00:00', 'out' => '17:05:00']],
      *     ...
      *   ],
      *   'leave_credits' => 15.0
      * ]
      *
-     * Fallback structure (dummy API for backward compatibility):
+     * Fallback structure (dummy / legacy API):
      * [
-     *   'employee_id' => 'EMP001',
-     *   'days_present' => 11.0,
-     *   'lwop_days' => 0.0,
-     *   'late_minutes' => 0,
-     *   'undertime_minutes' => 0,
-     *   'leave_credits' => 15.0
+     *   'employee_id'      => 'EMP001',
+     *   'days_present'     => 11.0,
+     *   'lwop_days'        => 0.0,
+     *   'late_minutes'     => 0,
+     *   'undertime_minutes'=> 0,
+     *   'leave_credits'    => 15.0
      * ]
      *
-     * @param  array $raw
-     * @return array  ['days_present', 'lwop_days', 'late_minutes', 'undertime_minutes', 'leave_credits']
+     * @param  array       $raw
+     * @param  string|null $periodStart  YYYY-MM-DD — used to determine is_first_cutoff per day
+     * @param  string|null $periodEnd    YYYY-MM-DD
+     * @return array {
+     *   days_present, lwop_days, late_minutes, undertime_minutes, leave_credits,
+     *   daily_logs: array<string, array>
+     * }
      */
-    protected function parseDailyLogs(array $raw): array
+    protected function parseDailyLogs(array $raw, ?string $periodStart = null, ?string $periodEnd = null): array
     {
-        // Check if this is the new raw daily logs format
         if (isset($raw['daily_logs']) && is_array($raw['daily_logs'])) {
-            return $this->computeMetricsFromDailyLogs($raw);
+            return $this->computeMetricsFromDailyLogs($raw, $periodStart, $periodEnd);
         }
 
-        // Fallback to legacy aggregated format (dummy API)
+        // ── Legacy / dummy API fallback ──────────────────────────────────
+        // No daily detail available; return empty daily_logs so the column
+        // is never null (avoids breaking the new cutoff-split helpers).
         return [
-            'days_present'      => (float) ($raw['days_present']      ?? 0),
-            'lwop_days'         => (float) ($raw['lwop_days']         ?? 0),
-            'late_minutes'      => (int)   ($raw['late_minutes']      ?? 0),
-            'undertime_minutes' => (int)   ($raw['undertime_minutes'] ?? 0),
-            'leave_credits'     => (float) ($raw['leave_credits']     ?? 0),
+            'days_present'      => (float) ($raw['days_present']       ?? 0),
+            'lwop_days'         => (float) ($raw['lwop_days']          ?? 0),
+            'late_minutes'      => (int)   ($raw['late_minutes']       ?? 0),
+            'undertime_minutes' => (int)   ($raw['undertime_minutes']  ?? 0),
+            'leave_credits'     => (float) ($raw['leave_credits']      ?? 0),
+            'daily_logs'        => [],   // no detail in legacy format
         ];
     }
 
     /**
-     * Compute attendance metrics from raw daily logs.
+     * Compute aggregated metrics AND build the structured daily_logs array
+     * from the production HRIS API format.
      *
-     * @param  array $raw  Raw data with 'daily_logs' array
-     * @return array  Computed metrics
+     * Each entry in daily_logs is keyed by the date string ('YYYY-MM-DD') and has:
+     * [
+     *   'present'           => bool,
+     *   'late_minutes'      => int,
+     *   'undertime_minutes' => int,
+     *   'is_first_cutoff'   => bool,   // true = days 1-15, false = days 16-end
+     * ]
+     *
+     * @param  array       $raw
+     * @param  string|null $periodStart
+     * @param  string|null $periodEnd
+     * @return array
      */
-    protected function computeMetricsFromDailyLogs(array $raw): array
+    protected function computeMetricsFromDailyLogs(array $raw, ?string $periodStart = null, ?string $periodEnd = null): array
     {
-        $dailyLogs = $raw['daily_logs'] ?? [];
-        $daysPresent = 0.0;
-        $lwopDays = 0.0;
-        $lateMinutes = 0;
-        $undertimeMinutes = 0;
+        $rawLogs      = $raw['daily_logs'] ?? [];
         $leaveCredits = (float) ($raw['leave_credits'] ?? 0);
 
-        foreach ($dailyLogs as $log) {
-            $date = $log['date'] ?? null;
-            $am = $log['am'] ?? [];
-            $pm = $log['pm'] ?? [];
+        $daysPresent      = 0.0;
+        $lwopDays         = 0.0;
+        $lateMinutes      = 0;
+        $undertimeMinutes = 0;
+        $structuredLogs   = [];   // keyed by date string
 
-            // Skip if no date
+        foreach ($rawLogs as $log) {
+            $date = $log['date'] ?? null;
+
             if (! $date) {
                 continue;
             }
 
-            // Check if this is a regular workday (Monday-Friday, excluding holidays)
-            // For now, we assume all dates in the cutoff are workdays unless marked otherwise
-            // TODO: Integrate with holiday calendar for accurate LWOP calculation
-            $isWorkday = $this->isWorkday($date);
-
-            if (! $isWorkday) {
+            // Only process dates that fall within the requested period
+            if ($periodStart && $periodEnd && ! $this->isWithinPeriod($date, $periodStart, $periodEnd)) {
                 continue;
             }
 
-            // Check for valid logs
-            $amIn = $am['in'] ?? null;
+            if (! $this->isWorkday($date)) {
+                continue;
+            }
+
+            $am    = $log['am'] ?? [];
+            $pm    = $log['pm'] ?? [];
+            $amIn  = $am['in']  ?? null;
             $amOut = $am['out'] ?? null;
-            $pmIn = $pm['in'] ?? null;
+            $pmIn  = $pm['in']  ?? null;
             $pmOut = $pm['out'] ?? null;
 
             $hasValidLogs = ($amIn || $amOut || $pmIn || $pmOut);
 
+            // Determine which cutoff half this day belongs to
+            $dayOfMonth     = (int) Carbon::parse($date)->format('j');
+            $isFirstCutoff  = $dayOfMonth <= 15;
+
             if ($hasValidLogs) {
-                // Count as present
-                $daysPresent += 1.0;
+                $dayLateMinutes      = $amIn  ? $this->computeLateMinutes($amIn)      : 0;
+                $dayUndertimeMinutes = $pmOut ? $this->computeUndertimeMinutes($pmOut) : 0;
 
-                // Compute tardiness (late minutes)
-                if ($amIn) {
-                    $lateMinutes += $this->computeLateMinutes($amIn);
-                }
+                $daysPresent      += 1.0;
+                $lateMinutes      += $dayLateMinutes;
+                $undertimeMinutes += $dayUndertimeMinutes;
 
-                // Compute undertime
-                if ($pmOut) {
-                    $undertimeMinutes += $this->computeUndertimeMinutes($pmOut);
-                }
+                $structuredLogs[$date] = [
+                    'present'           => true,
+                    'late_minutes'      => $dayLateMinutes,
+                    'undertime_minutes' => $dayUndertimeMinutes,
+                    'is_first_cutoff'   => $isFirstCutoff,
+                ];
             } else {
-                // All logs are null on a regular workday -> count as LWOP
+                // No logs on a workday → LWOP
                 $lwopDays += 1.0;
+
+                $structuredLogs[$date] = [
+                    'present'           => false,
+                    'late_minutes'      => 0,
+                    'undertime_minutes' => 0,
+                    'is_first_cutoff'   => $isFirstCutoff,
+                ];
             }
         }
+
+        // Keep the structured logs sorted by date (ascending) for consistent UI display
+        ksort($structuredLogs);
 
         return [
             'days_present'      => $daysPresent,
@@ -225,78 +284,8 @@ class AttendanceService
             'late_minutes'      => $lateMinutes,
             'undertime_minutes' => $undertimeMinutes,
             'leave_credits'     => $leaveCredits,
+            'daily_logs'        => $structuredLogs,
         ];
-    }
-
-    /**
-     * Check if a given date is a regular workday.
-     * For now, assumes Monday-Friday are workdays.
-     * TODO: Integrate with holiday calendar.
-     *
-     * @param  string $date  YYYY-MM-DD
-     * @return bool
-     */
-    protected function isWorkday(string $date): bool
-    {
-        try {
-            $dayOfWeek = date('N', strtotime($date)); // 1 (Monday) to 7 (Sunday)
-            return $dayOfWeek >= 1 && $dayOfWeek <= 5; // Monday-Friday
-        } catch (\Exception $e) {
-            Log::warning("Failed to parse date for workday check: {$date}");
-            return true; // Assume workday if parsing fails
-        }
-    }
-
-    /**
-     * Compute late minutes based on AM clock-in time.
-     * If clock-in is after the threshold (08:00:00), calculate the delta.
-     *
-     * @param  string $timeIn  HH:MM:SS format
-     * @return int  Late minutes (0 if on time or early)
-     */
-    protected function computeLateMinutes(string $timeIn): int
-    {
-        try {
-            $threshold = self::MORNING_START_THRESHOLD;
-            $inTime = strtotime($timeIn);
-            $thresholdTime = strtotime($threshold);
-
-            if ($inTime > $thresholdTime) {
-                $diffSeconds = $inTime - $thresholdTime;
-                return (int) round($diffSeconds / 60);
-            }
-
-            return 0;
-        } catch (\Exception $e) {
-            Log::warning("Failed to compute late minutes for time: {$timeIn}");
-            return 0;
-        }
-    }
-
-    /**
-     * Compute undertime minutes based on PM clock-out time.
-     * If clock-out is before the threshold (17:00:00), calculate the missing minutes.
-     *
-     * @param  string $timeOut  HH:MM:SS format
-     * @return int  Undertime minutes (0 if on time or late)
-     */
-    protected function computeUndertimeMinutes(string $timeOut): int
-    {
-        try {
-            $threshold = self::AFTERNOON_END_THRESHOLD;
-            $outTime = strtotime($timeOut);
-            $thresholdTime = strtotime($threshold);
-
-            if ($outTime < $thresholdTime) {
-                $diffSeconds = $thresholdTime - $outTime;
-                return (int) round($diffSeconds / 60);
-            }
-
-            return 0;
-        } catch (\Exception $e) {
-            Log::warning("Failed to compute undertime minutes for time: {$timeOut}");
-            return 0;
-        }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -304,14 +293,13 @@ class AttendanceService
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Return the stored attendance map for a batch, keyed by employee_id (integer).
+     * Return the full-month attendance map for a batch, keyed by employee_id.
      * Reads from attendance_snapshots — does NOT call the HRIS API.
      *
-     * Returns an empty array if no snapshots exist yet (batch hasn't been pulled).
-     * PayrollController@compute checks for this and blocks computation.
+     * Used by PayrollComputationService to compute the monthly payroll.
      *
      * @param  PayrollBatch $batch
-     * @return array  [ employee_id (int) => [ 'lwop_days'=>, 'late_minutes'=>, ... ] ]
+     * @return array  [ employee_id (int) => AttendanceArray ]
      */
     public function getAttendanceForBatch(PayrollBatch $batch): array
     {
@@ -319,6 +307,23 @@ class AttendanceService
             ->get()
             ->keyBy('employee_id')
             ->map(fn (AttendanceSnapshot $snap) => $snap->toAttendanceArray())
+            ->toArray();
+    }
+
+    /**
+     * Return attendance split by cutoff for a batch, keyed by employee_id.
+     * Used by reporting code that still needs 1st / 2nd cutoff breakdowns.
+     *
+     * @param  PayrollBatch $batch
+     * @param  bool         $firstCutoff  true = 1st (days 1-15), false = 2nd (days 16-end)
+     * @return array  [ employee_id (int) => CutoffAttendanceArray ]
+     */
+    public function getAttendanceByCutoff(PayrollBatch $batch, bool $firstCutoff): array
+    {
+        return AttendanceSnapshot::where('payroll_batch_id', $batch->id)
+            ->get()
+            ->keyBy('employee_id')
+            ->map(fn (AttendanceSnapshot $snap) => $snap->toCutoffAttendanceArray($firstCutoff))
             ->toArray();
     }
 
@@ -348,18 +353,50 @@ class AttendanceService
 
     /**
      * Allow HR to manually override one employee's attendance snapshot.
-     * Called from a future AttendanceController (or inline from PayrollController).
+     *
+     * When a correction is saved on a snapshot that has daily_logs, we also
+     * recompute the aggregated totals from the (possibly edited) daily_logs
+     * so they stay in sync. If daily_logs is absent (legacy), we accept the
+     * passed-in values directly.
      *
      * @param  AttendanceSnapshot $snapshot
-     * @param  array              $data  keys: lwop_days, late_minutes, undertime_minutes, correction_note
-     * @param  int                $userId  Auth::id() of the HR officer making the correction
+     * @param  array              $data    Keys: lwop_days, late_minutes, undertime_minutes,
+     *                                          leave_credits, correction_note,
+     *                                          daily_logs (optional — full replacement)
+     * @param  int                $userId  Auth::id() of the correcting officer
      */
     public function correctSnapshot(AttendanceSnapshot $snapshot, array $data, int $userId): void
     {
+        // If the caller is replacing daily_logs entirely, recompute aggregated fields
+        // from the new logs so everything stays consistent.
+        if (isset($data['daily_logs']) && is_array($data['daily_logs'])) {
+            $recomputed = $this->aggregateFromDailyLogs($data['daily_logs']);
+
+            $snapshot->update([
+                'daily_logs'        => $data['daily_logs'],
+                'days_present'      => $recomputed['days_present'],
+                'lwop_days'         => $recomputed['lwop_days'],
+                'late_minutes'      => $recomputed['late_minutes'],
+                'undertime_minutes' => $recomputed['undertime_minutes'],
+                // leave_credits is not derived from daily_logs — keep existing unless explicitly provided
+                'leave_credits'     => $data['leave_credits'] ?? $snapshot->leave_credits,
+                'is_corrected'      => true,
+                'correction_note'   => $data['correction_note'] ?? null,
+                'corrected_by'      => $userId,
+                'corrected_at'      => now(),
+                'source'            => 'manual',
+            ]);
+
+            return;
+        }
+
+        // No daily_logs replacement — just update aggregated fields directly
         $snapshot->update([
+            'days_present'      => $data['days_present']      ?? $snapshot->days_present,
             'lwop_days'         => (float) ($data['lwop_days']         ?? $snapshot->lwop_days),
             'late_minutes'      => (int)   ($data['late_minutes']      ?? $snapshot->late_minutes),
             'undertime_minutes' => (int)   ($data['undertime_minutes'] ?? $snapshot->undertime_minutes),
+            'leave_credits'     => (float) ($data['leave_credits']     ?? $snapshot->leave_credits),
             'is_corrected'      => true,
             'correction_note'   => $data['correction_note'] ?? null,
             'corrected_by'      => $userId,
@@ -368,18 +405,47 @@ class AttendanceService
         ]);
     }
 
+    /**
+     * Recompute aggregated fields from a structured daily_logs array.
+     * Used internally when HR replaces daily_logs during a correction.
+     *
+     * @param  array $dailyLogs  Same structure as AttendanceSnapshot::$daily_logs
+     * @return array { days_present, lwop_days, late_minutes, undertime_minutes }
+     */
+    protected function aggregateFromDailyLogs(array $dailyLogs): array
+    {
+        $daysPresent      = 0.0;
+        $lwopDays         = 0.0;
+        $lateMinutes      = 0;
+        $undertimeMinutes = 0;
+
+        foreach ($dailyLogs as $log) {
+            if ($log['present'] ?? false) {
+                $daysPresent      += 1.0;
+                $lateMinutes      += (int) ($log['late_minutes']      ?? 0);
+                $undertimeMinutes += (int) ($log['undertime_minutes'] ?? 0);
+            } else {
+                $lwopDays += 1.0;
+            }
+        }
+
+        return compact('daysPresent', 'lwopDays', 'lateMinutes', 'undertimeMinutes');
+    }
+
     // ═══════════════════════════════════════════════════════════════════
-    //  Single-employee compute (unchanged — used by PayrollComputationService)
+    //  Single-employee compute (called from PayrollComputationService)
     // ═══════════════════════════════════════════════════════════════════
 
     /**
      * Process attendance data and compute deduction amounts for one employee.
-     * Input is the raw array (from snapshot or directly), not a model.
+     * Input is a plain array (from snapshot or directly), not a model.
      *
      * Per DOLE RO9 rules: tardiness deductions hit LEAVE CREDITS first.
      * Late minutes are converted to equivalent leave days and deducted from
      * vacation_leave_balance before being treated as LWOP.
      *
+     * @param  Employee $employee
+     * @param  array    $attendance  Keys: lwop_days, late_minutes, undertime_mins [, days_present]
      * @return array {
      *   lwop_salary, lwop_pera, tardiness_amount,
      *   lwop_days, late_minutes, undertime_minutes,
@@ -392,36 +458,30 @@ class AttendanceService
         $pera             = (float) $employee->pera;
         $denom            = self::WORK_DAYS_DENOMINATOR;
 
-        $lwopDays         = (float) ($attendance['lwop_days']         ?? 0);
-        $lateMinutes      = (int)   ($attendance['late_minutes']      ?? 0);
-        $undertimeMinutes = (int)   ($attendance['undertime_minutes'] ?? 0);
+        $lwopDays         = (float) ($attendance['lwop_days']      ?? 0);
+        $lateMinutes      = (int)   ($attendance['late_minutes']   ?? 0);
+        $undertimeMinutes = (int)   ($attendance['undertime_mins'] ?? $attendance['undertime_minutes'] ?? 0);
 
         // ── Deduct late from vacation leave credits first ─────────────────
-        // Convert late minutes to equivalent leave days (8 hours = 1 day = 480 mins)
+        // Convert late minutes to equivalent leave days (8 hours = 480 mins = 1 day)
         $lateDaysEquivalent = $lateMinutes / 480;
-        
-        // Get employee's current vacation leave balance
-        $vacationBalance = (float) ($employee->vacation_leave_balance ?? 0);
-        
-        // Deduct from vacation leave balance first
+        $vacationBalance    = (float) ($employee->vacation_leave_balance ?? 0);
+
         if ($vacationBalance > 0 && $lateDaysEquivalent > 0) {
             if ($vacationBalance >= $lateDaysEquivalent) {
-                // Enough credits to cover all tardiness
                 $employee->vacation_leave_balance = $vacationBalance - $lateDaysEquivalent;
                 $employee->save();
                 $lateMinutesAfterCredits = 0;
             } else {
-                // Partial coverage - credits exhausted, remaining becomes LWOP
                 $employee->vacation_leave_balance = 0;
                 $employee->save();
-                $remainingLateDays = $lateDaysEquivalent - $vacationBalance;
+                $remainingLateDays       = $lateDaysEquivalent - $vacationBalance;
                 $lateMinutesAfterCredits = (int) round($remainingLateDays * 480);
             }
         } else {
             $lateMinutesAfterCredits = $lateMinutes;
         }
 
-        // Use late_minutes after credits for tardiness calculation
         $effectiveLateMinutes = $lateMinutesAfterCredits;
 
         // LWOP deductions
@@ -444,5 +504,91 @@ class AttendanceService
             'tardiness_days'    => $tardinessDays,
             'total_deduction'   => round($lwopSalary + $lwopPera + $tardinessAmount, 2),
         ];
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Date / time utilities
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Check if a given date falls within a period (inclusive).
+     *
+     * @param  string $date         YYYY-MM-DD
+     * @param  string $periodStart  YYYY-MM-DD
+     * @param  string $periodEnd    YYYY-MM-DD
+     */
+    protected function isWithinPeriod(string $date, string $periodStart, string $periodEnd): bool
+    {
+        try {
+            $d     = Carbon::parse($date);
+            $start = Carbon::parse($periodStart);
+            $end   = Carbon::parse($periodEnd);
+
+            return $d->between($start, $end, true);
+        } catch (\Exception $e) {
+            Log::warning("Failed to parse dates for period check: {$date}, {$periodStart}, {$periodEnd}");
+            return true; // include by default
+        }
+    }
+
+    /**
+     * Check if a given date is a regular workday (Monday–Friday).
+     * TODO: Integrate with holiday calendar for accurate LWOP calculation.
+     *
+     * @param  string $date  YYYY-MM-DD
+     */
+    protected function isWorkday(string $date): bool
+    {
+        try {
+            $dayOfWeek = date('N', strtotime($date)); // 1 = Monday … 7 = Sunday
+            return $dayOfWeek >= 1 && $dayOfWeek <= 5;
+        } catch (\Exception $e) {
+            Log::warning("Failed to parse date for workday check: {$date}");
+            return true;
+        }
+    }
+
+    /**
+     * Compute late minutes based on AM clock-in time.
+     * If clock-in is after 08:00:00, returns the delta in whole minutes.
+     *
+     * @param  string $timeIn  HH:MM:SS format
+     * @return int  Late minutes (0 if on time or early)
+     */
+    protected function computeLateMinutes(string $timeIn): int
+    {
+        try {
+            $inTime        = strtotime($timeIn);
+            $thresholdTime = strtotime(self::MORNING_START_THRESHOLD);
+
+            return $inTime > $thresholdTime
+                ? (int) round(($inTime - $thresholdTime) / 60)
+                : 0;
+        } catch (\Exception $e) {
+            Log::warning("Failed to compute late minutes for time: {$timeIn}");
+            return 0;
+        }
+    }
+
+    /**
+     * Compute undertime minutes based on PM clock-out time.
+     * If clock-out is before 17:00:00, returns the missing minutes.
+     *
+     * @param  string $timeOut  HH:MM:SS format
+     * @return int  Undertime minutes (0 if on time or overtime)
+     */
+    protected function computeUndertimeMinutes(string $timeOut): int
+    {
+        try {
+            $outTime       = strtotime($timeOut);
+            $thresholdTime = strtotime(self::AFTERNOON_END_THRESHOLD);
+
+            return $outTime < $thresholdTime
+                ? (int) round(($thresholdTime - $outTime) / 60)
+                : 0;
+        } catch (\Exception $e) {
+            Log::warning("Failed to compute undertime minutes for time: {$timeOut}");
+            return 0;
+        }
     }
 }

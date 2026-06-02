@@ -1,12 +1,9 @@
 {{-- resources/views/payroll/verify.blade.php --}}
 {{--
-    Expects from PayrollController@verify:
-      $payroll             — current PayrollBatch
-      $siblingBatch        — opposite cut-off batch (may be null)
-      $verifyRows          — collection of stdClass objects (see controller)
-      $totalNet1st         — float
-      $totalNet2nd         — float
-      $totalCombined       — float
+    Expects from PayrollController@verify (Phase 4 - Monthly Model):
+      $payroll             — current PayrollBatch (monthly)
+      $verifyRows          — collection of stdClass objects with net_1st, net_2nd, total_net
+      $totalNetMonthly     — float (total net for the month)
       $belowThresholdCount — int
 --}}
 
@@ -172,8 +169,7 @@
         'July', 'August', 'September', 'October', 'November', 'December',
     ];
     $periodLabel = ($months[$payroll->period_month] ?? '?')
-        . ' ' . ($payroll->cutoff === '1st' ? '1–15' : '16–30/31')
-        . ', ' . $payroll->period_year;
+        . ' ' . $payroll->period_year;
 
     $statusClass = match ($payroll->status) {
         'draft'                             => 'badge-draft',
@@ -193,10 +189,14 @@
     ];
     $statusLabel = $statusLabels[$payroll->status] ?? ucfirst(str_replace('_', ' ', $payroll->status));
 
-    // Label columns by cut-off
+    // Label columns by cut-off (computed on the fly from monthly data)
     $col1stLabel  = '1–15 Net Pay';
     $col2ndLabel  = '16–30/31 Net Pay';
-    $currentIs1st = $payroll->cutoff === '1st';
+
+    // Calculate cutoff totals from verifyRows
+    $totalNet1st = $verifyRows->sum('net_1st');
+    $totalNet2nd = $verifyRows->sum('net_2nd');
+    $totalCombined = $totalNet1st + $totalNet2nd;
 @endphp
 
 {{-- ═══════════════════════════════════════════════════════════════
@@ -208,11 +208,6 @@
         <p>
             {{ $periodLabel }} ·
             <span class="badge {{ $statusClass }}">{{ $statusLabel }}</span>
-            @if ($siblingBatch)
-                · Both cut-offs available
-            @else
-                · Sibling cut-off not yet created
-            @endif
         </p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
@@ -300,14 +295,8 @@
                     @foreach ($verifyRows as $i => $row)
                         @php
                             $flagged = $row->below_threshold;
-
-                            if ($currentIs1st) {
-                                $net1st = $row->net_current;
-                                $net2nd = $row->net_sibling;
-                            } else {
-                                $net1st = $row->net_sibling;
-                                $net2nd = $row->net_current;
-                            }
+                            $net1st = $row->net_1st;
+                            $net2nd = $row->net_2nd;
 
                             $net1stBelow = $net1st !== null && $net1st < 5000;
                             $net2ndBelow = $net2nd !== null && $net2nd < 5000;

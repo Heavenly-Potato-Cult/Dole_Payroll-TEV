@@ -48,7 +48,7 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/{payroll}',    [PayrollController::class, 'destroy'])->name('destroy');
 
             // Remove employee from batch (delete entry)
-            Route::delete('/{payroll}/entries/{entry}', [PayrollEntryController::class, 'destroy'])
+            Route::delete('/{payrollBatch}/entries/{entry}', [PayrollEntryController::class, 'destroy'])
                 ->name('entries.destroy');
 
             // Payroll workflow actions
@@ -62,6 +62,10 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{payroll}/force-edit',      [PayrollController::class, 'forceEdit'])      ->name('forceEdit');
             Route::post('/{payroll}/pull-attendance', [PayrollController::class, 'pullAttendance']) ->name('pullAttendance');
             Route::post('/{payroll}/pull-and-compute', [PayrollController::class, 'pullAndCompute']) ->name('pullAndCompute');
+
+            // Attendance edit
+            Route::get('/{payroll}/attendance/{snapshot}/edit', [PayrollController::class, 'editAttendance']) ->name('attendance.edit');
+            Route::match(['post', 'patch'], '/{payroll}/attendance/{snapshot}', [PayrollController::class, 'updateAttendance']) ->name('attendance.update');
 
             // ── Payslip generation (released / locked batches only) ──
             // ?mode=consolidated (default) | per_batch

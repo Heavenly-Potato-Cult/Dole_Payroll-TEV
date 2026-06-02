@@ -8,7 +8,7 @@
 <div class="page-header">
     <div class="page-header-left">
         <h1>New Payroll Batch</h1>
-        <p>Select the period and cut-off, then submit to generate all employee entries.</p>
+        <p>Select the payroll period, then submit to create the monthly batch.</p>
     </div>
     <a href="{{ route('payroll.index') }}" class="btn btn-outline btn-sm">← Back to Payroll List</a>
 </div>
@@ -17,10 +17,10 @@
 <div class="alert alert-info mb-3">
     <div>
         <strong>How batch creation works:</strong>
-        Creating a batch immediately triggers payroll computation for all
-        <strong>active employees</strong> using the 22-day fixed denominator.
-        Deductions are pulled from each employee's active enrollment records.
-        You can re-compute at any time before the batch is submitted for approval.
+        Creating a batch sets up the monthly payroll period for all
+        <strong>active employees</strong>.
+        After creation, pull attendance from HRIS, review / correct records, then compute.
+        The 44-day monthly denominator is applied automatically.
     </div>
 </div>
 
@@ -83,48 +83,22 @@
 
                 </div>
 
-                {{-- Cut-off --}}
-                <div class="form-group">
-                    <label>Cut-off Period</label>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:4px;">
-
-                        <label class="cutoff-card {{ old('cutoff', '1st') === '1st' ? 'cutoff-card--active' : '' }}"
-                               for="cutoff_1st">
-                            <input type="radio" name="cutoff" id="cutoff_1st" value="1st"
-                                   {{ old('cutoff', '1st') === '1st' ? 'checked' : '' }}
-                                   onchange="updatePreview()">
-                            <div class="cutoff-card-body">
-                                <strong>1st Cut-off</strong>
-                                <span>Coverage: 1–15</span>
-                                <span class="text-muted" style="font-size:0.78rem;">Released on the 10th</span>
-                            </div>
-                        </label>
-
-                        <label class="cutoff-card {{ old('cutoff') === '2nd' ? 'cutoff-card--active' : '' }}"
-                               for="cutoff_2nd">
-                            <input type="radio" name="cutoff" id="cutoff_2nd" value="2nd"
-                                   {{ old('cutoff') === '2nd' ? 'checked' : '' }}
-                                   onchange="updatePreview()">
-                            <div class="cutoff-card-body">
-                                <strong>2nd Cut-off</strong>
-                                <span>Coverage: 16–30/31</span>
-                                <span class="text-muted" style="font-size:0.78rem;">Released on the 25th</span>
-                            </div>
-                        </label>
-
-                    </div>
-                    @error('cutoff')
-                        <div class="invalid-feedback" style="display:block;">{{ $message }}</div>
-                    @enderror
+                {{-- Toggle for Custom Date Range --}}
+                <div class="form-group" style="margin-top:16px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                        <input type="checkbox" id="use_custom_range" onchange="toggleCustomRange()">
+                        <span style="font-size:0.85rem; font-weight:600; color:var(--navy);">Use Custom Date Range</span>
+                    </label>
                 </div>
 
                 {{-- Custom Date Range (Optional) --}}
-                <div class="form-group" style="margin-top:16px; padding:16px; background:#F8F9FA; border-radius:8px; border:1px solid #E9ECEF;">
+                <div class="form-group" id="customRangeSection" style="margin-top:12px; padding:16px; background:#F8F9FA; border-radius:8px; border:1px solid #E9ECEF; opacity:0.5; pointer-events:none;">
                     <label style="font-size:0.78rem; font-weight:700; color:var(--navy); margin-bottom:12px; display:block;">
                         Custom Date Range <span class="text-muted">(optional)</span>
                     </label>
                     <div style="font-size:0.75rem; color:var(--text-mid); margin-bottom:12px;">
-                        Leave blank to use standard cut-off dates above. Specify custom dates for special payroll periods.
+                        Leave blank to use the full calendar month (1st to last day).
+                        Specify custom dates only for special payroll periods.
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                         <div>
@@ -156,13 +130,13 @@
                 <div class="alert alert-warning" id="confirmNotice" style="display:none;">
                     <div>
                         <strong>⚠ About to create:</strong>
-                        <span id="confirmText"></span> — this will compute payroll for all active employees.
+                        <span id="confirmText"></span> — pull attendance after creation, then compute.
                     </div>
                 </div>
 
                 <div class="d-flex gap-2" style="margin-top:24px;">
                     <button type="button" class="btn btn-primary btn-lg" id="submitBtn" onclick="confirmCreatePayroll()">
-                         Create &amp; Compute Payroll
+                        Create Payroll Batch
                     </button>
                     <a href="{{ route('payroll.index') }}" class="btn btn-outline btn-lg">Cancel</a>
                 </div>
@@ -199,15 +173,15 @@
                 <div style="display:flex; flex-direction:column; gap:8px;">
                     <div>
                         <span class="fw-bold text-navy">Denominator</span><br>
-                        Fixed at <strong>22 working days</strong> per cut-off
+                        Fixed at <strong>44 working days</strong> per month (22 × 2)
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
                         <span class="fw-bold text-navy">Salary Earned</span><br>
-                        Basic Monthly ÷ 2
+                        Full basic monthly salary
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
                         <span class="fw-bold text-navy">PERA Earned</span><br>
-                        PERA Monthly ÷ 2
+                        Full PERA monthly amount
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
                         <span class="fw-bold text-navy">Attendance Deduction</span><br>
@@ -215,8 +189,9 @@
                         salary deducted only when credits are exhausted
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
-                        <span class="fw-bold text-navy">Tardiness / Undertime</span><br>
-                        Hidden in regular payroll view; reflected in special payroll processing
+                        <span class="fw-bold text-navy">Cutoff Breakdown</span><br>
+                        1st (days 1–15) and 2nd (days 16–end)<br>
+                        split proportionally from daily attendance logs
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
                         <span class="fw-bold text-navy">Withholding Tax</span><br>
@@ -234,119 +209,120 @@
 @endsection
 
 @section('scripts')
-<style>
-/* Cut-off selector cards */
-.cutoff-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px 16px;
-    border: 2px solid var(--border);
-    border-radius: var(--radius);
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-    background: white;
-}
-.cutoff-card:hover {
-    border-color: var(--navy);
-    background: var(--navy-light);
-}
-.cutoff-card--active {
-    border-color: var(--navy);
-    background: var(--navy-light);
-}
-.cutoff-card input[type="radio"] {
-    width: auto;
-    margin-top: 3px;
-    flex-shrink: 0;
-    accent-color: var(--navy);
-}
-.cutoff-card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 0.88rem;
-    line-height: 1.4;
-}
-.cutoff-card-body strong {
-    font-size: 0.92rem;
-    color: var(--navy);
-}
-</style>
-
 <script>
 const MONTHS = [
     '', 'January','February','March','April','May','June',
     'July','August','September','October','November','December'
 ];
 
+function lastDayOf(year, month) {
+    return new Date(year, month, 0).getDate();
+}
+
+function toggleCustomRange() {
+    const useCustom = document.getElementById('use_custom_range').checked;
+    const yearSelect = document.getElementById('period_year');
+    const monthSelect = document.getElementById('period_month');
+    const customSection = document.getElementById('customRangeSection');
+    
+    yearSelect.disabled = useCustom;
+    monthSelect.disabled = useCustom;
+    
+    if (useCustom) {
+        customSection.style.opacity = '1';
+        customSection.style.pointerEvents = 'auto';
+    } else {
+        customSection.style.opacity = '0.5';
+        customSection.style.pointerEvents = 'none';
+        document.getElementById('period_start').value = '';
+        document.getElementById('period_end').value = '';
+    }
+    
+    updatePreview();
+}
+
 function updatePreview() {
-    const year   = document.getElementById('period_year').value;
-    const month  = parseInt(document.getElementById('period_month').value);
-    const cutoff = document.querySelector('input[name="cutoff"]:checked')?.value || '1st';
+    const useCustom = document.getElementById('use_custom_range').checked;
+    const year = parseInt(document.getElementById('period_year').value);
+    const month = parseInt(document.getElementById('period_month').value);
     const customStart = document.getElementById('period_start').value;
     const customEnd = document.getElementById('period_end').value;
-
-    let days, release, label;
-
-    // Use custom dates if both are provided, otherwise use preset cutoffs
-    if (customStart && customEnd) {
+    
+    let label, rangeSub;
+    
+    if (useCustom && customStart && customEnd) {
         const startDate = new Date(customStart);
         const endDate = new Date(customEnd);
         const startDay = startDate.getDate();
         const endDay = endDate.getDate();
-        const startMonth = startDate.getMonth() + 1;
-        const endMonth = endDate.getMonth() + 1;
-
-        if (startMonth === endMonth && startMonth === month) {
-            days = `${startDay}–${endDay}`;
+        const startMon = startDate.getMonth() + 1;
+        const endMon = endDate.getMonth() + 1;
+        const startYear = startDate.getFullYear();
+        const endYear = endDate.getFullYear();
+        
+        if (startMon === endMon && startYear === endYear) {
+            rangeSub = `${startDay}–${endDay}`;
+            label = `${MONTHS[startMon]} ${rangeSub}, ${startYear}`;
         } else {
-            days = `${MONTHS[startMonth]} ${startDay} – ${MONTHS[endMonth]} ${endDay}`;
+            rangeSub = `${MONTHS[startMon]} ${startDay}, ${startYear} – ${MONTHS[endMon]} ${endDay}, ${endYear}`;
+            label = rangeSub;
         }
-
-        label = `${MONTHS[month]} ${days}, ${year}`;
-        release = 'Custom';
     } else {
-        days = cutoff === '1st' ? '1–15' : '16–30/31';
-        release = cutoff === '1st' ? '10th' : '25th';
-        label = `${MONTHS[month]} ${days}, ${year}`;
+        const lastDay = lastDayOf(year, month);
+        rangeSub = `1–${lastDay}`;
+        label = `${MONTHS[month]} ${rangeSub}, ${year}`;
     }
-
+    
     document.getElementById('previewLabel').textContent = label;
-    document.getElementById('previewSub').textContent   = `${cutoff.toUpperCase()} cut-off`;
-    document.getElementById('previewRelease').innerHTML =
-        `<span class="badge badge-pending" style="font-size:0.78rem;">Release date: ${MONTHS[month]} ${release}, ${year}</span>`;
-
-    // Confirmation notice
+    document.getElementById('previewSub').textContent = useCustom ? 'Custom payroll period' : 'Monthly payroll period';
+    document.getElementById('previewRelease').innerHTML = useCustom 
+        ? `<span class="badge badge-pending" style="font-size:0.78rem;">Custom period</span>`
+        : `<span class="badge badge-pending" style="font-size:0.78rem;">Release: end of ${MONTHS[month]} ${year}</span>`;
+    
     document.getElementById('confirmText').textContent = label;
     document.getElementById('confirmNotice').style.display = 'flex';
-
-    // Highlight active cut-off card
-    document.querySelectorAll('.cutoff-card').forEach(card => {
-        card.classList.remove('cutoff-card--active');
-        if (card.querySelector('input[value="' + cutoff + '"]')) {
-            card.classList.add('cutoff-card--active');
-        }
-    });
 }
 
-// SweetAlert2 confirmation for Create & Compute Payroll
 function confirmCreatePayroll() {
-    const year   = document.getElementById('period_year').value;
-    const month  = parseInt(document.getElementById('period_month').value);
-    const cutoff = document.querySelector('input[name="cutoff"]:checked')?.value || '1st';
-    const days   = cutoff === '1st' ? '1–15' : '16–30/31';
-    const label  = `${MONTHS[month]} ${days}, ${year}`;
+    const useCustom = document.getElementById('use_custom_range').checked;
+    let label;
+    
+    if (useCustom) {
+        const customStart = document.getElementById('period_start').value;
+        const customEnd = document.getElementById('period_end').value;
+        const startDate = new Date(customStart);
+        const endDate = new Date(customEnd);
+        const startDay = startDate.getDate();
+        const endDay = endDate.getDate();
+        const startMon = startDate.getMonth() + 1;
+        const endMon = endDate.getMonth() + 1;
+        const startYear = startDate.getFullYear();
+        const endYear = endDate.getFullYear();
+        
+        if (startMon === endMon && startYear === endYear) {
+            label = `${MONTHS[startMon]} ${startDay}–${endDay}, ${startYear}`;
+        } else {
+            label = `${MONTHS[startMon]} ${startDay}, ${startYear} – ${MONTHS[endMon]} ${endDay}, ${endYear}`;
+        }
+    } else {
+        const year = parseInt(document.getElementById('period_year').value);
+        const month = parseInt(document.getElementById('period_month').value);
+        const lastDay = lastDayOf(year, month);
+        label = `${MONTHS[month]} 1–${lastDay}, ${year}`;
+    }
 
     Swal.fire({
-        title: 'Create & Compute Payroll?',
+        title: 'Create Payroll Batch?',
         html: `<div style="text-align:center;">
             <div style="font-size:1.25rem;font-weight:600;color:#0F1B4C;margin-bottom:8px;">${label}</div>
-            <p style="color:#6b7280;font-size:0.95rem;">This will generate payroll entries for all active employees.</p>
+            <p style="color:#6b7280;font-size:0.95rem;">
+                A ${useCustom ? 'custom' : 'monthly'} batch will be created.<br>
+                Pull attendance first, then compute.
+            </p>
         </div>`,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Create & Compute',
+        confirmButtonText: 'Create Batch',
         cancelButtonText: 'Cancel',
         confirmButtonColor: '#0F1B4C',
         cancelButtonColor: '#6B7280',
@@ -354,114 +330,11 @@ function confirmCreatePayroll() {
         focusCancel: true
     }).then((result) => {
         if (result.isConfirmed) {
-            executeCreatePayroll(label);
+            document.getElementById('createForm').submit();
         }
     });
 }
 
-async function executeCreatePayroll(periodLabel) {
-    // Show simple loading modal
-    Swal.fire({
-        title: '<span style="color:#0F1B4C;">Creating Payroll...</span>',
-        html: `<div style="margin-top:10px;text-align:center;">
-            <div style="font-size:1.1rem;color:#0F1B4C;margin-bottom:8px;">${periodLabel}</div>
-            <p style="font-size:0.9rem;color:#6b7280;">Please wait while payroll is computed...</p>
-        </div>`,
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        showConfirmButton: false,
-        showCancelButton: false,
-        didOpen: () => {
-            Swal.showLoading();
-        }
-    });
-
-    try {
-        const form = document.getElementById('createForm');
-        const formData = new FormData(form);
-        const csrfToken = formData.get('_token');
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout for payroll computation
-
-        const response = await fetch(form.action, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json, text/html',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: formData,
-            signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        // Payroll creation typically redirects to show page
-        Swal.fire({
-            icon: 'success',
-            title: 'Payroll Created!',
-            html: `<div style="text-align:center;">
-                <div style="font-size:1.1rem;color:#0F1B4C;margin-bottom:8px;">${periodLabel}</div>
-                <p style="color:#6b7280;font-size:0.9rem;">Payroll has been computed for all active employees.</p>
-            </div>`,
-            confirmButtonColor: '#0F1B4C'
-        }).then(() => {
-            // Follow the redirect or reload
-            if (response.redirected) {
-                window.location.href = response.url;
-            } else {
-                window.location.reload();
-            }
-        });
-
-    } catch (error) {
-        let errorTitle = 'Creation Failed';
-        let errorMessage = 'An unexpected error occurred while creating payroll.';
-
-        if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
-            errorTitle = 'Connection Error';
-            errorMessage = 'Unable to complete the request. Please check your internet connection.';
-        } else if (error.message.includes('500')) {
-            errorTitle = 'Server Error';
-            errorMessage = 'The server encountered an error during payroll computation. Please contact the system administrator.';
-        } else if (error.message.includes('422')) {
-            errorTitle = 'Validation Error';
-            errorMessage = 'Please check that all required fields are filled correctly (Year, Month, Cutoff).';
-        } else if (error.message) {
-            errorMessage = error.message;
-        }
-
-        Swal.fire({
-            icon: 'error',
-            title: errorTitle,
-            html: `<div style="text-align:left;">
-                <p>${errorMessage}</p>
-                <p style="margin-top:12px;font-size:0.85rem;color:#6b7280;">
-                    <strong>Troubleshooting:</strong><br>
-                    • Verify all fields are filled (Year, Month, Cutoff)<br>
-                    • Check that employees have valid salary grades<br>
-                    • Contact IT if the problem persists
-                </p>
-            </div>`,
-            confirmButtonText: 'Try Again',
-            confirmButtonColor: '#0F1B4C',
-            showCancelButton: true,
-            cancelButtonText: 'Cancel',
-            cancelButtonColor: '#6B7280'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                confirmCreatePayroll();
-            }
-        });
-    }
-}
-
-// Init on page load
-updatePreview();
+toggleCustomRange();
 </script>
 @endsection

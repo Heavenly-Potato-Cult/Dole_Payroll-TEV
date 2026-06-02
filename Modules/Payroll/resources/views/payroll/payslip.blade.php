@@ -257,7 +257,6 @@ body {
         return number_format($val, 2);
     };
 
-    $cutoffIs1st = $batch->cutoff === '1st';
     $copyLabels  = ['EMPLOYEE COPY', 'OFFICE COPY'];
 
     // Base64-encode logo for DomPDF (requires GD extension)
@@ -268,17 +267,22 @@ body {
 @endphp
 
 {{--
-    $payslips is a collection of arrays, each with:
-      employee, entry1st, entry2nd, ded1st (keyed), ded2nd (keyed)
+    $payslips is a collection of arrays (Phase 4 - Monthly Model), each with:
+      employee, entry (monthly), cutoffSplit (first_cutoff/second_cutoff), dedMap (keyed)
     One <div class="employee-page"> per employee triggers a PDF page break.
 --}}
 @foreach ($payslips as $slip)
 @php
     $employee = $slip['employee'];
-    $entry1st = $slip['entry1st'];
-    $entry2nd = $slip['entry2nd'];
-    $ded1st   = $slip['ded1st'];
-    $ded2nd   = $slip['ded2nd'];
+    $entry = $slip['entry'];
+    $cutoffSplit = $slip['cutoffSplit'];
+    $dedMap = $slip['dedMap'];
+
+    // Extract cutoff data from cutoffSplit
+    $entry1st = $cutoffSplit['first_cutoff'] ?? null;
+    $entry2nd = $cutoffSplit['second_cutoff'] ?? null;
+    $ded1st = $dedMap;
+    $ded2nd = $dedMap;
 @endphp
 
 <div class="employee-page">
@@ -363,11 +367,11 @@ body {
             switch ($type) {
                 case 'income':
                     if ($label === 'BASIC') {
-                        $a1 = $entry1st ? (float) $entry1st->basic_salary : null;
-                        $a2 = $entry2nd ? (float) $entry2nd->basic_salary : null;
+                        $a1 = $entry1st ? (float) ($entry1st['basic_salary'] ?? 0) : null;
+                        $a2 = $entry2nd ? (float) ($entry2nd['basic_salary'] ?? 0) : null;
                     } elseif ($label === 'ALLOWANCE') {
-                        $a1 = $entry1st ? (float) $entry1st->pera : null;
-                        $a2 = $entry2nd ? (float) $entry2nd->pera : null;
+                        $a1 = $entry1st ? (float) ($entry1st['pera'] ?? 0) : null;
+                        $a2 = $entry2nd ? (float) ($entry2nd['pera'] ?? 0) : null;
                     }
                     break;
                 case 'deduction':
@@ -376,16 +380,18 @@ body {
                     $a2 = $amt($ded2nd, $code);
                     break;
                 case 'divider':
-                    $a1 = $entry1st ? (float) $entry1st->total_deductions : null;
-                    $a2 = $entry2nd ? (float) $entry2nd->total_deductions : null;
+                    // For cutoff split, calculate total deductions from the split arrays
+                    $a1 = $entry1st ? (float) (($entry1st['lwop_deduction'] ?? 0) + ($entry1st['tardiness'] ?? 0) + ($entry1st['undertime'] ?? 0)) : null;
+                    $a2 = $entry2nd ? (float) (($entry2nd['lwop_deduction'] ?? 0) + ($entry2nd['tardiness'] ?? 0) + ($entry2nd['undertime'] ?? 0)) : null;
                     break;
                 case 'net':
+                    // Calculate net from gross minus attendance deductions for each cutoff
                     if ($label === 'NET PAY 1-15') {
-                        $a1 = $entry1st ? (float) $entry1st->net_amount : null;
+                        $a1 = $entry1st ? (float) (($entry1st['gross_income'] ?? 0) - (($entry1st['lwop_deduction'] ?? 0) + ($entry1st['tardiness'] ?? 0) + ($entry1st['undertime'] ?? 0))) : null;
                         $a2 = null;
                     } else {
                         $a1 = null;
-                        $a2 = $entry2nd ? (float) $entry2nd->net_amount : null;
+                        $a2 = $entry2nd ? (float) (($entry2nd['gross_income'] ?? 0) - (($entry2nd['lwop_deduction'] ?? 0) + ($entry2nd['tardiness'] ?? 0) + ($entry2nd['undertime'] ?? 0))) : null;
                     }
                     break;
             }
@@ -399,9 +405,9 @@ body {
                 default   => 'row-deduction',
             };
 
-            // Highlight the column that belongs to the batch being viewed
-            $active1 = $cutoffIs1st  ? 'col-active' : '';
-            $active2 = !$cutoffIs1st ? 'col-active' : '';
+            // Phase 4: Both cutoffs shown equally (no active column highlighting)
+            $active1 = '';
+            $active2 = '';
         @endphp
 
         @if ($type === 'spacer')

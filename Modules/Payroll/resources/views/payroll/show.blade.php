@@ -369,8 +369,10 @@
         '', 'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December',
     ];
+    // Phase 5: full-month label — no cutoff half
     $periodLabel = ($months[$payroll->period_month] ?? '?')
-        . ' ' . ($payroll->cutoff === '1st' ? '1–15' : '16–30/31')
+        . ' ' . \Carbon\Carbon::parse($payroll->period_start)->format('j')
+        . '–' . \Carbon\Carbon::parse($payroll->period_end)->format('j')
         . ', ' . $payroll->period_year;
 
     $statusClass = match ($payroll->status) {
@@ -382,6 +384,7 @@
         'locked'             => 'badge-locked',
         default              => 'badge-draft',
     };
+    // Phase 5: pending_hr removed
     $statusLabels = [
         'draft'               => 'Draft',
         'computed'            => 'Computed',
@@ -406,9 +409,9 @@
                   && in_array($payroll->status, ['draft', 'computed']);
 
     $nextAction = null;
-    // CHANGED: hrmo removed — only payroll_officer submits to Accountant
+    // Phase 5: submit goes directly computed → pending_accountant (no pending_hr step)
     if (auth()->user()->hasRole('payroll_officer')
-        && in_array($payroll->status, ['draft', 'computed'])) {
+        && $payroll->status === 'computed') {
         $nextAction = [
             'label'  => 'Submit to Accountant',
             'route'  => route('payroll.submit', $payroll),
@@ -452,7 +455,7 @@
             <div class="page-header-left">
                 <h1>{{ $periodLabel }}</h1>
                 <p>
-                    {{ $payroll->cutoff }} cut-off ·
+                    Monthly payroll ·
                     <span class="badge {{ $statusClass }}">{{ $statusLabel }}</span>
                     · Created by {{ $payroll->creator->name ?? '—' }}
                     on {{ $payroll->created_at->format('M d, Y') }}
@@ -461,48 +464,38 @@
             <div class="d-flex gap-2 flex-wrap payroll-show-actions">
                 <a href="{{ route('payroll.index') }}" class="btn btn-outline btn-sm">← All Batches</a>
 
-    @if ($canPullAttendance && $canCompute)
-        {{-- Combined Pull Attendance & Compute Button --}}
-        <button type="button" class="btn btn-primary btn-sm" onclick="confirmPullAndCompute()">
-             Pull Attendance & Compute Payroll
-        </button>
-    @else
-        {{-- Fallback: Show original buttons if permissions differ --}}
-        @if ($canPullAttendance)
-            <form method="POST" action="{{ route('payroll.pullAttendance', $payroll) }}"
-                  onsubmit="return confirm('{{ $snapshotCount > 0 ? 'Re-pulling will reset any manual HR corrections. Continue?' : 'Pull attendance from HRIS for all active employees?' }}')">
-                @csrf
-                <button class="btn btn-outline btn-sm">
-                    {{ $snapshotCount > 0 ? '🔄 Re-pull Attendance' : '📥 Pull Attendance' }}
-                    @if ($snapshotCount > 0)
-                        <span style="font-size:0.72rem; opacity:0.8;">({{ $snapshotCount }}/{{ $activeCount }})</span>
-                    @endif
-                </button>
-            </form>
-        @endif
-
-        @if ($canCompute)
-            <form method="POST" action="{{ route('payroll.compute', $payroll) }}"
-                  onsubmit="return confirm('Run payroll computation for all active employees?\n\nExisting entries will be overwritten.')">
-                @csrf
-                @if ($snapshotCount === 0)
-                    <button class="btn btn-gold btn-sm" disabled title="Pull attendance first">
-                        ⚙ {{ $payroll->status === 'draft' ? 'Compute Payroll' : 'Re-compute' }}
-                    </button>
-                @else
-                    <button class="btn btn-gold btn-sm">
-                        ⚙ {{ $payroll->status === 'draft' ? 'Compute Payroll' : 'Re-compute' }}
-                    </button>
+    @if ($canPullAttendance)
+        {{-- Phase 5: separate Pull, Edit, and Compute buttons --}}
+        <form method="POST" action="{{ route('payroll.pullAttendance', $payroll) }}" id="pullAttendanceForm">
+            @csrf
+            <button type="button" class="btn btn-outline btn-sm" onclick="confirmPullAttendance()">
+                {{ $snapshotCount > 0 ? '🔄 Re-pull Attendance' : '📥 Pull Attendance' }}
+                @if ($snapshotCount > 0)
+                    <span style="font-size:0.72rem; opacity:0.8;">({{ $snapshotCount }}/{{ $activeCount }})</span>
                 @endif
-            </form>
-        @endif
+            </button>
+        </form>
+    @endif
+
+    @if ($canCompute)
+        <form method="POST" action="{{ route('payroll.compute', $payroll) }}" id="computeForm">
+            @csrf
+            @if ($snapshotCount === 0)
+                <button type="button" class="btn btn-gold btn-sm" disabled title="Pull attendance first">
+                    ⚙ {{ $payroll->status === 'draft' ? 'Compute Payroll' : 'Re-compute' }}
+                </button>
+            @else
+                <button type="button" class="btn btn-gold btn-sm" onclick="confirmCompute()">
+                    ⚙ {{ $payroll->status === 'draft' ? 'Compute Payroll' : 'Re-compute' }}
+                </button>
+            @endif
+        </form>
     @endif
 
             @if ($nextAction)
-                <form method="POST" action="{{ $nextAction['route'] }}"
-                      onsubmit="return confirm('{{ $nextAction['confirm'] }}')">
+                <form method="POST" action="{{ $nextAction['route'] }}" id="nextActionForm">
                     @csrf
-                    <button class="btn {{ $nextAction['class'] }} btn-sm">
+                    <button type="button" class="btn {{ $nextAction['class'] }} btn-sm" onclick="confirmNextAction()">
                         ✔ {{ $nextAction['label'] }}
                     </button>
                 </form>
@@ -548,14 +541,6 @@
     <div class="alert" style="background:#FAFBFF; border-color:var(--border); margin-top:14px;">
         <strong style="color:var(--navy);">Remarks:</strong> {{ $payroll->remarks }}
     </div>
-@endif
-
-{{-- Alerts --}}
-@if (session('success'))
-    <div class="alert alert-success">{{ session('success') }}</div>
-@endif
-@if (session('error'))
-    <div class="alert alert-error">{{ session('error') }}</div>
 @endif
 @if (session('warning'))
     <div class="alert alert-warning">{{ session('warning') }}</div>
@@ -643,6 +628,9 @@
                             <th class="text-center">Late (min)</th>
                             <th class="text-center">Undertime (min)</th>
                             <th class="text-center">Source</th>
+                            @if ($canCompute)
+                                <th class="text-center">Edit</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -671,6 +659,15 @@
                                         <span class="badge badge-draft">HRIS API</span>
                                     @endif
                                 </td>
+                                @if ($canCompute)
+                                    <td class="text-center">
+                                        <a href="{{ route('payroll.attendance.edit', [$payroll, $snap]) }}"
+                                           class="btn btn-outline btn-sm"
+                                           style="font-size:0.72rem; padding:2px 8px;">
+                                            ✏ Edit
+                                        </a>
+                                    </td>
+                                @endif
                             </tr>
                         @endforeach
                     </tbody>
@@ -1060,6 +1057,150 @@
 
 @section('scripts')
 <script>
+const snapshotCount = {{ $snapshotCount ?? 0 }};
+
+function confirmPullAttendance() {
+    const message = snapshotCount > 0 
+        ? 'Re-pulling will reset any manual HR corrections. Continue?' 
+        : 'Pull attendance from HRIS for all active employees?';
+    
+    Swal.fire({
+        title: 'Pull Attendance?',
+        text: message,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Pull Attendance',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#0F1B4C',
+        cancelButtonColor: '#6B7280',
+        reverseButtons: true,
+        focusCancel: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Show loading with progress bar
+            Swal.fire({
+                title: 'Pulling Attendance...',
+                html: '<div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div></div>',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Submit form via AJAX
+            const form = document.getElementById('pullAttendanceForm');
+            const formData = new FormData(form);
+            
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        title: 'Success!',
+                        text: data.message || 'Attendance pulled successfully.',
+                        icon: 'success',
+                        confirmButtonColor: '#0F1B4C'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'Error',
+                        text: data.message || 'Failed to pull attendance.',
+                        icon: 'error',
+                        confirmButtonColor: '#0F1B4C'
+                    });
+                }
+            })
+            .catch(error => {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'An error occurred while pulling attendance.',
+                    icon: 'error',
+                    confirmButtonColor: '#0F1B4C'
+                });
+            });
+        }
+    });
+}
+
+function confirmCompute() {
+    Swal.fire({
+        title: 'Compute Payroll?',
+        text: 'Run payroll computation for all active employees? Existing entries will be overwritten.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Compute',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#0F1B4C',
+        cancelButtonColor: '#6B7280',
+        reverseButtons: true,
+        focusCancel: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Show loading with progress bar
+            Swal.fire({
+                title: 'Computing Payroll...',
+                html: '<div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div></div>',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Submit form via AJAX
+            const form = document.getElementById('computeForm');
+            const formData = new FormData(form);
+            
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        title: 'Success!',
+                        text: data.message || 'Payroll computed successfully.',
+                        icon: 'success',
+                        confirmButtonColor: '#0F1B4C'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'Error',
+                        text: data.message || 'Failed to compute payroll.',
+                        icon: 'error',
+                        confirmButtonColor: '#0F1B4C'
+                    });
+                }
+            })
+            .catch(error => {
+                Swal.fire({
+                    title: 'Error',
+                    text: 'An error occurred while computing payroll.',
+                    icon: 'error',
+                    confirmButtonColor: '#0F1B4C'
+                });
+            });
+        }
+    });
+}
+
 function toggleDed(entryId) {
     const row    = document.getElementById('ded-row-' + entryId);
     const panel  = document.getElementById('ded-panel-' + entryId);
@@ -1221,6 +1362,84 @@ function submitPayslip() {
 document.getElementById('payslipModal').addEventListener('click', function(e) {
     if (e.target === this) closePayslipModal();
 });
+
+async function confirmNextAction() {
+    const form = document.getElementById('nextActionForm');
+    const confirmMessage = "{{ $nextAction['confirm'] ?? 'Are you sure?' }}";
+    
+    const result = await Swal.fire({
+        title: 'Confirm Action',
+        text: confirmMessage,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0F1B4C',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Yes, proceed',
+        cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+        Swal.fire({
+            title: '<span style="color:#0F1B4C;">Processing…</span>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        try {
+            // Ensure csrfToken is a string, not a function
+            const csrfToken = typeof window.csrfToken === 'function' ? window.csrfToken() : window.csrfToken;
+            
+            console.log('Submitting action to:', form.action);
+            const resp = await fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+                body: new FormData(form)
+            });
+
+            console.log('Response status:', resp.status, 'OK:', resp.ok);
+            
+            if (!resp.ok) {
+                const errorText = await resp.text();
+                console.error('Response not OK:', errorText);
+                throw new Error(`HTTP ${resp.status}: ${errorText}`);
+            }
+
+            const data = await resp.json();
+            console.log('Response data:', data);
+
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success',
+                    text: data.message || 'Action completed successfully.',
+                    confirmButtonColor: '#0F1B4C'
+                }).then(() => window.location.reload());
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action Failed',
+                    text: data.message || 'Unable to complete the action.',
+                    confirmButtonColor: '#0F1B4C'
+                });
+            }
+        } catch (error) {
+            console.error('Error submitting action:', error);
+            Swal.close();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: error.message || 'An error occurred while processing the action.',
+                confirmButtonColor: '#0F1B4C'
+            });
+        }
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // VIRTUAL SCROLLING FOR PAYROLL REGISTER TABLE
@@ -1394,7 +1613,9 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
     }
 
     async function confirmRemoveEntry(entryId) {
+        console.log('confirmRemoveEntry called with entryId:', entryId);
         const row = (window.virtualRowData || []).find(r => String(r.id) === String(entryId));
+        console.log('Found row:', row);
         const name = row?.employee_name || 'this employee';
 
         const result = await Swal.fire({
@@ -1426,26 +1647,69 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
         });
 
         const url = `/payroll/${window.payrollId}/entries/${entryId}`;
-        const resp = await fetch(url, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRF-TOKEN': window.csrfToken,
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json, text/html',
-            },
-        });
-
-        if (resp.ok) {
-            Swal.fire({
-                icon: 'success',
-                title: 'Removed',
-                confirmButtonColor: '#0F1B4C'
-            }).then(() => window.location.reload());
-        } else {
+        
+        if (!window.payrollId || !entryId) {
+            console.error('Invalid parameters:', { payrollId: window.payrollId, entryId });
+            Swal.close();
             Swal.fire({
                 icon: 'error',
-                title: 'Remove failed',
-                html: `<div style="color:#6b7280;">Unable to remove the employee from this batch.</div>`,
+                title: 'Error',
+                text: 'Invalid parameters for removal.',
+                confirmButtonColor: '#0F1B4C'
+            });
+            return;
+        }
+        
+        // Ensure csrfToken is a string, not a function
+        const csrfToken = typeof window.csrfToken === 'function' ? window.csrfToken() : window.csrfToken;
+        
+        try {
+            console.log('Removing entry:', entryId, 'URL:', url);
+            const headers = {
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+            };
+            console.log('Headers:', headers);
+            
+            const resp = await fetch(url, {
+                method: 'DELETE',
+                headers: headers,
+            });
+
+            console.log('Response status:', resp.status, 'OK:', resp.ok);
+            
+            if (!resp.ok) {
+                const errorText = await resp.text();
+                console.error('Response not OK:', errorText);
+                throw new Error(`HTTP ${resp.status}: ${errorText}`);
+            }
+
+            const data = await resp.json();
+            console.log('Response data:', data);
+
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Removed',
+                    text: data.message || 'Employee removed successfully.',
+                    confirmButtonColor: '#0F1B4C'
+                }).then(() => window.location.reload());
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Remove failed',
+                    text: data.message || 'Unable to remove the employee from this batch.',
+                    confirmButtonColor: '#0F1B4C'
+                });
+            }
+        } catch (error) {
+            console.error('Error removing entry:', error);
+            Swal.close(); // Close loading dialog first
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: error.message || 'An error occurred while removing the employee.',
                 confirmButtonColor: '#0F1B4C'
             });
         }

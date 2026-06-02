@@ -153,7 +153,6 @@ div#tab-active.active {
     .pr-table tr.pr-main-row:active { background: var(--bg); }
 
     /* Hide columns moved to detail panel */
-    .pr-table tr.pr-main-row td.col-cutoff,
     .pr-table tr.pr-main-row td.col-employees,
     .pr-table tr.pr-main-row td.col-gross,
     .pr-table tr.pr-main-row td.col-deductions,
@@ -274,7 +273,7 @@ div#tab-active.active {
 <div class="page-header">
     <div class="page-header-left">
         <h1>Regular Payroll Batches</h1>
-        <p>Semi-monthly payroll for all DOLE RO9 regular employees.</p>
+        <p>Monthly payroll for all DOLE RO9 regular employees.</p>
     </div>
 @canCreatePayroll
 <a href="{{ route('payroll.create') }}" class="btn btn-primary">
@@ -355,7 +354,7 @@ div#tab-active.active {
                     <thead>
                         <tr>
                             <th>Period</th>
-                            <th>Cut-off</th>
+
                             <th>Status</th>
                             <th class="text-right">Employees</th>
                             <th class="text-right">Total Gross</th>
@@ -374,7 +373,8 @@ div#tab-active.active {
                                 'July', 'August', 'September', 'October', 'November', 'December',
                             ];
                             $periodLabel = ($months[$batch->period_month] ?? '?')
-                                . ' ' . ($batch->cutoff === '1st' ? '1–15' : '16–30/31')
+                                . ' ' . \Carbon\Carbon::parse($batch->period_start)->format('j')
+                                . '–' . \Carbon\Carbon::parse($batch->period_end)->format('j')
                                 . ', ' . $batch->period_year;
 
                             $entryCount = $batch->entries_count ?? 0;
@@ -407,13 +407,9 @@ div#tab-active.active {
                         <tr class="pr-main-row" data-id="{{ $batch->id }}" onclick="togglePrRow(this)">
                             <td class="col-period">
                                 <span class="pr-period-label">{{ $periodLabel }}</span>
-                                <span class="pr-period-sub">{{ $batch->cutoff }} cut-off</span>
+                                <span class="pr-period-sub">Monthly · {{ $batch->period_year }}</span>
                             </td>
-                            <td class="col-cutoff">
-                                <span class="badge {{ $batch->cutoff === '1st' ? 'badge-computed' : 'badge-released' }}">
-                                    {{ $batch->cutoff }} Cut-off
-                                </span>
-                            </td>
+                            {{-- col-cutoff removed — no cutoff in monthly model --}}
                             <td class="col-status">
                                 <span class="badge {{ $statusClass }}">{{ $statusLabel }}</span>
                             </td>
@@ -448,7 +444,7 @@ div#tab-active.active {
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="button" class="btn btn-danger btn-sm"
-                                                        onclick="event.stopPropagation(); confirmDeletePayroll({{ $batch->id }}, '{{ $batch->period_year }}-{{ str_pad($batch->period_month, 2, '0', STR_PAD_LEFT) }}-{{ $batch->cutoff }}')">Delete</button>
+                                                        onclick="event.stopPropagation(); confirmDeletePayroll({{ $batch->id }}, '{{ $batch->period_year }}-{{ str_pad($batch->period_month, 2, '0', STR_PAD_LEFT) }}')">Delete</button>
                                             </form>
                                         @endif
                                     @endrole
@@ -461,14 +457,6 @@ div#tab-active.active {
                         <tr class="pr-detail-row" id="pr-detail-{{ $batch->id }}">
                             <td colspan="10">
                                 <div class="pr-detail-grid">
-                                    <div class="pr-detail-item">
-                                        <label>Cut-off</label>
-                                        <span>
-                                            <span class="badge {{ $batch->cutoff === '1st' ? 'badge-computed' : 'badge-released' }}">
-                                                {{ $batch->cutoff }} Cut-off
-                                            </span>
-                                        </span>
-                                    </div>
                                     <div class="pr-detail-item">
                                         <label>Employees</label>
                                         <span>{{ $entryCount }}</span>
@@ -501,7 +489,7 @@ div#tab-active.active {
                                        class="btn btn-outline btn-sm">View</a>
                                     @canCreatePayroll
                                         @if ($batch->status === 'draft')
-                                            <button type="button" class="btn btn-danger btn-sm" style="width:100%;" onclick="confirmDeletePayroll({{ $batch->id }}, '{{ $batch->period_year }}-{{ str_pad($batch->period_month, 2, '0', STR_PAD_LEFT) }}-{{ $batch->cutoff }}')">Delete</button>
+                                            <button type="button" class="btn btn-danger btn-sm" style="width:100%;" onclick="confirmDeletePayroll({{ $batch->id }}, '{{ $batch->period_year }}-{{ str_pad($batch->period_month, 2, '0', STR_PAD_LEFT) }}')">Delete</button>
                                         @endif
                                     @endcanCreatePayroll
                                 </div>
@@ -535,7 +523,7 @@ div#tab-active.active {
                     <thead>
                         <tr>
                             <th>Period</th>
-                            <th>Cut-off</th>
+
                             <th>Status</th>
                             <th class="text-right">Employees</th>
                             <th class="text-right">Total Gross</th>
@@ -554,7 +542,8 @@ div#tab-active.active {
                                 'July', 'August', 'September', 'October', 'November', 'December',
                             ];
                             $periodLabel = ($months[$batch->period_month] ?? '?')
-                                . ' ' . ($batch->cutoff === '1st' ? '1–15' : '16–30/31')
+                                . ' ' . \Carbon\Carbon::parse($batch->period_start)->format('j')
+                                . '–' . \Carbon\Carbon::parse($batch->period_end)->format('j')
                                 . ', ' . $batch->period_year;
 
                             $entryCount = $batch->entries_count ?? 0;
@@ -588,14 +577,10 @@ div#tab-active.active {
 
                             <td class="col-period">
                                 <span class="pr-period-label">{{ $periodLabel }}</span>
-                                <span class="pr-period-sub">{{ $batch->cutoff }} cut-off</span>
+                                <span class="pr-period-sub">Monthly · {{ $batch->period_year }}</span>
                             </td>
 
-                            <td class="col-cutoff">
-                                <span class="badge {{ $batch->cutoff === '1st' ? 'badge-computed' : 'badge-released' }}">
-                                    {{ $batch->cutoff }} Cut-off
-                                </span>
-                            </td>
+                            {{-- col-cutoff removed — no cutoff in monthly model --}}
 
                             <td class="col-status">
                                 <span class="badge {{ $statusClass }}">{{ $statusLabel }}</span>
@@ -643,14 +628,6 @@ div#tab-active.active {
                         <tr class="pr-detail-row" id="pr-detail-{{ $batch->id }}">
                             <td colspan="10">
                                 <div class="pr-detail-grid">
-                                    <div class="pr-detail-item">
-                                        <label>Cut-off</label>
-                                        <span>
-                                            <span class="badge {{ $batch->cutoff === '1st' ? 'badge-computed' : 'badge-released' }}">
-                                                {{ $batch->cutoff }} Cut-off
-                                            </span>
-                                        </span>
-                                    </div>
                                     <div class="pr-detail-item">
                                         <label>Employees</label>
                                         <span>{{ $entryCount }}</span>
