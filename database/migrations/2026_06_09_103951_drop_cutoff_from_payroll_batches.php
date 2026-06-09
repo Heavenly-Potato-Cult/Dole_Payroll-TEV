@@ -6,22 +6,17 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('employees', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
+        Schema::table('payroll_batches', function (Blueprint $table) {
+            $table->dropColumn('cutoff');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('employees');
+        Schema::table('payroll_batches', function (Blueprint $table) {
+            $table->string('cutoff', 10)->after('period_month');
+        });
     }
 };
