@@ -645,7 +645,8 @@
                 <h1>Deduction Types</h1>
                 <p class="db-greeting-location">Manage all deduction and loan types used across payroll and employee enrollments.</p>
             </div>
-            <div class="dt-header-actions">
+            <div class="dt-header-actions" style="display:flex;gap:10px;align-items:center;">
+                <a href="{{ route('deduction-type-categories.index') }}" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.4);">☰ Categories</a>
                 <a href="{{ route('deduction-types.create') }}" class="btn btn-primary">+ New Deduction Type</a>
             </div>
         </div>
@@ -769,7 +770,7 @@
                         data-status="{{ $type->is_active ? 'active' : 'inactive' }}">
 
                         {{-- Order --}}
-                        <td><span class="dt-order">{{ $type->display_order }}</span></td>
+                        <td><span class="dt-order">{{ $loop->iteration }}</span></td>
 
                         {{-- Code (immutable) --}}
                         <td><span class="code-chip">{{ $type->code }}</span></td>

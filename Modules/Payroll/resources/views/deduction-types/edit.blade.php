@@ -42,11 +42,7 @@
     </div>
     @endif
 
-    {{-- ══════════════════════════════════════════════════════════════════
-         ── Formula Rate Settings  (Tier 1 / is_computed only) ───────────
-         Shows configurable rate fields for PAG-IBIG, PhilHealth, GSIS.
-         WHT shows a read-only developer notice instead.
-         ══════════════════════════════════════════════════════════════════ --}}
+    {{-- ── Formula Rate Settings (Tier 1 / is_computed only) ─────────── --}}
     @if ($deductionType->is_computed)
     <div class="card" style="border-left:4px solid #059669;margin-bottom:20px;">
         <div class="card-header" style="background:#ecfdf5;">
@@ -62,7 +58,6 @@
                 $isWht        = in_array($code, ['WITHHOLDING_TAX', 'WHT']);
             @endphp
 
-            {{-- ── WHT: read-only notice ───────────────────────────────── --}}
             @if ($isWht)
             <div style="padding:14px 16px;background:#fef9c3;border:1px solid #fbbf24;border-radius:8px;font-size:0.85rem;color:#78350f;">
                 <div style="font-weight:700;margin-bottom:6px;">⚠ Developer-only configuration</div>
@@ -76,7 +71,6 @@
                 re-test the affected salary ranges before deploying.
             </div>
 
-            {{-- ── PAG-IBIG I ─────────────────────────────────────────── --}}
             @elseif ($isPagibig)
             <div style="font-size:0.82rem;color:var(--text-mid);margin-bottom:18px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
                 These are the contribution rates used to compute each employee's PAG-IBIG I
@@ -92,7 +86,6 @@
             </div>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
-
                 <div>
                     <label for="formula_rate"
                            style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
@@ -100,11 +93,9 @@
                     </label>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <input type="number"
-                               id="formula_rate"
-                               name="formula_rate"
+                               id="formula_rate" name="formula_rate"
                                value="{{ old('formula_rate', $deductionType->formula_rate !== null ? number_format((float)$deductionType->formula_rate * 100, 2, '.', '') : '') }}"
-                               min="0" max="100" step="0.01"
-                               placeholder="2.00"
+                               min="0" max="100" step="0.01" placeholder="2.00"
                                style="max-width:110px;">
                         <span style="font-size:0.82rem;color:var(--text-mid);">%</span>
                     </div>
@@ -115,7 +106,6 @@
                         Applied when salary &gt; threshold.<br>Statutory: <strong>2.00%</strong>
                     </div>
                 </div>
-
                 <div>
                     <label for="formula_rate_low"
                            style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
@@ -123,11 +113,9 @@
                     </label>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <input type="number"
-                               id="formula_rate_low"
-                               name="formula_rate_low"
+                               id="formula_rate_low" name="formula_rate_low"
                                value="{{ old('formula_rate_low', $deductionType->formula_rate_low !== null ? number_format((float)$deductionType->formula_rate_low * 100, 2, '.', '') : '') }}"
-                               min="0" max="100" step="0.01"
-                               placeholder="1.00"
+                               min="0" max="100" step="0.01" placeholder="1.00"
                                style="max-width:110px;">
                         <span style="font-size:0.82rem;color:var(--text-mid);">%</span>
                     </div>
@@ -138,72 +126,50 @@
                         Applied when salary ≤ threshold.<br>Statutory: <strong>1.00%</strong>
                     </div>
                 </div>
-
                 <div>
                     <label for="formula_rate_threshold"
                            style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
                         Salary Threshold (₱/month)
                     </label>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <span style="font-size:0.82rem;color:var(--text-mid);">₱</span>
-                        <input type="number"
-                               id="formula_rate_threshold"
-                               name="formula_rate_threshold"
-                               value="{{ old('formula_rate_threshold', $deductionType->formula_rate_threshold !== null ? number_format((float)$deductionType->formula_rate_threshold, 2, '.', '') : '') }}"
-                               min="0" step="0.01"
-                               placeholder="1500.00"
-                               style="max-width:130px;">
-                    </div>
+                    <input type="number"
+                           id="formula_rate_threshold" name="formula_rate_threshold"
+                           value="{{ old('formula_rate_threshold', $deductionType->formula_rate_threshold) }}"
+                           min="0" step="0.01" placeholder="1500.00"
+                           style="max-width:140px;">
                     @error('formula_rate_threshold')
                         <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
                     @enderror
                     <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
-                        Salaries at or below this amount use the Low-Salary Rate.<br>
-                        Statutory: <strong>₱1,500.00</strong>
+                        Low rate applies at or below this.<br>Statutory: <strong>₱1,500</strong>
                     </div>
                 </div>
-
                 <div>
                     <label for="formula_monthly_cap"
                            style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
-                        Monthly Cap on Employee Share (₱)
+                        Monthly Cap (₱)
                     </label>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <span style="font-size:0.82rem;color:var(--text-mid);">₱</span>
-                        <input type="number"
-                               id="formula_monthly_cap"
-                               name="formula_monthly_cap"
-                               value="{{ old('formula_monthly_cap', $deductionType->formula_monthly_cap !== null ? number_format((float)$deductionType->formula_monthly_cap, 2, '.', '') : '') }}"
-                               min="0" step="0.01"
-                               placeholder="100.00"
-                               style="max-width:130px;">
-                    </div>
+                    <input type="number"
+                           id="formula_monthly_cap" name="formula_monthly_cap"
+                           value="{{ old('formula_monthly_cap', $deductionType->formula_monthly_cap) }}"
+                           min="0" step="0.01" placeholder="100.00"
+                           style="max-width:140px;">
                     @error('formula_monthly_cap')
                         <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
                     @enderror
                     <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
-                        No employee's monthly contribution can exceed this.<br>
-                        Statutory: <strong>₱100.00/month</strong>
+                        Max monthly employee share before ÷2.<br>Statutory: <strong>₱100</strong>
                     </div>
                 </div>
-
             </div>
 
-            {{-- ── PhilHealth ──────────────────────────────────────────── --}}
             @elseif ($isPhilhealth)
             <div style="font-size:0.82rem;color:var(--text-mid);margin-bottom:18px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
-                These values set how PhilHealth premiums are calculated. The <strong>Premium Rate</strong>
-                is multiplied by the employee's monthly basic salary to get the total monthly premium.
-                The total is then clamped between the <strong>Minimum</strong> and <strong>Maximum</strong>
-                monthly amounts. The employee pays <strong>half</strong> of the total premium,
-                then that amount is divided by 2 for the cut-off deduction.
+                PhilHealth premium = basic salary × Premium Rate, clamped between the monthly
+                floor and ceiling. The employee pays 50% of the total; divide by 2 for the cut-off.
                 <br><br>
                 Current statutory values: <strong>5%</strong> rate · floor ₱500 · ceiling ₱5,000/month.
-                Update only when PhilHealth issues a new premium circular.
             </div>
-
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;">
-
                 <div>
                     <label for="formula_rate"
                            style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
@@ -211,82 +177,56 @@
                     </label>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <input type="number"
-                               id="formula_rate"
-                               name="formula_rate"
+                               id="formula_rate" name="formula_rate"
                                value="{{ old('formula_rate', $deductionType->formula_rate !== null ? number_format((float)$deductionType->formula_rate * 100, 2, '.', '') : '') }}"
-                               min="0" max="100" step="0.01"
-                               placeholder="5.00"
-                               style="max-width:100px;">
+                               min="0" max="100" step="0.01" placeholder="5.00"
+                               style="max-width:110px;">
                         <span style="font-size:0.82rem;color:var(--text-mid);">%</span>
                     </div>
                     @error('formula_rate')
                         <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
                     @enderror
-                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
-                        % of basic monthly salary.<br>Statutory: <strong>5.00%</strong>
-                    </div>
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">Statutory: <strong>5.00%</strong></div>
                 </div>
-
                 <div>
                     <label for="formula_monthly_floor"
                            style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
-                        Minimum Monthly Premium (₱)
+                        Monthly Floor (₱)
                     </label>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <span style="font-size:0.82rem;color:var(--text-mid);">₱</span>
-                        <input type="number"
-                               id="formula_monthly_floor"
-                               name="formula_monthly_floor"
-                               value="{{ old('formula_monthly_floor', $deductionType->formula_monthly_floor !== null ? number_format((float)$deductionType->formula_monthly_floor, 2, '.', '') : '') }}"
-                               min="0" step="0.01"
-                               placeholder="500.00"
-                               style="max-width:110px;">
-                    </div>
+                    <input type="number"
+                           id="formula_monthly_floor" name="formula_monthly_floor"
+                           value="{{ old('formula_monthly_floor', $deductionType->formula_monthly_floor) }}"
+                           min="0" step="0.01" placeholder="500.00"
+                           style="max-width:120px;">
                     @error('formula_monthly_floor')
                         <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
                     @enderror
-                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
-                        Lowest possible total monthly premium.<br>Statutory: <strong>₱500.00</strong>
-                    </div>
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">Statutory: <strong>₱500</strong></div>
                 </div>
-
                 <div>
                     <label for="formula_monthly_ceiling"
                            style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
-                        Maximum Monthly Premium (₱)
+                        Monthly Ceiling (₱)
                     </label>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <span style="font-size:0.82rem;color:var(--text-mid);">₱</span>
-                        <input type="number"
-                               id="formula_monthly_ceiling"
-                               name="formula_monthly_ceiling"
-                               value="{{ old('formula_monthly_ceiling', $deductionType->formula_monthly_ceiling !== null ? number_format((float)$deductionType->formula_monthly_ceiling, 2, '.', '') : '') }}"
-                               min="0" step="0.01"
-                               placeholder="5000.00"
-                               style="max-width:110px;">
-                    </div>
+                    <input type="number"
+                           id="formula_monthly_ceiling" name="formula_monthly_ceiling"
+                           value="{{ old('formula_monthly_ceiling', $deductionType->formula_monthly_ceiling) }}"
+                           min="0" step="0.01" placeholder="5000.00"
+                           style="max-width:120px;">
                     @error('formula_monthly_ceiling')
                         <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
                     @enderror
-                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
-                        Highest possible total monthly premium.<br>Statutory: <strong>₱5,000.00</strong>
-                    </div>
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">Statutory: <strong>₱5,000</strong></div>
                 </div>
-
             </div>
 
-            {{-- ── GSIS Life & Retirement ──────────────────────────────── --}}
             @elseif ($isGsis)
             <div style="font-size:0.82rem;color:var(--text-mid);margin-bottom:18px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
-                The <strong>Personal Share Rate</strong> is applied to the employee's monthly basic salary
-                to get their monthly GSIS contribution. The result is divided by 2 for the cut-off deduction.
-                For employees who worked fewer days than the full period, the system automatically prorates
-                the deduction.
+                GSIS personal share = basic salary × Personal Share Rate, prorated for incomplete
+                months, divided by 2 for the cut-off.
                 <br><br>
-                Current statutory value: <strong>9%</strong> (RA 8291, personal share).
-                Update only when GSIS or Congress amends the contribution rate.
+                Current statutory value: <strong>9%</strong>.
             </div>
-
             <div style="margin-bottom:16px;">
                 <label for="formula_rate"
                        style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
@@ -294,45 +234,31 @@
                 </label>
                 <div style="display:flex;align-items:center;gap:6px;">
                     <input type="number"
-                           id="formula_rate"
-                           name="formula_rate"
+                           id="formula_rate" name="formula_rate"
                            value="{{ old('formula_rate', $deductionType->formula_rate !== null ? number_format((float)$deductionType->formula_rate * 100, 2, '.', '') : '') }}"
-                           min="0" max="100" step="0.01"
-                           placeholder="9.00"
-                           style="max-width:120px;">
-                    <span style="font-size:0.82rem;color:var(--text-mid);">% of basic monthly salary</span>
+                           min="0" max="100" step="0.01" placeholder="9.00"
+                           style="max-width:110px;">
+                    <span style="font-size:0.82rem;color:var(--text-mid);">%</span>
                 </div>
                 @error('formula_rate')
                     <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
                 @enderror
-                <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">
-                    Statutory personal share: <strong>9.00%</strong> (RA 8291).
-                    The government's counterpart share is not deducted from the employee's pay and is not set here.
-                </div>
-            </div>
-
-            @endif
-
-            {{-- Shared advisory footer (not shown for WHT) --}}
-            @if (!$isWht)
-            <div style="margin-top:4px;padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:0.78rem;color:#92400e;">
-                <strong>⚠ Important:</strong>
-                These rate fields affect <strong>every employee</strong> on the next payroll run.
-                Double-check the values before saving. If you are unsure, contact your payroll consultant
-                or verify against the latest government circular before making changes.
+                <div style="font-size:0.72rem;color:var(--text-light);margin-top:3px;">Statutory: <strong>9.00%</strong></div>
             </div>
             @endif
 
         </div>
     </div>
     @endif
-    {{-- end Formula Rate Settings --}}
 
+    {{-- ── Main edit form ─────────────────────────────────────────────── --}}
     <div class="card">
         <div class="card-header"><h3>Deduction Details</h3></div>
         <div class="card-body">
 
-            <form method="POST" action="{{ route('deduction-types.update', $deductionType) }}" id="editTypeForm">
+            <form method="POST"
+                  action="{{ route('deduction-types.update', $deductionType) }}"
+                  id="editTypeForm">
             @csrf
             @method('PUT')
 
@@ -367,20 +293,42 @@
                     @enderror
                 </div>
 
-                {{-- Category --}}
+                {{-- Category — dynamic from DB --}}
                 <div style="margin-bottom:18px;">
-                    <label for="category" style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                    <label for="deduction_type_category_id"
+                           style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
                         Category <span style="color:#dc2626;">*</span>
                     </label>
-                    <select id="category" name="category" required>
-                        @foreach ($categoryLabels as $key => $label)
-                            <option value="{{ $key }}"
-                                    {{ old('category', $deductionType->category) === $key ? 'selected' : '' }}>
-                                {{ $label }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('category')
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <select id="deduction_type_category_id"
+                                name="deduction_type_category_id"
+                                required
+                                style="flex:1;">
+                            @foreach ($categories as $cat)
+                                <option value="{{ $cat->id }}"
+                                        data-code="{{ $cat->code }}"
+                                        {{ (string) old('deduction_type_category_id', $deductionType->deduction_type_category_id) === (string) $cat->id ? 'selected' : '' }}>
+                                    {{ $cat->name }}
+                                </option>
+                            @endforeach
+                            {{-- Fallback: if current category is no longer active, show it as a disabled option --}}
+                            @if (! $categories->contains('id', $deductionType->deduction_type_category_id) && $deductionType->deduction_type_category_id)
+                                @php $orphanCat = \Modules\Payroll\Models\DeductionTypeCategory::withTrashed()->find($deductionType->deduction_type_category_id); @endphp
+                                @if ($orphanCat)
+                                <option value="{{ $orphanCat->id }}" selected disabled>
+                                    {{ $orphanCat->name }} (inactive)
+                                </option>
+                                @endif
+                            @endif
+                        </select>
+                        <a href="{{ route('deduction-type-categories.index') }}"
+                           target="_blank"
+                           style="font-size:0.78rem;white-space:nowrap;color:var(--navy);text-decoration:underline;"
+                           title="Manage categories (opens in new tab)">
+                            Manage
+                        </a>
+                    </div>
+                    @error('deduction_type_category_id')
                         <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
                     @enderror
                 </div>
@@ -413,7 +361,6 @@
                     </div>
 
                     @if ($deductionType->is_computed)
-                    {{-- Computed types: override_amount acts as global fixed amount when locked --}}
                     <div style="padding:12px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin-bottom:14px;font-size:0.82rem;">
                         <strong style="color:#1e40af;">Formula type:</strong>
                         Setting an amount below and enabling <strong>Lock</strong> bypasses the formula
@@ -462,7 +409,6 @@
                     @endif
 
                     @else
-                    {{-- Manual types: default_amount + is_locked --}}
                     <div style="margin-bottom:14px;">
                         <label for="default_amount" style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
                             Global / Default Amount (₱ per cut-off)
@@ -483,7 +429,6 @@
                         </div>
                     </div>
 
-                    {{-- Percentage --}}
                     <div style="margin-bottom:14px;">
                         <label for="percentage" style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
                             Percentage of Basic Salary (%)
@@ -505,7 +450,7 @@
                     </div>
                     @endif
 
-                    {{-- ── Lock toggle — shown for ALL types ──────────────────── --}}
+                    {{-- Lock toggle — shown for ALL types --}}
                     <div id="lockToggleWrapper">
                         <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:0;">
                             <input type="checkbox"
@@ -524,7 +469,6 @@
                                         <strong>all employees</strong> — formula is bypassed entirely.
                                         <br>
                                         <strong>Unlocked:</strong> The formula runs normally per employee.
-                                        The Override Amount (if set) still applies as a per-type adjustment.
                                     @else
                                         <strong>Locked:</strong> The Global Amount above is applied to
                                         <strong>all employees</strong> automatically. HR cannot edit
@@ -591,18 +535,25 @@
 @section('scripts')
 <script>
 // ── Order conflict detection ──────────────────────────────────────────────
+// existingOrders is keyed by category CODE string (not ID)
 const existingOrders = @json($existingOrders);
 const loanCategories = @json($loanCategories);
 
-function checkOrderConflict() {
-    const cat    = document.getElementById('category').value;
-    const order  = parseInt(document.getElementById('display_order').value, 10);
-    const orders = existingOrders[cat] || [];
-    const warn   = document.getElementById('orderConflictWarning');
-    if (warn) warn.style.display = (orders.includes(order)) ? 'inline' : 'none';
+function selectedCategoryCode() {
+    const sel = document.getElementById('deduction_type_category_id');
+    const opt = sel ? sel.options[sel.selectedIndex] : null;
+    return opt ? (opt.dataset.code || '') : '';
 }
 
-const catEl = document.getElementById('category');
+function checkOrderConflict() {
+    const code   = selectedCategoryCode();
+    const order  = parseInt(document.getElementById('display_order').value, 10);
+    const orders = existingOrders[code] || [];
+    const warn   = document.getElementById('orderConflictWarning');
+    if (warn) warn.style.display = (!isNaN(order) && orders.includes(order)) ? 'inline' : 'none';
+}
+
+const catEl = document.getElementById('deduction_type_category_id');
 const ordEl = document.getElementById('display_order');
 if (catEl) catEl.addEventListener('change', checkOrderConflict);
 if (ordEl) ordEl.addEventListener('input', checkOrderConflict);

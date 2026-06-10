@@ -4,6 +4,7 @@ namespace Modules\Payroll\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -31,6 +32,17 @@ use Illuminate\Database\Eloquent\Builder;
  *    Loan-category types (category = 'loan' or 'caress') are ALWAYS treated
  *    as Tier 3 by DeductionService regardless of is_locked, because loan
  *    amortisations are inherently per-employee.
+ *
+ * ── Category columns ─────────────────────────────────────────────────────
+ * Two category columns coexist for backward compatibility:
+ *
+ *   category (string)               — runtime key used by DeductionService /
+ *                                     PayrollComputationService.  IMMUTABLE.
+ *                                     Maps to DeductionTypeCategory::code.
+ *
+ *   deduction_type_category_id (FK) — UI foreign key to deduction_type_categories.
+ *                                     Used by the CMS to display managed labels.
+ *                                     Kept in sync with `category` by the controller.
  */
 class DeductionType extends Model
 {
@@ -39,6 +51,7 @@ class DeductionType extends Model
         'name',
         'display_order',
         'category',
+        'deduction_type_category_id',    // ← new: FK to managed categories table
         'is_computed',
         'is_active',
         'notes',
@@ -56,18 +69,23 @@ class DeductionType extends Model
     ];
 
     protected $casts = [
-        'is_computed'        => 'boolean',
-        'is_active'          => 'boolean',
-        'is_locked'          => 'boolean',
-        'display_order'      => 'integer',
-        'override_amount'    => 'decimal:2',
-        'default_amount'     => 'decimal:2',
-        'percentage'         => 'decimal:2',
-        'min_override_amount'=> 'decimal:2',
-        'max_override_amount'=> 'decimal:2',
+        'is_computed'                 => 'boolean',
+        'is_active'                   => 'boolean',
+        'is_locked'                   => 'boolean',
+        'display_order'               => 'integer',
+        'deduction_type_category_id'  => 'integer',
+        'override_amount'             => 'decimal:2',
+        'default_amount'              => 'decimal:2',
+        'percentage'                  => 'decimal:2',
+        'min_override_amount'         => 'decimal:2',
+        'max_override_amount'         => 'decimal:2',
     ];
 
     // ── Category constants ────────────────────────────────────────────────
+    // IMPORTANT: Do NOT remove these constants.
+    // They are referenced by DeductionService::resolveDeductions() and
+    // PayrollComputationService::computeEntry() for tier/category matching.
+    // The managed DeductionTypeCategory records use the same code strings.
     const CAT_PAGIBIG    = 'pagibig';
     const CAT_PHILHEALTH = 'philhealth';
     const CAT_GSIS       = 'gsis';
@@ -83,6 +101,16 @@ class DeductionType extends Model
     const LOAN_CATEGORIES = [self::CAT_LOAN, self::CAT_CARESS];
 
     // ── Relationships ─────────────────────────────────────────────────────
+
+    /**
+     * The managed category record for this deduction type.
+     * May be null for legacy rows that pre-date the category CMS.
+     * Always fall back to the `category` string when this is null.
+     */
+    public function deductionTypeCategory(): BelongsTo
+    {
+        return $this->belongsTo(DeductionTypeCategory::class, 'deduction_type_category_id');
+    }
 
     public function enrollments(): HasMany
     {

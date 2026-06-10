@@ -65,21 +65,34 @@
                     @enderror
                 </div>
 
-                {{-- Category --}}
+                {{-- Category — dynamic from DB --}}
                 <div style="margin-bottom:18px;">
-                    <label for="category" style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
+                    <label for="deduction_type_category_id"
+                           style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
                         Category <span style="color:#dc2626;">*</span>
                     </label>
-                    <select id="category" name="category" required>
-                        <option value="">— Select a category —</option>
-                        @foreach ($categoryLabels as $key => $label)
-                            <option value="{{ $key }}"
-                                    {{ old('category') === $key ? 'selected' : '' }}>
-                                {{ $label }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('category')
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <select id="deduction_type_category_id"
+                                name="deduction_type_category_id"
+                                required
+                                style="flex:1;">
+                            <option value="">— Select a category —</option>
+                            @foreach ($categories as $cat)
+                                <option value="{{ $cat->id }}"
+                                        data-code="{{ $cat->code }}"
+                                        {{ (string) old('deduction_type_category_id') === (string) $cat->id ? 'selected' : '' }}>
+                                    {{ $cat->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <a href="{{ route('deduction-type-categories.create') }}"
+                           target="_blank"
+                           style="font-size:0.78rem;white-space:nowrap;color:var(--navy);text-decoration:underline;"
+                           title="Manage categories (opens in new tab)">
+                            + Manage
+                        </a>
+                    </div>
+                    @error('deduction_type_category_id')
                         <div style="color:#dc2626;font-size:0.78rem;margin-top:4px;">{{ $message }}</div>
                     @enderror
                 </div>
@@ -111,7 +124,7 @@
 
                 <hr style="border:none;border-top:1px solid var(--border);margin:24px 0;">
 
-                {{-- ── Global Amount & Lock section ────────────────────────── --}}
+                {{-- Global Amount & Lock --}}
                 <div style="margin-bottom:18px;">
                     <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:12px;">
                         Global Amount &amp; Enrollment Mode
@@ -234,24 +247,31 @@
 
 @section('scripts')
 <script>
-// ── Order conflict detection ──────────────────────────────────────────────
+// ── Build existing-orders map keyed by category code ─────────────────────
 const existingOrders = @json($existingOrders);
 const loanCategories = @json($loanCategories);
 
-function checkOrderConflict() {
-    const cat    = document.getElementById('category').value;
-    const order  = parseInt(document.getElementById('display_order').value, 10);
-    const orders = existingOrders[cat] || [];
-    const warn   = document.getElementById('orderConflictWarning');
-    warn.style.display = (orders.includes(order)) ? 'inline' : 'none';
+// Map category option id → code for conflict + loan checks
+function selectedCategoryCode() {
+    const sel = document.getElementById('deduction_type_category_id');
+    const opt = sel.options[sel.selectedIndex];
+    return opt ? (opt.dataset.code || '') : '';
 }
 
-document.getElementById('category').addEventListener('change', function () {
+function checkOrderConflict() {
+    const code   = selectedCategoryCode();
+    const order  = parseInt(document.getElementById('display_order').value, 10);
+    const orders = existingOrders[code] || [];
+    const warn   = document.getElementById('orderConflictWarning');
+    warn.style.display = (!isNaN(order) && orders.includes(order)) ? 'inline' : 'none';
+}
+
+document.getElementById('deduction_type_category_id').addEventListener('change', function () {
     checkOrderConflict();
-    // Show/hide loan lock warning
+    const code     = selectedCategoryCode();
     const loanWarn = document.getElementById('loanLockWarning');
     if (loanWarn) {
-        loanWarn.style.display = loanCategories.includes(this.value) ? 'block' : 'none';
+        loanWarn.style.display = loanCategories.includes(code) ? 'block' : 'none';
     }
 });
 document.getElementById('display_order').addEventListener('input', checkOrderConflict);

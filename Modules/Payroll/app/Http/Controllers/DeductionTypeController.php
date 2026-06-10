@@ -4,6 +4,7 @@ namespace Modules\Payroll\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Modules\Payroll\Models\DeductionType;
+use Modules\Payroll\Models\DeductionTypeCategory;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -36,6 +37,13 @@ use Illuminate\Validation\Rule;
  *  Tier 3 — Per-employee  (is_computed = false, is_locked = false OR loan category)
  *    default_amount (if set) pre-fills the enrollment form. HR may override
  *    per employee. Used for loans and variable deductions.
+ *
+ * ── Category strategy ────────────────────────────────────────────────────────
+ * categoryLabels() now loads from deduction_type_categories, falling back to
+ * the hardcoded array when the table is unavailable (e.g. before migration).
+ * On store/update, BOTH `category` (the runtime string) and
+ * `deduction_type_category_id` (the FK) are written so the two columns stay
+ * in sync.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 class DeductionTypeController extends Controller
@@ -43,11 +51,12 @@ class DeductionTypeController extends Controller
     /** Display the full list of deduction types, grouped by category. */
     public function index()
     {
-        $types = DeductionType::orderBy('display_order')
+        $types = DeductionType::with('deductionTypeCategory')
+            ->orderBy('display_order')
             ->orderBy('name')
             ->get();
 
-        $grouped = $types->groupBy('category');
+        $grouped        = $types->groupBy('category');
         $categoryLabels = self::categoryLabels();
 
         return view('payroll::deduction-types.index', compact('grouped', 'categoryLabels'));
@@ -56,8 +65,11 @@ class DeductionTypeController extends Controller
     /** Show the create form. */
     public function create()
     {
-        $categoryLabels = self::fallbackCategoryLabels();
-        $nextOrder      = DeductionType::max('display_order') + 1;
+        $categories  = self::loadActiveCategories();
+        $categoryLabels = $categories->pluck('name', 'code')->toArray()
+                          ?: self::fallbackCategoryLabels();
+
+        $nextOrder = DeductionType::max('display_order') + 1;
 
         $existingOrders = DeductionType::all()
             ->groupBy('category')
@@ -67,7 +79,7 @@ class DeductionTypeController extends Controller
         $loanCategories = DeductionType::LOAN_CATEGORIES;
 
         return view('payroll::deduction-types.create',
-            compact('categoryLabels', 'nextOrder', 'existingOrders', 'loanCategories'));
+            compact('categories', 'categoryLabels', 'nextOrder', 'existingOrders', 'loanCategories'));
     }
 
     /**
@@ -80,24 +92,25 @@ class DeductionTypeController extends Controller
      */
     public function store(Request $request)
     {
-        $validKeys = array_keys(self::fallbackCategoryLabels());
+        $validCodes = self::loadActiveCategories()->pluck('code')->toArray()
+                      ?: array_keys(self::fallbackCategoryLabels());
 
         $data = $request->validate([
-            'code'           => [
+            'code' => [
                 'required',
                 'string',
                 'max:50',
                 'regex:/^[A-Z0-9_]+$/',
                 'unique:deduction_types,code',
             ],
-            'name'           => 'required|string|max:200',
-            'category'       => ['required', Rule::in($validKeys)],
-            'display_order'  => [
+            'name'                       => 'required|string|max:200',
+            'deduction_type_category_id' => ['required', 'integer', 'exists:deduction_type_categories,id'],
+            'display_order' => [
                 'required',
                 'integer',
                 'min:0',
                 function ($attribute, $value, $fail) use ($request) {
-                    $exists = DeductionType::where('category', $request->input('category'))
+                    $exists = DeductionType::where('category', $this->categoryCodeFromId($request->input('deduction_type_category_id')))
                         ->where('display_order', $value)
                         ->exists();
                     if ($exists) {
@@ -111,9 +124,12 @@ class DeductionTypeController extends Controller
             'percentage'     => ['nullable', 'numeric', 'min:0', 'max:100', 'regex:/^\d+(\.\d{1,2})?$/'],
         ]);
 
-        $data['is_computed'] = false;
-        $data['is_active']   = true;
-        $data['is_locked']   = (bool) ($data['is_locked'] ?? false);
+        // Resolve the category string from the FK
+        $data['category'] = $this->categoryCodeFromId($data['deduction_type_category_id']);
+
+        $data['is_computed']    = false;
+        $data['is_active']      = true;
+        $data['is_locked']      = (bool) ($data['is_locked'] ?? false);
         $data['default_amount'] = $data['default_amount'] ?? null;
 
         DeductionType::create($data);
@@ -125,7 +141,9 @@ class DeductionTypeController extends Controller
     /** Show the edit form. */
     public function edit(DeductionType $deductionType)
     {
-        $categoryLabels = self::fallbackCategoryLabels();
+        $categories     = self::loadActiveCategories();
+        $categoryLabels = $categories->pluck('name', 'code')->toArray()
+                          ?: self::fallbackCategoryLabels();
 
         $existingOrders = DeductionType::where('id', '!=', $deductionType->id)
             ->get()
@@ -137,7 +155,7 @@ class DeductionTypeController extends Controller
         $loanCategories     = DeductionType::LOAN_CATEGORIES;
 
         return view('payroll::deduction-types.edit',
-            compact('deductionType', 'categoryLabels',
+            compact('deductionType', 'categories', 'categoryLabels',
                     'existingOrders', 'formulaDescription', 'loanCategories'));
     }
 
@@ -161,17 +179,16 @@ class DeductionTypeController extends Controller
      */
     public function update(Request $request, DeductionType $deductionType)
     {
-        $validKeys = array_keys(self::fallbackCategoryLabels());
-
         $data = $request->validate([
-            'name'            => 'required|string|max:200',
-            'category'        => ['required', Rule::in($validKeys)],
-            'display_order'   => [
+            'name'                       => 'required|string|max:200',
+            'deduction_type_category_id' => ['required', 'integer', 'exists:deduction_type_categories,id'],
+            'display_order' => [
                 'required',
                 'integer',
                 'min:0',
                 function ($attribute, $value, $fail) use ($request, $deductionType) {
-                    $exists = DeductionType::where('category', $request->input('category'))
+                    $catCode = $this->categoryCodeFromId($request->input('deduction_type_category_id'));
+                    $exists = DeductionType::where('category', $catCode)
                         ->where('display_order', $value)
                         ->where('id', '!=', $deductionType->id)
                         ->exists();
@@ -180,88 +197,58 @@ class DeductionTypeController extends Controller
                     }
                 },
             ],
-            'notes'           => 'nullable|string|max:500',
-
-            // Global amount + lock (all types)
-            'default_amount'  => ['nullable', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
-            'is_locked'       => 'nullable|boolean',
-
-            // Percentage-based deduction (manual types)
-            'percentage'      => ['nullable', 'numeric', 'min:0', 'max:100', 'regex:/^\d+(\.\d{1,2})?$/'],
-
-            // Tier 1 formula override (is_computed types only)
-            'is_computed'     => 'nullable|boolean',
+            'is_active'      => 'nullable|boolean',
+            'notes'          => 'nullable|string|max:500',
+            'default_amount' => ['nullable', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
+            'is_locked'      => 'nullable|boolean',
+            'percentage'     => ['nullable', 'numeric', 'min:0', 'max:100', 'regex:/^\d+(\.\d{1,2})?$/'],
+            // Tier 1 formula override fields (validated but only applied for is_computed types)
             'override_amount' => ['nullable', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
-            'override_note'   => 'nullable|string|max:300',
+            'override_note'   => 'nullable|string|max:500',
             'clear_override'  => 'nullable|boolean',
-
-            // ── Formula rate columns (Tier 1 / is_computed types only) ──
-            // Accepted as percentages in the UI (0–100), stored as decimals (÷100).
-            // PAG-IBIG: formula_rate, formula_rate_low, formula_rate_threshold, formula_monthly_cap
-            // PhilHealth: formula_rate, formula_monthly_floor, formula_monthly_ceiling
-            // GSIS: formula_rate
-            // WHT: none — intentionally excluded
-            'formula_rate'           => ['nullable', 'numeric', 'min:0', 'max:100',
-                                         'regex:/^\d+(\.\d{1,2})?$/'],
-            'formula_rate_low'       => ['nullable', 'numeric', 'min:0', 'max:100',
-                                         'regex:/^\d+(\.\d{1,2})?$/'],
-            'formula_rate_threshold' => ['nullable', 'numeric', 'min:0',
-                                         'regex:/^\d+(\.\d{1,2})?$/'],
-            'formula_monthly_floor'  => ['nullable', 'numeric', 'min:0',
-                                         'regex:/^\d+(\.\d{1,2})?$/'],
-            'formula_monthly_ceiling'=> ['nullable', 'numeric', 'min:0',
-                                         'regex:/^\d+(\.\d{1,2})?$/'],
-            'formula_monthly_cap'    => ['nullable', 'numeric', 'min:0',
-                                         'regex:/^\d+(\.\d{1,2})?$/'],
+            // formula_rate_* (submitted as percentages, stored as decimals)
+            'formula_rate'           => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'formula_rate_low'       => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'formula_rate_threshold' => ['nullable', 'numeric', 'min:0'],
+            'formula_monthly_floor'  => ['nullable', 'numeric', 'min:0'],
+            'formula_monthly_ceiling'=> ['nullable', 'numeric', 'min:0'],
+            'formula_monthly_cap'    => ['nullable', 'numeric', 'min:0'],
+            // WHT min/max override
+            'min_override_amount' => ['nullable', 'numeric', 'min:0'],
+            'max_override_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        // ── Additional cross-field validation for formula rates ───────────
-        // Only enforce when the type is computed and this is not WHT.
-        $isComputedEdit = (bool) ($data['is_computed'] ?? $deductionType->is_computed);
-        $isWhtCode      = in_array($deductionType->code, ['WITHHOLDING_TAX', 'WHT']);
-        $isPagibigCode  = in_array($deductionType->code, ['PAG_IBIG_1', 'PAGIBIG_1']);
-
-        if ($isComputedEdit && !$isWhtCode) {
-            // Ensure low rate does not exceed main rate (PAG-IBIG only)
-            if ($isPagibigCode
-                && isset($data['formula_rate'], $data['formula_rate_low'])
-                && (float) $data['formula_rate_low'] > (float) $data['formula_rate']
-            ) {
-                return back()
-                    ->withInput()
-                    ->withErrors(['formula_rate_low' =>
-                        'The Low-Salary Rate cannot be higher than the Main Rate.']);
-            }
-
-            // Ensure floor does not exceed ceiling (PhilHealth only)
-            if ($deductionType->code === 'PHILHEALTH'
-                && isset($data['formula_monthly_floor'], $data['formula_monthly_ceiling'])
-                && (float) $data['formula_monthly_floor'] > (float) $data['formula_monthly_ceiling']
-            ) {
-                return back()
-                    ->withInput()
-                    ->withErrors(['formula_monthly_floor' =>
-                        'The Minimum Monthly Premium cannot be higher than the Maximum Monthly Premium.']);
-            }
-        }
-
-        // ── Build the update payload ──────────────────────────────────────
-        $newIsComputed = (bool) ($data['is_computed'] ?? $deductionType->is_computed);
-        $newIsLocked   = (bool) ($data['is_locked'] ?? false);
+        // Resolve category string from FK and keep in sync
+        $categoryCode = $this->categoryCodeFromId($data['deduction_type_category_id']);
 
         $updateData = [
-            'name'           => $data['name'],
-            'category'       => $data['category'],
-            'display_order'  => $data['display_order'],
-            'notes'          => $data['notes'] ?? null,
-            'is_computed'    => $newIsComputed,
-            'is_locked'      => $newIsLocked,
-            'default_amount' => $data['default_amount'] ?? null,
-            'percentage'     => $data['percentage'] ?? null,
+            'name'                       => $data['name'],
+            'category'                   => $categoryCode,
+            'deduction_type_category_id' => $data['deduction_type_category_id'],
+            'display_order'              => $data['display_order'],
+            'is_active'                  => (bool) ($data['is_active'] ?? $deductionType->is_active),
+            'notes'                      => $data['notes'] ?? null,
+            'default_amount'             => $data['default_amount'] ?? null,
+            'is_locked'                  => (bool) ($data['is_locked'] ?? false),
+            'percentage'                 => $data['percentage'] ?? null,
         ];
 
-        // ── Tier 1: formula override handling ────────────────────────────
+        // WHT min/max overrides (available for all non-computed types)
+        if (array_key_exists('min_override_amount', $data)) {
+            $updateData['min_override_amount'] = $data['min_override_amount'];
+        }
+        if (array_key_exists('max_override_amount', $data)) {
+            $updateData['max_override_amount'] = $data['max_override_amount'];
+        }
+
+        $newIsComputed = $deductionType->is_computed; // is_computed is immutable via UI
+        $newIsLocked   = $updateData['is_locked'];
+
+        $isPagibigCode = in_array($deductionType->code, ['PAG_IBIG_1', 'PAGIBIG_1']);
+        $isWhtCode     = in_array($deductionType->code, ['WITHHOLDING_TAX', 'WHT']);
+
         if ($newIsComputed) {
+            // ── Tier 1: handle formula override ──────────────────────────
             if (! empty($data['clear_override'])) {
                 $updateData['override_amount'] = null;
                 $updateData['override_note']   = null;
@@ -271,20 +258,12 @@ class DeductionTypeController extends Controller
             }
 
             // ── formula_rate_* columns ────────────────────────────────────
-            // Only persist when the type is computed AND not WHT.
-            // Rates submitted as percentages (e.g. 2.00) → stored as decimals (0.0200).
-            // Columns irrelevant to a given code are left unchanged (not cleared)
-            // so that an admin changing just the main rate doesn't accidentally
-            // null out the threshold or cap values.
             if (! $isWhtCode) {
-                // formula_rate applies to PAG-IBIG, PhilHealth, and GSIS
                 if (array_key_exists('formula_rate', $data)) {
                     $updateData['formula_rate'] = $data['formula_rate'] !== null
                         ? round((float) $data['formula_rate'] / 100, 4)
                         : null;
                 }
-
-                // PAG-IBIG-only columns
                 if ($isPagibigCode) {
                     if (array_key_exists('formula_rate_low', $data)) {
                         $updateData['formula_rate_low'] = $data['formula_rate_low'] !== null
@@ -298,8 +277,6 @@ class DeductionTypeController extends Controller
                         $updateData['formula_monthly_cap'] = $data['formula_monthly_cap'] ?? null;
                     }
                 }
-
-                // PhilHealth-only columns
                 if ($deductionType->code === 'PHILHEALTH') {
                     if (array_key_exists('formula_monthly_floor', $data)) {
                         $updateData['formula_monthly_floor'] = $data['formula_monthly_floor'] ?? null;
@@ -313,9 +290,6 @@ class DeductionTypeController extends Controller
             // Switching to manual — clear any formula override
             $updateData['override_amount'] = null;
             $updateData['override_note']   = null;
-            // formula_rate_* columns are intentionally NOT cleared when switching
-            // a type to manual: the data is harmless there and avoids accidental
-            // data loss if someone toggles is_computed back and forth.
         }
 
         $deductionType->update($updateData);
@@ -372,11 +346,34 @@ class DeductionTypeController extends Controller
 
     // ── Shared helpers ─────────────────────────────────────────────────────
 
-    public static function categoryLabels(): array
+    /**
+     * Returns an active-ordered collection of DeductionTypeCategory models.
+     * Returns an empty collection if the table does not exist yet (pre-migration).
+     */
+    public static function loadActiveCategories()
     {
-        return self::fallbackCategoryLabels();
+        try {
+            return DeductionTypeCategory::active()->ordered()->get();
+        } catch (\Throwable) {
+            return collect();
+        }
     }
 
+    /**
+     * Returns ['code' => 'Label'] map for use in views and validation.
+     * Prefers live DB data; falls back to hardcoded array.
+     */
+    public static function categoryLabels(): array
+    {
+        $dbLabels = self::loadActiveCategories()->pluck('name', 'code')->toArray();
+        return $dbLabels ?: self::fallbackCategoryLabels();
+    }
+
+    /**
+     * Hardcoded fallback — used before migration runs or when the DB is
+     * unavailable.  Also used by DeductionService / PayrollComputationService
+     * indirectly (they match on the code string, not this array).
+     */
     public static function fallbackCategoryLabels(): array
     {
         return [
@@ -392,11 +389,25 @@ class DeductionTypeController extends Controller
     }
 
     /**
+     * Looks up the category `code` string for a given category ID.
+     * Falls back to 'misc' if the ID is not found.
+     */
+    protected function categoryCodeFromId(mixed $id): string
+    {
+        if (! $id) {
+            return 'misc';
+        }
+        try {
+            $cat = DeductionTypeCategory::withTrashed()->find((int) $id);
+            return $cat?->code ?? 'misc';
+        } catch (\Throwable) {
+            return 'misc';
+        }
+    }
+
+    /**
      * Human-readable formula description for the edit page preview panel.
      * Returns null for non-computed / unknown codes.
-     *
-     * The formula strings reference the DB-configurable rate columns so
-     * users understand which numbers in the description they can change.
      */
     public static function formulaDescription(string $code): ?array
     {
