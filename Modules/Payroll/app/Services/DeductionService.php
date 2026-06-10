@@ -209,13 +209,16 @@ class DeductionService
                 continue;
             }
 
-            // ── Fix 2: Deduplicate PAG-IBIG alias codes ───────────────────
-            // If this code belongs to the PAG-IBIG group AND we have already
-            // added a PAG-IBIG line, skip this one.
-            $isPagibigCode = in_array($type->code, self::PAGIBIG_GROUP_CODES);
-            if ($isPagibigCode && $pagibigGroupResolved) {
-                continue;
-            }
+// ── Fix 2: Deduplicate PAG-IBIG alias codes ───────────────────
+// Mark the group resolved on FIRST ENCOUNTER (not just when amount > 0),
+// so a zero-resolving first record still blocks the alias from sneaking through.
+$isPagibigCode = in_array($type->code, self::PAGIBIG_GROUP_CODES);
+if ($isPagibigCode && $pagibigGroupResolved) {
+    continue;
+}
+if ($isPagibigCode) {
+    $pagibigGroupResolved = true;
+}
 
             $amount       = 0.00;
             $isOverridden = false;
@@ -272,10 +275,6 @@ class DeductionService
                     'is_global'         => $isGlobal,
                 ];
 
-                // Mark PAG-IBIG group as resolved so the alias code is skipped
-                if ($isPagibigCode) {
-                    $pagibigGroupResolved = true;
-                }
             }
         }
 
