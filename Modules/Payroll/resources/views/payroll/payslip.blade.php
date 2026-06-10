@@ -3,18 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-<title>Payslips — {{ $periodLabel }}</title>
+<title>Payslip — {{ $periodLabel }}</title>
 <style>
 /* ================================================================
-   DOLE RO9 Payslip — DomPDF Stylesheet
-   A4 Portrait · Two payslip copies side-by-side per employee
-   Each employee starts on its own page (page-break-after).
+   DOLE RO9 Payslip — DomPDF Stylesheet (v7 · Monthly)
+   A4 Portrait · Two payslip copies side-by-side
    Layout: 46% slip | 8% divider | 46% slip = 100%
+   Earnings/Deductions: single amount column (monthly total)
+   Net Pay footer: three columns — 1–15 | 16–end | TOTAL
 ================================================================ */
 
-@page {
-    margin: 8mm 6mm 6mm 6mm;
-}
+@page { margin: 8mm 6mm 6mm 6mm; }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -26,29 +25,17 @@ body {
     line-height: 1.35;
 }
 
-/* ── Page break between employees ── */
-.employee-page {
-    page-break-after: always;
-}
-.employee-page:last-child {
-    page-break-after: avoid;
-}
-
-/* ─────────────────────────────────────────────
-   OUTER LAYOUT: 46% | 8% | 46% = 100%
-───────────────────────────────────────────── */
+/* ─── OUTER LAYOUT ─── */
 .two-col {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
 }
-
 .slip-cell {
     width: 46%;
     vertical-align: top;
     padding: 0;
 }
-
 .col-divider {
     width: 8%;
     vertical-align: top;
@@ -57,17 +44,15 @@ body {
     border-left: 1.2px dashed #9BADD0;
     border-right: 1.2px dashed #9BADD0;
 }
-
 .divider-scissors {
     display: block;
-    text-align: center;
     font-size: 9pt;
     color: #9BADD0;
     padding-top: 3px;
     line-height: 1;
 }
 
-/* ── Copy badge ── */
+/* ─── Copy badge ─── */
 .copy-badge {
     text-align: center;
     font-size: 5.5pt;
@@ -78,9 +63,7 @@ body {
     padding: 0 0 2px 0;
 }
 
-/* ─────────────────────────────────────────────
-   PAYSLIP CARD
-───────────────────────────────────────────── */
+/* ─── PAYSLIP CARD ─── */
 .slip {
     width: 100%;
     border: 1px solid #1A2B6B;
@@ -88,7 +71,6 @@ body {
     table-layout: fixed;
     border-collapse: collapse;
 }
-
 .slip > tbody > tr > td { padding: 0; }
 
 /* ── Header ── */
@@ -98,19 +80,17 @@ body {
     text-align: center;
     background: #fff;
 }
-
 .header-logo {
     display: block;
     margin: 0 auto 3px auto;
     width: 34px;
     height: 34px;
 }
-
 .slip-header .republic    { font-size: 5.5pt; font-style: italic; color: #666; }
 .slip-header .agency      { font-size: 7.5pt; font-weight: bold; color: #1A2B6B; line-height: 1.25; }
 .slip-header .ro          { font-size: 6.2pt; color: #444; }
 .slip-header .payslip-for { margin-top: 2px; font-size: 7pt; font-weight: bold; letter-spacing: 0.1em; color: #1A2B6B; }
-.slip-header .period-label{ font-size: 6.2pt; color: #555; }
+.slip-header .period-label { font-size: 6.2pt; color: #555; }
 
 /* ── Employee info strip ── */
 .slip-employee {
@@ -118,35 +98,17 @@ body {
     padding: 2px 4px;
     background: #F3F5FC;
 }
-
 .slip-employee table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-
 .slip-employee td { font-size: 6.2pt; padding: 0.8px 2px; vertical-align: top; overflow: hidden; }
-
 .slip-employee .lbl { width: 44px; color: #777; font-size: 5.5pt; white-space: nowrap; }
 .slip-employee .val { font-weight: bold; color: #0D1C55; word-wrap: break-word; }
 
-/* ── Cut-off column sub-headers ── */
-.col-headers {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-    border-bottom: 1px solid #1A2B6B;
-    background: #E6EAF7;
-}
-
-.col-headers td { padding: 1.8px 3px; font-size: 6pt; font-weight: bold; color: #1A2B6B; text-align: right; }
-.col-headers .c-label { text-align: left; width: 54%; }
-.col-headers .c-1st,
-.col-headers .c-2nd   { width: 23%; }
-
-/* ── Rows table ── */
+/* ── Rows table (single-amount: earnings + deductions) ── */
 .slip-rows {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
 }
-
 .slip-rows td {
     padding: 1.2px 3px;
     font-size: 6.5pt;
@@ -154,15 +116,12 @@ body {
     border-bottom: 1px solid #ECECEC;
     overflow: hidden;
 }
-
-.slip-rows .c-label { width: 54%; color: #222; }
-.slip-rows .c-1st,
-.slip-rows .c-2nd   { width: 23%; text-align: right; font-size: 6.3pt; word-wrap: break-word; overflow: hidden; }
+.slip-rows .c-label { width: 70%; color: #222; }
+.slip-rows .c-amt   { width: 30%; text-align: right; font-size: 6.3pt; word-wrap: break-word; }
 
 /* Income rows */
 .row-income .c-label { font-weight: bold; font-size: 6.8pt; color: #0D1C55; }
-.row-income .c-1st,
-.row-income .c-2nd   { font-weight: bold; color: #0D1C55; }
+.row-income .c-amt   { font-weight: bold; color: #0D1C55; }
 
 /* Section banner */
 .row-spacer td {
@@ -178,7 +137,7 @@ body {
 /* Sub-rows */
 .row-sub .c-label { padding-left: 8px; color: #555; font-style: italic; font-size: 6.2pt; }
 
-/* TOTAL row */
+/* TOTAL DEDUCTIONS row */
 .row-divider td {
     background: #E2E7F5;
     font-weight: bold;
@@ -187,38 +146,54 @@ body {
     border-bottom: 1px solid #7A90CC;
 }
 
-/* NET PAY rows */
-.row-net td { border-bottom: 1px solid #1A2B6B; }
+.amount-zero { color: #ccc; }
 
-.row-net .c-label {
+/* ── NET PAY footer table (three columns: 1-15 | 16-end | TOTAL) ── */
+.net-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+.net-table td {
+    border-bottom: 1px solid #1A2B6B;
+    padding: 0;
+}
+
+/* Header sub-row inside net table */
+.net-col-header td {
+    background: #E6EAF7;
+    font-size: 5.8pt;
+    font-weight: bold;
+    color: #1A2B6B;
+    text-align: right;
+    padding: 1.5px 3px;
+    border-bottom: 1px solid #1A2B6B;
+}
+.net-col-header .nh-label { text-align: left; width: 40%; }
+.net-col-header .nh-1st   { width: 20%; }
+.net-col-header .nh-2nd   { width: 20%; }
+.net-col-header .nh-tot   { width: 20%; }
+
+/* Net pay value row */
+.net-row .nl-label {
+    width: 40%;
     background: #1A2B6B;
     color: #F9A825;
     font-weight: bold;
-    font-size: 6.8pt;
+    font-size: 6.5pt;
     letter-spacing: 0.04em;
     padding: 2.5px 3px;
 }
-
-.row-net .c-1st,
-.row-net .c-2nd {
+.net-row .nl-1st,
+.net-row .nl-2nd,
+.net-row .nl-tot {
+    width: 20%;
     background: #FFFBEA;
     color: #7A5900;
     font-weight: bold;
-    font-size: 7.2pt;
-}
-
-/* Active cut-off highlight */
-.col-active { background: #E5F3E8 !important; color: #1B5E20 !important; }
-
-.amount-zero { color: #ccc; }
-
-/* Tardiness / LWOP */
-.row-attendance td {
-    background: #FFF8F0;
-    font-size: 6pt;
-    color: #6D4C41;
-    padding: 1.2px 3px;
-    border-bottom: 1px solid #FFE0B2;
+    font-size: 6.8pt;
+    text-align: right;
+    padding: 2.5px 3px;
 }
 
 /* ── Footer ── */
@@ -227,16 +202,12 @@ body {
     padding: 3px 4px 3px;
     background: #F3F5FC;
 }
-
 .slip-footer .signatory  { font-weight: bold; font-size: 6.8pt; color: #0D1C55; }
 .slip-footer .sig-title  { font-size: 5.8pt; color: #555; }
+.slip-footer .doc-ref    { margin-top: 2px; font-size: 5.3pt; color: #777; line-height: 1.6; }
 
-.slip-footer .doc-ref {
-    margin-top: 2px;
-    font-size: 5.3pt;
-    color: #777;
-    line-height: 1.6;
-}
+/* ─── Page break between employees ─── */
+.page-break { page-break-after: always; }
 
 </style>
 </head>
@@ -245,114 +216,86 @@ body {
 @php
     $months = ['','January','February','March','April','May','June',
                'July','August','September','October','November','December'];
+    $monthName   = $months[$batch->period_month] ?? '';
+    $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $batch->period_month, $batch->period_year);
 
-    $amt = function($dedMap, $code) {
-        if (!$dedMap || !$code) return null;
-        $d = $dedMap->get($code);
-        return $d ? (float) $d->amount : null;
-    };
-
-    $fmt = function($val, $forceShow = false) {
-        if ($val === null || (!$forceShow && $val == 0)) return null;
-        return number_format($val, 2);
-    };
-
-    $copyLabels  = ['EMPLOYEE COPY', 'OFFICE COPY'];
-
-    // Base64-encode logo for DomPDF (requires GD extension)
+    // Base64-encode logo for DomPDF
     $logoPath = public_path('assets/img/dole_logo.png');
     $logoSrc  = (file_exists($logoPath) && extension_loaded('gd'))
         ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
         : '';
+
+    $copyLabels = ['EMPLOYEE COPY', 'OFFICE COPY'];
 @endphp
 
-{{--
-    $payslips is a collection of arrays (Phase 4 - Monthly Model), each with:
-      employee, entry (monthly), cutoffSplit (first_cutoff/second_cutoff), dedMap (keyed)
-    One <div class="employee-page"> per employee triggers a PDF page break.
---}}
 @foreach ($payslips as $slip)
 @php
-    $employee = $slip['employee'];
-    $entry = $slip['entry'];
-    $cutoffSplit = $slip['cutoffSplit'];
-    $dedMap = $slip['dedMap'];
+    $employee    = $slip['employee'];
+    $entry       = $slip['entry'];
+    $cutoffSplit = $slip['cutoffSplit'] ?? null;
+    $dedMap      = $slip['dedMap'];
 
-    // Extract cutoff data from cutoffSplit
-    $entry1st = $cutoffSplit['first_cutoff'] ?? null;
-    $entry2nd = $cutoffSplit['second_cutoff'] ?? null;
-    $ded1st = $dedMap;
-    $ded2nd = $dedMap;
+    $ded = function($code) use ($dedMap) {
+        $d = $dedMap->get($code);
+        return $d ? (float) $d->amount : null;
+    };
+
+    // ── Net pay per cutoff (for the bottom section) ───────────────────
+    $net1st = isset($cutoffSplit['first_cutoff']['net_amount'])
+        ? (float) $cutoffSplit['first_cutoff']['net_amount']
+        : (isset($cutoffSplit['first_cutoff']['gross_income'])
+            ? (float) $cutoffSplit['first_cutoff']['gross_income']
+            : (float) $entry->net_amount / 2);
+
+    $net2nd = isset($cutoffSplit['second_cutoff']['net_amount'])
+        ? (float) $cutoffSplit['second_cutoff']['net_amount']
+        : (isset($cutoffSplit['second_cutoff']['gross_income'])
+            ? (float) $cutoffSplit['second_cutoff']['gross_income']
+            : (float) $entry->net_amount / 2);
+
+    $netTot = (float) $entry->net_amount;
 @endphp
 
-<div class="employee-page">
 <table class="two-col">
 <tbody>
 <tr>
 
 @for ($col = 1; $col <= 2; $col++)
 
-{{-- ════════════════ SLIP CELL ════════════════ --}}
 <td class="slip-cell">
 
     <div class="copy-badge">{{ $copyLabels[$col - 1] }}</div>
 
     <table class="slip">
 
-        {{-- ── Header ── --}}
+        {{-- ── HEADER ── --}}
         <tr><td>
         <div class="slip-header">
             @if ($logoSrc)
-            <img class="header-logo" src="{{ $logoSrc }}" alt="DOLE Logo"/>
+            <img class="header-logo" src="{{ $logoSrc }}" alt="DOLE"/>
             @endif
             <div class="republic">Republic of the Philippines</div>
             <div class="agency">DEPARTMENT OF LABOR AND EMPLOYMENT</div>
             <div class="ro">Regional Office No. 9</div>
             <div class="payslip-for">PAYSLIP FOR</div>
-            <div class="period-label">{{ $periodLabel }}</div>
+            <div class="period-label">{{ $monthName }} 1–{{ $daysInMonth }}, {{ $batch->period_year }}</div>
         </div>
         </td></tr>
 
-        {{-- ── Employee info ── --}}
+        {{-- ── EMPLOYEE INFO ── --}}
         <tr><td>
         <div class="slip-employee">
             <table>
-                <tr>
-                    <td class="lbl">Name:</td>
-                    <td class="val">{{ $employee->full_name }}</td>
-                </tr>
-                <tr>
-                    <td class="lbl">Position:</td>
-                    <td class="val">{{ $employee->position_title }}</td>
-                </tr>
-                <tr>
-                    <td class="lbl">Plantilla:</td>
-                    <td>{{ $employee->plantilla_item_no ?? '—' }}</td>
-                </tr>
-                <tr>
-                    <td class="lbl">Division:</td>
-                    <td>{{ $employee->division->name ?? '—' }}</td>
-                </tr>
-                <tr>
-                    <td class="lbl">SG – Step:</td>
-                    <td>SG {{ $employee->salary_grade }} – Step {{ $employee->step }}</td>
-                </tr>
+                <tr><td class="lbl">Name:</td><td class="val">{{ $employee->full_name }}</td></tr>
+                <tr><td class="lbl">Position:</td><td class="val">{{ $employee->position_title }}</td></tr>
+                <tr><td class="lbl">Plantilla:</td><td>{{ $employee->plantilla_item_no ?? '—' }}</td></tr>
+                <tr><td class="lbl">Division:</td><td>{{ $employee->division->name ?? '—' }}</td></tr>
+                <tr><td class="lbl">SG – Step:</td><td>SG {{ $employee->salary_grade }} – Step {{ $employee->step }}</td></tr>
             </table>
         </div>
         </td></tr>
 
-        {{-- ── Cut-off column headers ── --}}
-        <tr><td>
-        <table class="col-headers">
-            <tr>
-                <td class="c-label"></td>
-                <td class="c-1st">1–15</td>
-                <td class="c-2nd">16–30/31</td>
-            </tr>
-        </table>
-        </td></tr>
-
-        {{-- ── Payslip data rows ── --}}
+        {{-- ── EARNINGS & DEDUCTIONS (single amount column) ── --}}
         <tr><td>
         <table class="slip-rows">
 
@@ -360,39 +303,24 @@ body {
         @php
             $type  = $row['type'];
             $label = $row['label'];
-            $code  = $row['code'] ?? null;
-            $a1    = null;
-            $a2    = null;
+            $code  = $row['code'];
 
+            // Skip net rows — handled separately in the net-table below
+            if ($type === 'net') continue;
+
+            $amt = null;
             switch ($type) {
                 case 'income':
-                    if ($label === 'BASIC') {
-                        $a1 = $entry1st ? (float) ($entry1st['basic_salary'] ?? 0) : null;
-                        $a2 = $entry2nd ? (float) ($entry2nd['basic_salary'] ?? 0) : null;
-                    } elseif ($label === 'ALLOWANCE') {
-                        $a1 = $entry1st ? (float) ($entry1st['pera'] ?? 0) : null;
-                        $a2 = $entry2nd ? (float) ($entry2nd['pera'] ?? 0) : null;
-                    }
+                    $amt = $label === 'BASIC'
+                        ? (float) $entry->basic_salary
+                        : (float) $entry->pera;
                     break;
                 case 'deduction':
                 case 'sub':
-                    $a1 = $amt($ded1st, $code);
-                    $a2 = $amt($ded2nd, $code);
+                    $amt = $ded($code);
                     break;
                 case 'divider':
-                    // For cutoff split, calculate total deductions from the split arrays
-                    $a1 = $entry1st ? (float) (($entry1st['lwop_deduction'] ?? 0) + ($entry1st['tardiness'] ?? 0) + ($entry1st['undertime'] ?? 0)) : null;
-                    $a2 = $entry2nd ? (float) (($entry2nd['lwop_deduction'] ?? 0) + ($entry2nd['tardiness'] ?? 0) + ($entry2nd['undertime'] ?? 0)) : null;
-                    break;
-                case 'net':
-                    // Calculate net from gross minus attendance deductions for each cutoff
-                    if ($label === 'NET PAY 1-15') {
-                        $a1 = $entry1st ? (float) (($entry1st['gross_income'] ?? 0) - (($entry1st['lwop_deduction'] ?? 0) + ($entry1st['tardiness'] ?? 0) + ($entry1st['undertime'] ?? 0))) : null;
-                        $a2 = null;
-                    } else {
-                        $a1 = null;
-                        $a2 = $entry2nd ? (float) (($entry2nd['gross_income'] ?? 0) - (($entry2nd['lwop_deduction'] ?? 0) + ($entry2nd['tardiness'] ?? 0) + ($entry2nd['undertime'] ?? 0))) : null;
-                    }
+                    $amt = (float) $entry->total_deductions;
                     break;
             }
 
@@ -401,44 +329,29 @@ body {
                 'spacer'  => 'row-spacer',
                 'sub'     => 'row-sub',
                 'divider' => 'row-divider',
-                'net'     => 'row-net',
                 default   => 'row-deduction',
             };
-
-            // Phase 4: Both cutoffs shown equally (no active column highlighting)
-            $active1 = '';
-            $active2 = '';
         @endphp
 
         @if ($type === 'spacer')
             <tr class="{{ $rowClass }}">
-                <td colspan="3">{{ $label }}</td>
+                <td colspan="2">{{ $label }}</td>
             </tr>
 
-        @elseif ($type === 'net')
+        @elseif ($type === 'divider')
             <tr class="{{ $rowClass }}">
                 <td class="c-label">{{ $label }}</td>
-                <td class="c-1st {{ $active1 }}">
-                    @if ($a1 !== null){{ $fmt($a1, true) }}@endif
-                </td>
-                <td class="c-2nd {{ $active2 }}">
-                    @if ($a2 !== null){{ $fmt($a2, true) }}@endif
+                <td class="c-amt">
+                    @if ($amt != 0){{ number_format($amt, 2) }}@else<span class="amount-zero">—</span>@endif
                 </td>
             </tr>
 
         @else
             <tr class="{{ $rowClass }}">
                 <td class="c-label">{{ $label }}</td>
-                <td class="c-1st {{ $type === 'divider' ? $active1 : '' }}">
-                    @if ($a1 !== null && $a1 != 0)
-                        {{ $fmt($a1) }}
-                    @elseif ($type === 'income')
-                        <span class="amount-zero">—</span>
-                    @endif
-                </td>
-                <td class="c-2nd {{ $type === 'divider' ? $active2 : '' }}">
-                    @if ($a2 !== null && $a2 != 0)
-                        {{ $fmt($a2) }}
+                <td class="c-amt">
+                    @if ($amt !== null && $amt != 0)
+                        {{ number_format($amt, 2) }}
                     @elseif ($type === 'income')
                         <span class="amount-zero">—</span>
                     @endif
@@ -448,31 +361,36 @@ body {
 
         @endforeach
 
-        {{-- ── Tardiness / LWOP ── --}}
-        @php
-            $showAttendance = false;
-        @endphp
-
-        @if ($showAttendance)
-        <tr class="row-attendance">
-            <td class="c-label">Tardiness / LWOP</td>
-            <td class="c-1st">
-                @if (($tardy1 + $lwop1) > 0){{ number_format($tardy1 + $lwop1, 2) }}@endif
-            </td>
-            <td class="c-2nd">
-                @if (($tardy2 + $lwop2) > 0){{ number_format($tardy2 + $lwop2, 2) }}@endif
-            </td>
-        </tr>
-        @endif
-
         </table>
         </td></tr>
 
-        {{-- ── Footer / Signatory ── --}}
+        {{-- ── NET PAY SECTION — three columns ── --}}
+        <tr><td>
+        <table class="net-table">
+            {{-- Column sub-headers --}}
+            <tr class="net-col-header">
+                <td class="nh-label">NET PAY</td>
+                <td class="nh-1st">1–15</td>
+                <td class="nh-2nd">16–{{ $daysInMonth }}</td>
+                <td class="nh-tot">TOTAL</td>
+            </tr>
+            {{-- Values --}}
+            <tr class="net-row">
+                <td class="nl-label">{{ $monthName }} {{ $batch->period_year }}</td>
+                <td class="nl-1st">{{ number_format($net1st, 2) }}</td>
+                <td class="nl-2nd">{{ number_format($net2nd, 2) }}</td>
+                <td class="nl-tot">{{ number_format($netTot, 2) }}</td>
+            </tr>
+        </table>
+        </td></tr>
+
+        {{-- ── FOOTER ── --}}
         <tr><td>
         <div class="slip-footer">
             <div class="signatory">{{ strtoupper($signatory?->full_name ?? 'HRMO DESIGNATE') }}</div>
-            <div class="sig-title">{{ $signatory?->position_title ?? '' }}{{ ($signatory?->position_title) ? ', ' : '' }}HRMO Designate</div>
+            <div class="sig-title">
+                {{ $signatory?->position_title ?? '' }}{{ $signatory?->position_title ? ', ' : '' }}HRMO Designate
+            </div>
             <div class="doc-ref">
                 D9FI-550308 Rev. 01 &nbsp;·&nbsp;
                 Email: ro9@dole.gov.ph &nbsp;·&nbsp;
@@ -486,7 +404,6 @@ body {
 
 </td>
 
-{{-- ════════════════ CENTER DIVIDER ════════════════ --}}
 @if ($col === 1)
 <td class="col-divider">
     <span class="divider-scissors">✂</span>
@@ -498,7 +415,10 @@ body {
 </tr>
 </tbody>
 </table>
-</div>{{-- .employee-page --}}
+
+@if (!$loop->last)
+<div class="page-break"></div>
+@endif
 
 @endforeach
 
