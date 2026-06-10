@@ -44,6 +44,11 @@ class PayrollComputationService
      *    AttendanceSnapshot model so cutoff split helpers work without an
      *    extra query.
      *
+     * Fix log:
+     *  2026-06-10  daysWorked is now derived from the attendance array and
+     *              passed to resolveDeductions() so GSIS is prorated correctly
+     *              for employees with LWOP days in the period.
+     *
      * @param  Employee               $employee
      * @param  PayrollBatch           $batch
      * @param  array                  $attendance  Shape:
@@ -52,6 +57,7 @@ class PayrollComputationService
      *     'late_minutes'    => int,     // full-month cumulative late minutes
      *     'undertime_mins'  => int,     // full-month cumulative undertime minutes
      *     'ytd_gross'       => float,   // year-to-date gross BEFORE this payroll (WHT)
+     *     'days_present'    => float,   // (optional) days actually worked — for GSIS proration
      *   ]
      * @param  AttendanceSnapshot|null $snapshot   Optional — needed only for cutoff split
      * @return PayrollEntry  (loaded with deductions relation)
@@ -67,6 +73,18 @@ class PayrollComputationService
         $lateMinutes   = (int)   ($attendance['late_minutes']   ?? 0);
         $undertimeMins = (int)   ($attendance['undertime_mins'] ?? $attendance['undertime_minutes'] ?? 0);
         $ytdGross      = (float) ($attendance['ytd_gross']      ?? 0);
+
+        // Days worked — used for GSIS proration ONLY when employee has LWOP.
+        // Only pass daysWorked to resolveDeductions() when lwopDays > 0;
+        // otherwise pass null to skip proration entirely (full month worked).
+        $totalDays  = self::DENOMINATOR_SEMI_MONTHLY; // 22 working days/month
+        $daysWorked = isset($attendance['days_present'])
+            ? (int) $attendance['days_present']
+            : (int) max(0, $totalDays - (int) $lwopDays);
+
+        // Only prorate GSIS when there are actual LWOP days.
+        // Passing null tells resolveDeductions() to use the full monthly amount.
+        $gsisProrateDays = $lwopDays > 0 ? $daysWorked : null;
 
         // ── 2. Gross income components (full month) ───────────────────────
         $basicMonthly = (float) $employee->basic_monthly_salary;
@@ -120,10 +138,14 @@ class PayrollComputationService
         $totalAttendanceDed = round($lwopDeduction + $tardiness + $undertimeDed, 2);
 
         // ── 4. Statutory / other deductions via DeductionService ──────────
+        // daysWorked is only passed (non-null) when employee has LWOP days,
+        // so GSIS proration only activates for incomplete months.
         $deductionLines = $this->deductionService->resolveDeductions(
             $employee,
             $batch,
-            $ytdGross
+            $ytdGross,
+            $gsisProrateDays,
+            $totalDays
         );
 
         $totalDeductions = round(
@@ -192,6 +214,13 @@ class PayrollComputationService
      * Snapshots are eager-loaded in a single query so computeCutoffSplit()
      * can access daily_logs without N+1 queries.
      *
+     * Fix log:
+     *  2026-06-10  ytdGross is now queried from prior payroll_entries before
+     *              each computeEntry() call so Withholding Tax is computed
+     *              correctly. Previously ytdGross was always 0.0, causing WHT
+     *              to always land in the 0% bracket and return 0.00 for every
+     *              employee.
+     *
      * @param  PayrollBatch $batch
      * @param  array        $attendanceMap  [ employee_id (int) => attendance array ]
      * @return array  ['computed' => int, 'errors' => string[]]
@@ -208,6 +237,17 @@ class PayrollComputationService
             ->get()
             ->keyBy('employee_id');
 
+        // Pre-load YTD gross for all active employees in one query.
+        // period_year lives on payroll_batches not payroll_entries, so we
+        // join through the batches table to filter by year correctly.
+        $ytdGrossMap = PayrollEntry::join('payroll_batches', 'payroll_entries.payroll_batch_id', '=', 'payroll_batches.id')
+            ->where('payroll_batches.period_year', $batch->period_year)
+            ->where('payroll_entries.payroll_batch_id', '!=', $batch->id)
+            ->where('payroll_batches.status', '!=', 'draft')
+            ->selectRaw('payroll_entries.employee_id, SUM(payroll_entries.gross_income) as ytd_gross')
+            ->groupBy('payroll_entries.employee_id')
+            ->pluck('ytd_gross', 'employee_id');
+
         $computed = 0;
         $errors   = [];
 
@@ -215,6 +255,11 @@ class PayrollComputationService
             try {
                 $attendance = $attendanceMap[$employee->id] ?? [];
                 $snapshot   = $snapshots->get($employee->id);
+
+                // Inject the correct ytd_gross so WHT is computed properly.
+                // If no prior entries exist for this year, defaults to 0.0
+                // (correct for the first payroll run of the year).
+                $attendance['ytd_gross'] = (float) ($ytdGrossMap->get($employee->id) ?? 0.0);
 
                 $this->computeEntry($employee, $batch, $attendance, $snapshot);
                 $computed++;
@@ -249,6 +294,10 @@ class PayrollComputationService
      *   ratio_2nd = days_present_2nd / total_days_present
      *   gross_1st = ratio_1st * monthly_gross  (etc.)
      *
+     * Net pay per cutoff is derived as:
+     *   net_1st = gross_1st - (total_deductions * ratio_1st)
+     *   net_2nd = gross_2nd - (total_deductions * ratio_2nd)
+     *
      * If daily_logs is empty (legacy snapshot without day detail), falls back
      * to a 50/50 split so the method always returns a usable result.
      *
@@ -258,6 +307,7 @@ class PayrollComputationService
      *   first_cutoff: array{
      *     gross_income: float, basic_salary: float, pera: float, rata: float,
      *     lwop_deduction: float, tardiness: float, undertime: float,
+     *     net_amount: float,
      *     days_present: float, late_minutes: int, undertime_minutes: int
      *   },
      *   second_cutoff: array{ ... same keys ... }
@@ -303,6 +353,20 @@ class PayrollComputationService
         // ── Proportional split of gross components ────────────────────────
         $gross1st = $this->applyCutoffRatio($entry, $ratio1st);
         $gross2nd = $this->applyCutoffRatio($entry, $ratio2nd);
+
+        // ── Net pay per cutoff ────────────────────────────────────────────
+        // Deductions are split by the same ratio so net = gross_cutoff - ded_cutoff.
+        // Statutory deductions (GSIS, PhilHealth, WHT, PAG-IBIG) are schedule-based
+        // and handled separately by reporting export classes (Phase 6), but for the
+        // payslip display this proportional approach is accurate enough.
+        $gross1st['net_amount'] = round(
+            $gross1st['gross_income'] - round($entry->total_deductions * $ratio1st, 2),
+            2
+        );
+        $gross2nd['net_amount'] = round(
+            $gross2nd['gross_income'] - round($entry->total_deductions * $ratio2nd, 2),
+            2
+        );
 
         // Staple the per-cutoff attendance metrics on
         $gross1st['days_present']      = $daysPresent1st;

@@ -58,16 +58,20 @@ use Carbon\Carbon;
  *              Both PAG_IBIG_1 and PAGIBIG_1 deduction type records are
  *              active in the DB (legacy + new naming). Both resolved
  *              independently to ₱50 each, doubling the PAG-IBIG deduction.
- *              The fix keeps only the first one encountered (by display_order)
- *              and skips any subsequent code in the same group.
  *              Permanent fix: run — UPDATE deduction_types SET is_active = 0
  *              WHERE code = 'PAGIBIG_1'; — then remove this dedup logic.
  *
- *  2026-06-10  Fix 3: WHT always returning 0.00 — NOT fixed here.
- *              Root cause: ytdGross is always 0.0 because
- *              PayrollComputationService::computeBatch() never queries
- *              prior payroll entries to populate it. Fix is in
- *              PayrollComputationService — see that file for the patch.
+ *  2026-06-10  Fix 2a: Corrected PAG-IBIG dedup guard. The original guard
+ *              only set $pagibigGroupResolved = true inside the `if ($amount > 0)`
+ *              block. If the first code resolved to 0.00 (e.g. no enrollment for
+ *              Tier 3), the flag was never set and the alias code still slipped
+ *              through. Fixed by moving the flag setter to immediately after
+ *              first encounter of any PAG-IBIG group code, before amount
+ *              resolution.
+ *
+ *  2026-06-10  Fix 3: WHT always returning 0.00 — fixed in
+ *              PayrollComputationService::computeBatch(). ytdGross is now
+ *              queried from prior payroll_entries before each computeEntry() call.
  * ─────────────────────────────────────────────────────────────────────────
  */
 class DeductionService
@@ -110,9 +114,10 @@ class DeductionService
     /**
      * Groups of legacy/alias PAG-IBIG codes that resolve to the same deduction.
      *
-     * When iterating deduction types, only the FIRST code in each group that
-     * produces an amount > 0 is kept. All subsequent codes in the same group
-     * are skipped to prevent double-counting.
+     * The dedup guard marks the group as resolved on FIRST ENCOUNTER of any
+     * code in the group — regardless of whether it produces amount > 0.
+     * This prevents the alias from sneaking through when the first code
+     * resolves to zero (e.g. Tier 3 employee with no enrollment record).
      *
      * Permanent fix: deactivate the old code in the DB:
      *   UPDATE deduction_types SET is_active = 0 WHERE code = 'PAGIBIG_1';
@@ -134,10 +139,9 @@ class DeductionService
      * @param  Employee     $employee
      * @param  PayrollBatch $batch
      * @param  float        $ytdGross   Year-to-date gross BEFORE this cut-off (for WHT).
-     *                                  ⚠ Must be the sum of gross_income from all prior
+     *                                  Must be the sum of gross_income from all prior
      *                                  payroll_entries for this employee in the same
      *                                  calendar year. Passing 0.0 causes WHT = 0 for all.
-     *                                  See PayrollComputationService for the fix.
      * @param  int|null     $daysWorked Days worked in the period (for prorated GSIS)
      * @param  int          $totalDays  Total working days in the period (default 22)
      * @return array        Each element: [deduction_type_id, code, name, amount, is_overridden, is_global]
@@ -198,8 +202,9 @@ class DeductionService
 
         $lines = [];
 
-        // Tracks which PAG-IBIG group code has already been resolved to prevent
-        // double-counting when both PAG_IBIG_1 and PAGIBIG_1 are active in the DB.
+        // Tracks whether a PAG-IBIG group code has already been encountered.
+        // Set on FIRST ENCOUNTER (not just when amount > 0) so a zero-resolving
+        // first record still blocks the alias from being processed.
         $pagibigGroupResolved = false;
 
         foreach ($allTypes as $type) {
@@ -209,16 +214,16 @@ class DeductionService
                 continue;
             }
 
-// ── Fix 2: Deduplicate PAG-IBIG alias codes ───────────────────
-// Mark the group resolved on FIRST ENCOUNTER (not just when amount > 0),
-// so a zero-resolving first record still blocks the alias from sneaking through.
-$isPagibigCode = in_array($type->code, self::PAGIBIG_GROUP_CODES);
-if ($isPagibigCode && $pagibigGroupResolved) {
-    continue;
-}
-if ($isPagibigCode) {
-    $pagibigGroupResolved = true;
-}
+            // ── Fix 2 + 2a: Deduplicate PAG-IBIG alias codes ─────────────
+            // Mark the group resolved on FIRST ENCOUNTER regardless of amount,
+            // then skip any subsequent code in the same group.
+            $isPagibigCode = in_array($type->code, self::PAGIBIG_GROUP_CODES);
+            if ($isPagibigCode && $pagibigGroupResolved) {
+                continue;
+            }
+            if ($isPagibigCode) {
+                $pagibigGroupResolved = true;
+            }
 
             $amount       = 0.00;
             $isOverridden = false;
@@ -274,7 +279,6 @@ if ($isPagibigCode) {
                     'is_overridden'     => $isOverridden,
                     'is_global'         => $isGlobal,
                 ];
-
             }
         }
 
@@ -381,12 +385,6 @@ if ($isPagibigCode) {
      *   that would silently produce incorrect tax deductions for all employees.
      *   If the tax table changes (new TRAIN amendments), a developer must
      *   update birGraduatedTax() below and re-test.
-     *
-     * ⚠ WHT IS 0.00 FOR ALL EMPLOYEES — known issue, fix is in
-     *   PayrollComputationService::computeBatch(). The $ytdGross parameter
-     *   must be populated with the sum of prior gross_income entries for
-     *   this employee in the current calendar year before calling computeEntry().
-     *   See PayrollComputationService for the patch.
      *
      * No DeductionType parameter — this method does not use formula_rate_* columns.
      */

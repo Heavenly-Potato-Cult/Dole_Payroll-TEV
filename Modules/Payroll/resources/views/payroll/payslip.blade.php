@@ -295,17 +295,16 @@ body {
     $hasAttDed    = ($attLwop + $attTardiness + $attUndertime) > 0;
 
     // ── Net pay per cutoff (for the bottom section) ───────────────────────
+    // Priority: net_amount from cutoffSplit (most accurate, uses actual
+    // attendance ratio). Falls back to net_amount / 2 (50/50 split).
+    // Never falls back to gross_income — that would show gross instead of net.
     $net1st = isset($cutoffSplit['first_cutoff']['net_amount'])
         ? (float) $cutoffSplit['first_cutoff']['net_amount']
-        : (isset($cutoffSplit['first_cutoff']['gross_income'])
-            ? (float) $cutoffSplit['first_cutoff']['gross_income']
-            : (float) $entry->net_amount / 2);
+        : (float) $entry->net_amount / 2;
 
     $net2nd = isset($cutoffSplit['second_cutoff']['net_amount'])
         ? (float) $cutoffSplit['second_cutoff']['net_amount']
-        : (isset($cutoffSplit['second_cutoff']['gross_income'])
-            ? (float) $cutoffSplit['second_cutoff']['gross_income']
-            : (float) $entry->net_amount / 2);
+        : (float) $entry->net_amount / 2;
 
     $netTot = (float) $entry->net_amount;
 @endphp
