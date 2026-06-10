@@ -44,6 +44,30 @@ use Carbon\Carbon;
  *  Withholding Tax (computeWithholdingTax) remains fully hardcoded — the
  *  BIR graduated table has too many interdependent brackets to expose safely
  *  in a UI. A developer must update those brackets directly in this class.
+ *
+ * ── Fix Log ──────────────────────────────────────────────────────────────
+ *
+ *  2026-06-10  Fix 1: Added EMPLOYER_ONLY_CODES skip list.
+ *              GSIS_GOVERNMENT_SHARE is the employer's 12% contribution —
+ *              it must never be deducted from the employee's net pay.
+ *              Previously it was resolving through Tier 2 (locked, percentage
+ *              set to 12%) and being summed into total_deductions, causing
+ *              the payslip total to be overstated by ~₱1,177 per employee.
+ *
+ *  2026-06-10  Fix 2: Added PAG-IBIG deduplication via PAGIBIG_GROUP_CODES.
+ *              Both PAG_IBIG_1 and PAGIBIG_1 deduction type records are
+ *              active in the DB (legacy + new naming). Both resolved
+ *              independently to ₱50 each, doubling the PAG-IBIG deduction.
+ *              The fix keeps only the first one encountered (by display_order)
+ *              and skips any subsequent code in the same group.
+ *              Permanent fix: run — UPDATE deduction_types SET is_active = 0
+ *              WHERE code = 'PAGIBIG_1'; — then remove this dedup logic.
+ *
+ *  2026-06-10  Fix 3: WHT always returning 0.00 — NOT fixed here.
+ *              Root cause: ytdGross is always 0.0 because
+ *              PayrollComputationService::computeBatch() never queries
+ *              prior payroll entries to populate it. Fix is in
+ *              PayrollComputationService — see that file for the patch.
  * ─────────────────────────────────────────────────────────────────────────
  */
 class DeductionService
@@ -59,9 +83,9 @@ class DeductionService
     const PAGIBIG_MONTHLY_CAP   = 100.00;  // EE share capped at ₱100/month
 
     // PhilHealth
-    const PHILHEALTH_RATE           = 0.05;    // 5 % total premium rate
-    const PHILHEALTH_MONTHLY_FLOOR  = 500.00;  // ₱500 minimum monthly premium
-    const PHILHEALTH_MONTHLY_CEILING= 5000.00; // ₱5,000 maximum monthly premium
+    const PHILHEALTH_RATE            = 0.05;    // 5 % total premium rate
+    const PHILHEALTH_MONTHLY_FLOOR   = 500.00;  // ₱500 minimum monthly premium
+    const PHILHEALTH_MONTHLY_CEILING = 5000.00; // ₱5,000 maximum monthly premium
 
     // GSIS Life & Retirement
     const GSIS_RATE = 0.09; // 9 % personal share
@@ -69,11 +93,51 @@ class DeductionService
     const DENOMINATOR = 22;
 
     /**
+     * Deduction type codes that represent the EMPLOYER'S share.
+     *
+     * These are stored in deduction_types for reporting/GL purposes but must
+     * NEVER be deducted from the employee's net pay. They are skipped entirely
+     * during employee deduction resolution.
+     *
+     * Add any future employer-side codes here (e.g. PHILHEALTH_EMPLOYER if
+     * you later split PhilHealth into separate EE/ER records).
+     */
+    const EMPLOYER_ONLY_CODES = [
+        'GSIS_GOVERNMENT_SHARE',  // 12% employer GSIS contribution — not employee's deduction
+        'PHILHEALTH_EMPLOYER',    // 50% PhilHealth employer share — if ever split
+    ];
+
+    /**
+     * Groups of legacy/alias PAG-IBIG codes that resolve to the same deduction.
+     *
+     * When iterating deduction types, only the FIRST code in each group that
+     * produces an amount > 0 is kept. All subsequent codes in the same group
+     * are skipped to prevent double-counting.
+     *
+     * Permanent fix: deactivate the old code in the DB:
+     *   UPDATE deduction_types SET is_active = 0 WHERE code = 'PAGIBIG_1';
+     * Once done, this constant has no effect but is harmless to leave in.
+     */
+    const PAGIBIG_GROUP_CODES = [
+        'PAG_IBIG_1',
+        'PAGIBIG_1',
+    ];
+
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
      * Resolve all deduction line items for one employee in one payroll batch.
+     *
+     * Returns only EMPLOYEE-side deductions. Employer-only codes (see
+     * EMPLOYER_ONLY_CODES) are silently skipped.
      *
      * @param  Employee     $employee
      * @param  PayrollBatch $batch
-     * @param  float        $ytdGross   Year-to-date gross before this cut-off (for WHT)
+     * @param  float        $ytdGross   Year-to-date gross BEFORE this cut-off (for WHT).
+     *                                  ⚠ Must be the sum of gross_income from all prior
+     *                                  payroll_entries for this employee in the same
+     *                                  calendar year. Passing 0.0 causes WHT = 0 for all.
+     *                                  See PayrollComputationService for the fix.
      * @param  int|null     $daysWorked Days worked in the period (for prorated GSIS)
      * @param  int          $totalDays  Total working days in the period (default 22)
      * @return array        Each element: [deduction_type_id, code, name, amount, is_overridden, is_global]
@@ -81,7 +145,7 @@ class DeductionService
     public function resolveDeductions(
         Employee     $employee,
         PayrollBatch $batch,
-        float        $ytdGross  = 0.0,
+        float        $ytdGross   = 0.0,
         ?int         $daysWorked = null,
         int          $totalDays  = 22
     ): array {
@@ -134,7 +198,25 @@ class DeductionService
 
         $lines = [];
 
+        // Tracks which PAG-IBIG group code has already been resolved to prevent
+        // double-counting when both PAG_IBIG_1 and PAGIBIG_1 are active in the DB.
+        $pagibigGroupResolved = false;
+
         foreach ($allTypes as $type) {
+
+            // ── Fix 1: Skip employer-only codes entirely ──────────────────
+            if (in_array($type->code, self::EMPLOYER_ONLY_CODES)) {
+                continue;
+            }
+
+            // ── Fix 2: Deduplicate PAG-IBIG alias codes ───────────────────
+            // If this code belongs to the PAG-IBIG group AND we have already
+            // added a PAG-IBIG line, skip this one.
+            $isPagibigCode = in_array($type->code, self::PAGIBIG_GROUP_CODES);
+            if ($isPagibigCode && $pagibigGroupResolved) {
+                continue;
+            }
+
             $amount       = 0.00;
             $isOverridden = false;
             $isGlobal     = false;
@@ -147,7 +229,7 @@ class DeductionService
                     $isOverridden = true;
                     $isGlobal     = true;
                 } elseif ($type->isOverridden()) {
-                    // Not locked but override set → per-type manual adjustment (Enhancement #1)
+                    // Not locked but override set → per-type manual adjustment
                     $amount       = (float) $type->override_amount;
                     $isOverridden = true;
                 } else {
@@ -189,6 +271,11 @@ class DeductionService
                     'is_overridden'     => $isOverridden,
                     'is_global'         => $isGlobal,
                 ];
+
+                // Mark PAG-IBIG group as resolved so the alias code is skipped
+                if ($isPagibigCode) {
+                    $pagibigGroupResolved = true;
+                }
             }
         }
 
@@ -226,8 +313,8 @@ class DeductionService
         $threshold = (float) ($type?->formula_rate_threshold ?? self::PAGIBIG_THRESHOLD);
         $cap       = (float) ($type?->formula_monthly_cap    ?? self::PAGIBIG_MONTHLY_CAP);
 
-        $appliedRate  = $basicMonthly <= $threshold ? $rateLow : $rate;
-        $monthlyEE    = min(round($basicMonthly * $appliedRate, 2), $cap);
+        $appliedRate = $basicMonthly <= $threshold ? $rateLow : $rate;
+        $monthlyEE   = min(round($basicMonthly * $appliedRate, 2), $cap);
 
         return round($monthlyEE / 2, 2);
     }
@@ -268,10 +355,10 @@ class DeductionService
      * DB columns used: formula_rate
      */
     public function computeGsisLife(
-        float         $basicMonthly,
+        float          $basicMonthly,
         ?DeductionType $type       = null,
-        ?int          $daysWorked  = null,
-        ?int          $totalDays   = 22
+        ?int           $daysWorked = null,
+        ?int           $totalDays  = 22
     ): float {
         $rate = (float) ($type?->formula_rate ?? self::GSIS_RATE);
 
@@ -295,6 +382,12 @@ class DeductionService
      *   that would silently produce incorrect tax deductions for all employees.
      *   If the tax table changes (new TRAIN amendments), a developer must
      *   update birGraduatedTax() below and re-test.
+     *
+     * ⚠ WHT IS 0.00 FOR ALL EMPLOYEES — known issue, fix is in
+     *   PayrollComputationService::computeBatch(). The $ytdGross parameter
+     *   must be populated with the sum of prior gross_income entries for
+     *   this employee in the current calendar year before calling computeEntry().
+     *   See PayrollComputationService for the patch.
      *
      * No DeductionType parameter — this method does not use formula_rate_* columns.
      */
@@ -330,12 +423,12 @@ class DeductionService
      * Last updated: TRAIN Law (RA 10963) rates effective 2023 onwards.
      *
      * Bracket structure (annual taxable income):
-     *   ≤ ₱250,000            →  0 %
-     *   ₱250,001 – ₱400,000   → 15 % of excess over ₱250,000
-     *   ₱400,001 – ₱800,000   → ₱22,500  + 20 % of excess over ₱400,000
-     *   ₱800,001 – ₱2,000,000 → ₱102,500 + 25 % of excess over ₱800,000
+     *   ≤ ₱250,000              →  0 %
+     *   ₱250,001 – ₱400,000     → 15 % of excess over ₱250,000
+     *   ₱400,001 – ₱800,000     → ₱22,500  + 20 % of excess over ₱400,000
+     *   ₱800,001 – ₱2,000,000   → ₱102,500 + 25 % of excess over ₱800,000
      *   ₱2,000,001 – ₱8,000,000 → ₱402,500 + 30 % of excess over ₱2,000,000
-     *   > ₱8,000,000           → ₱2,202,500 + 35 % of excess over ₱8,000,000
+     *   > ₱8,000,000             → ₱2,202,500 + 35 % of excess over ₱8,000,000
      */
     public function birGraduatedTax(float $taxableIncome): float
     {

@@ -6,12 +6,44 @@
 <title>Payslip — {{ $periodLabel }}</title>
 <style>
 /* ================================================================
-   DOLE RO9 Payslip — DomPDF Stylesheet (v7 · Monthly)
+   DOLE RO9 Payslip — DomPDF Stylesheet (v8 · Monthly)
    A4 Portrait · Two payslip copies side-by-side
    Layout: 46% slip | 8% divider | 46% slip = 100%
    Earnings/Deductions: single amount column (monthly total)
    Net Pay footer: three columns — 1–15 | 16–end | TOTAL
+
+   v8 changes vs v7:
+     • Attendance deductions (LWOP, Tardiness, Undertime) now rendered
+       as visible sub-rows under a new "ATTENDANCE DEDUCTIONS" banner.
+       Previously these were silently included in total_deductions but
+       not shown, causing the line-item sum to mismatch the total.
+     • GSIS Government Share row added to the MANDATORY DEDUCTIONS block
+       (it was being stored in payroll_deductions but had no $rows entry).
+     • Withholding Tax: still always rendered (even at 0.00) so HR can
+       confirm it was evaluated. The 0.00 result across all employees is
+       a known data issue — see NOTE below.
+     • Attendance banner only rendered when at least one att. deduction > 0.
 ================================================================ */
+
+/*
+ * ─── WHT NOTE FOR DEVELOPERS ───────────────────────────────────────────
+ * Withholding Tax is showing 0.00 for ALL employees because ytdGross is
+ * always passed as 0.0 in every call to computeEntry(). This means
+ * projectedAnnual is always underestimated, taxableIncome is always
+ * small, and the result lands in the 0% bracket.
+ *
+ * Fix required in PayrollComputationService::computeBatch():
+ *   1. Before each computeEntry() call, query the SUM of all
+ *      payroll_entries.gross_income for this employee in the same
+ *      calendar year (where period_year = $batch->period_year AND
+ *      payroll_batch_id != $batch->id AND status != 'draft').
+ *   2. Pass that sum as $attendance['ytd_gross'].
+ *
+ * Quick SQL to verify the issue:
+ *   SELECT withholding_tax, COUNT(*) FROM payroll_entries GROUP BY withholding_tax;
+ *   -- You will see all rows have withholding_tax = 0.00
+ * ─────────────────────────────────────────────────────────────────────────
+ */
 
 @page { margin: 8mm 6mm 6mm 6mm; }
 
@@ -134,8 +166,23 @@ body {
     border-bottom: none;
 }
 
+/* Attendance banner — slightly different shade to distinguish */
+.row-spacer-att td {
+    background: #4A3B6B;
+    color: #fff;
+    font-weight: bold;
+    font-size: 6.2pt;
+    letter-spacing: 0.12em;
+    padding: 2px 3px;
+    border-bottom: none;
+}
+
 /* Sub-rows */
 .row-sub .c-label { padding-left: 8px; color: #555; font-style: italic; font-size: 6.2pt; }
+
+/* Attendance sub-rows — slightly different colour to distinguish from loan subs */
+.row-sub-att .c-label { padding-left: 8px; color: #6B2222; font-style: italic; font-size: 6.2pt; }
+.row-sub-att .c-amt   { color: #8B0000; font-size: 6.3pt; }
 
 /* TOTAL DEDUCTIONS row */
 .row-divider td {
@@ -147,6 +194,7 @@ body {
 }
 
 .amount-zero { color: #ccc; }
+.amount-att  { color: #8B0000; } /* red tint for attendance deductions */
 
 /* ── NET PAY footer table (three columns: 1-15 | 16-end | TOTAL) ── */
 .net-table {
@@ -240,7 +288,13 @@ body {
         return $d ? (float) $d->amount : null;
     };
 
-    // ── Net pay per cutoff (for the bottom section) ───────────────────
+    // ── Attendance deductions (from payroll_entry columns, not dedMap) ─────
+    $attLwop      = (float) ($entry->lwop_deduction ?? 0);
+    $attTardiness = (float) ($entry->tardiness      ?? 0);
+    $attUndertime = (float) ($entry->undertime      ?? 0);
+    $hasAttDed    = ($attLwop + $attTardiness + $attUndertime) > 0;
+
+    // ── Net pay per cutoff (for the bottom section) ───────────────────────
     $net1st = isset($cutoffSplit['first_cutoff']['net_amount'])
         ? (float) $cutoffSplit['first_cutoff']['net_amount']
         : (isset($cutoffSplit['first_cutoff']['gross_income'])
@@ -303,7 +357,7 @@ body {
         @php
             $type  = $row['type'];
             $label = $row['label'];
-            $code  = $row['code'];
+            $code  = $row['code'] ?? null;
 
             // Skip net rows — handled separately in the net-table below
             if ($type === 'net') continue;
@@ -339,6 +393,32 @@ body {
             </tr>
 
         @elseif ($type === 'divider')
+            {{-- ── Insert ATTENDANCE DEDUCTIONS block just before the Total row ── --}}
+            @if ($hasAttDed)
+            <tr class="row-spacer-att">
+                <td colspan="2">ATTENDANCE DEDUCTIONS</td>
+            </tr>
+            @if ($attLwop > 0)
+            <tr class="row-sub-att">
+                <td class="c-label">Leave Without Pay (LWOP)</td>
+                <td class="c-amt"><span class="amount-att">{{ number_format($attLwop, 2) }}</span></td>
+            </tr>
+            @endif
+            @if ($attTardiness > 0)
+            <tr class="row-sub-att">
+                <td class="c-label">Tardiness</td>
+                <td class="c-amt"><span class="amount-att">{{ number_format($attTardiness, 2) }}</span></td>
+            </tr>
+            @endif
+            @if ($attUndertime > 0)
+            <tr class="row-sub-att">
+                <td class="c-label">Undertime</td>
+                <td class="c-amt"><span class="amount-att">{{ number_format($attUndertime, 2) }}</span></td>
+            </tr>
+            @endif
+            @endif
+
+            {{-- Now render the TOTAL DEDUCTIONS row ── --}}
             <tr class="{{ $rowClass }}">
                 <td class="c-label">{{ $label }}</td>
                 <td class="c-amt">
@@ -352,6 +432,14 @@ body {
                 <td class="c-amt">
                     @if ($amt !== null && $amt != 0)
                         {{ number_format($amt, 2) }}
+                    @elseif ($code === 'WITHHOLDING_TAX')
+                        {{--
+                            Always show WHT even if 0.00.
+                            If this is 0.00 for ALL employees, the ytd_gross
+                            is not being passed correctly — see developer note
+                            in the CSS block at the top of this file.
+                        --}}
+                        <span class="amount-zero">0.00</span>
                     @elseif ($type === 'income')
                         <span class="amount-zero">—</span>
                     @endif
