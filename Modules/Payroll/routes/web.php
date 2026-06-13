@@ -104,8 +104,10 @@ Route::middleware(['auth'])->group(function () {
                     Route::match(['post', 'patch'], '/{payroll}/attendance/{snapshot}',
                                [PayrollController::class, 'updateAttendance'])->name('attendance.update');
 
-                    Route::get('/{payroll}/payslips/generate',
+                    Route::post('/{payroll}/payslips/generate',
                                [PayrollController::class, 'generatePayslips'])->name('payslips.generate');
+                    Route::get('/payslips/download/{file}',
+                               [PayrollController::class, 'downloadPayslip'])->name('payslips.download');
                 });
         });
 

@@ -1016,10 +1016,10 @@
             <div>
                 <div style="font-weight:700; font-size:0.88rem; color:var(--navy);">
                     Monthly Payslip
-                    <span style="font-size:0.72rem; background:#E8F0FE; color:var(--navy);
+                    <!-- <span style="font-size:0.72rem; background:#E8F0FE; color:var(--navy);
                                  padding:1px 8px; border-radius:10px; margin-left:6px;">
                         Recommended
-                    </span>
+                    </span> -->
                 </div>
                 <div style="font-size:0.78rem; color:var(--text-mid); margin-top:3px;">
                     Single payslip showing both 1–15 and 16–30/31 cut-offs side by side.
@@ -1044,7 +1044,19 @@
             </select>
         </div>
 
-        <div style="display:flex; gap:10px; justify-content:flex-end;">
+        {{-- Progress bar (hidden by default) --}}
+        <div id="payslipProgress" style="display:none; margin-top:20px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span style="font-size:0.78rem; font-weight:600; color:var(--navy);">Generating Payslips...</span>
+                <span id="progressPercent" style="font-size:0.78rem; font-weight:600; color:var(--navy);">0%</span>
+            </div>
+            <div style="width:100%; height:8px; background:#E5E7EB; border-radius:4px; overflow:hidden;">
+                <div id="progressBar" style="width:0%; height:100%; background:var(--navy); transition:width 0.3s ease;"></div>
+            </div>
+            <div id="progressStatus" style="font-size:0.75rem; color:var(--text-mid); margin-top:6px;">Initializing...</div>
+        </div>
+
+        <div id="payslipButtons" style="display:flex; gap:10px; justify-content:flex-end;">
             <button onclick="closePayslipModal()" class="btn btn-outline btn-sm">Cancel</button>
             <button onclick="submitPayslip()" class="btn btn-primary btn-sm">
                 📄 Generate PDF
@@ -1354,9 +1366,121 @@ function submitPayslip() {
     const mode     = document.querySelector('input[name="payslipMode"]:checked').value;
     const entryId  = document.getElementById('payslipEmployee').value;
     const base     = '{{ route("payroll.payslips.generate", $payroll) }}';
-    const url      = base + '?mode=' + mode + (entryId ? '&entry_id=' + entryId : '');
-    window.open(url, '_blank');
-    closePayslipModal();
+
+    // Show progress bar, hide buttons
+    document.getElementById('payslipButtons').style.display = 'none';
+    document.getElementById('payslipProgress').style.display = 'block';
+
+    // Generate unique job ID for progress tracking
+    const jobId = 'payslip_' + Date.now();
+
+    // Start AJAX request to generate payslips
+    const formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    formData.append('mode', mode);
+    if (entryId) formData.append('entry_id', entryId);
+    formData.append('job_id', jobId);
+
+    // Simulate progress updates
+    let progress = 0;
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressStatus = document.getElementById('progressStatus');
+
+    const progressInterval = setInterval(() => {
+        if (progress < 90) {
+            progress += Math.random() * 15;
+            if (progress > 90) progress = 90;
+            progressBar.style.width = progress + '%';
+            progressPercent.textContent = Math.round(progress) + '%';
+
+            if (progress < 30) {
+                progressStatus.textContent = 'Preparing data...';
+            } else if (progress < 60) {
+                progressStatus.textContent = 'Generating payslips...';
+            } else {
+                progressStatus.textContent = 'Finalizing...';
+            }
+        }
+    }, 500);
+
+    fetch(base, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        clearInterval(progressInterval);
+
+        if (data.success) {
+            // Download the file from base64 content
+            if (data.file_content) {
+                const binaryString = atob(data.file_content);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: data.content_type || 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = data.filename || 'payslips.zip';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }
+
+            // Show success message
+            progressStatus.textContent = 'Complete! Downloading...';
+            progressBar.style.width = '100%';
+            progressPercent.textContent = '100%';
+
+            setTimeout(() => {
+                closePayslipModal();
+                // Reset modal state
+                document.getElementById('payslipButtons').style.display = 'flex';
+                document.getElementById('payslipProgress').style.display = 'none';
+                document.getElementById('progressBar').style.width = '0%';
+                document.getElementById('progressPercent').textContent = '0%';
+                document.getElementById('progressStatus').textContent = 'Initializing...';
+            }, 2000);
+        } else {
+            // Show error
+            clearInterval(progressInterval);
+            progressStatus.textContent = 'Error: ' + (data.message || 'Failed to generate payslips');
+            progressBar.style.background = '#EF4444';
+
+            setTimeout(() => {
+                closePayslipModal();
+                document.getElementById('payslipButtons').style.display = 'flex';
+                document.getElementById('payslipProgress').style.display = 'none';
+                document.getElementById('progressBar').style.width = '0%';
+                document.getElementById('progressBar').style.background = 'var(--navy)';
+                document.getElementById('progressPercent').textContent = '0%';
+                document.getElementById('progressStatus').textContent = 'Initializing...';
+            }, 3000);
+        }
+    })
+    .catch(error => {
+        clearInterval(progressInterval);
+        progressStatus.textContent = 'Error: ' + error.message;
+        progressBar.style.background = '#EF4444';
+
+        setTimeout(() => {
+            closePayslipModal();
+            document.getElementById('payslipButtons').style.display = 'flex';
+            document.getElementById('payslipProgress').style.display = 'none';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressBar').style.background = 'var(--navy)';
+            document.getElementById('progressPercent').textContent = '0%';
+            document.getElementById('progressStatus').textContent = 'Initializing...';
+        }, 3000);
+    });
 }
 // Close modal on backdrop click
 document.getElementById('payslipModal').addEventListener('click', function(e) {

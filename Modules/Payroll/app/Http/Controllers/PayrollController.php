@@ -666,10 +666,17 @@ class PayrollController extends Controller
     public function generatePayslips(Request $request, PayrollBatch $payroll)
     {
         if (! in_array($payroll->status, ['released', 'locked'])) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payslips are only available after the batch has been released.'
+                ], 403);
+            }
             abort(403, 'Payslips are only available after the batch has been released.');
         }
 
         $entryId = $request->input('entry_id');
+        $isAjax = $request->expectsJson();
 
         $query = $payroll->entries()
             ->with(['employee.division', 'deductions.deductionType'])
@@ -686,43 +693,54 @@ class PayrollController extends Controller
         $entries = $query->get();
 
         if ($entries->isEmpty()) {
+            if ($isAjax) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No payroll entries found for the given parameters.'
+                ], 404);
+            }
             abort(404, 'No payroll entries found for the given parameters.');
         }
 
-        // Phase 4: Process in chunks to avoid memory exhaustion with large batches
-        // Limit to 50 employees per PDF to prevent DomPDF memory issues
-        $chunkSize = 50;
-        $totalEmployees = $entries->count();
-
-        if ($totalEmployees > $chunkSize && !$entryId) {
-            // For large batches, redirect back with a message to use individual payslip generation
-            return redirect()->route('payroll.show', $payroll)
-                ->with('warning', "This batch has {$totalEmployees} employees. To avoid memory issues, please generate payslips individually by clicking on each employee's payslip link, or reduce the batch size.");
+        // If single employee, generate single PDF directly
+        if ($entryId) {
+            if ($isAjax) {
+                return $this->generateSinglePayslipPdfAjax($payroll, $entries->first());
+            }
+            return $this->generateSinglePayslipPdf($payroll, $entries->first());
         }
 
-        // Pre-load all snapshots for cutoff split computation
+        // For multiple employees, process in chunks to avoid memory exhaustion
+        // Generate multiple PDFs and return as ZIP
+        if ($isAjax) {
+            return $this->generateChunkedPayslipsZipAjax($payroll, $entries);
+        }
+        return $this->generateChunkedPayslipsZip($payroll, $entries);
+    }
+
+    private function generateSinglePayslipPdf(PayrollBatch $payroll, $entry)
+    {
+        // Pre-load snapshots for cutoff split computation
         $snapshots = AttendanceSnapshot::where('payroll_batch_id', $payroll->id)
             ->get()
             ->keyBy('employee_id');
 
         $computationService = app(PayrollComputationService::class);
-        $dedMap             = fn ($entry) => $entry
-            ? $entry->deductions->keyBy(fn ($d) => $d->deductionType->code ?? $d->name)
+        $dedMap             = fn ($e) => $e
+            ? $e->deductions->keyBy(fn ($d) => $d->deductionType->code ?? $d->name)
             : collect();
 
-        $payslips = $entries->map(function ($entry) use ($snapshots, $computationService, $dedMap) {
-            $snapshot    = $snapshots->get($entry->employee_id);
-            $cutoffSplit = $snapshot
-                ? $computationService->computeCutoffSplit($entry, $snapshot)
-                : null;
+        $snapshot    = $snapshots->get($entry->employee_id);
+        $cutoffSplit = $snapshot
+            ? $computationService->computeCutoffSplit($entry, $snapshot)
+            : null;
 
-            return [
-                'employee'    => $entry->employee,
-                'entry'       => $entry,
-                'cutoffSplit' => $cutoffSplit,
-                'dedMap'      => $dedMap($entry),
-            ];
-        });
+        $payslips = collect([[
+            'employee'    => $entry->employee,
+            'entry'       => $entry,
+            'cutoffSplit' => $cutoffSplit,
+            'dedMap'      => $dedMap($entry),
+        ]]);
 
         $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
         $periodLabel = ($months[$payroll->period_month] ?? '') . ' ' . $payroll->period_year;
@@ -737,9 +755,281 @@ class PayrollController extends Controller
             'mode'        => 'monthly',
         ])->setPaper('a4', 'portrait');
 
-        $filename = 'Payslips_' . str_replace(' ', '_', $periodLabel) . '_Monthly.pdf';
+        $employeeName = $entry->employee
+            ? str_replace(' ', '_', $entry->employee->full_name)
+            : 'Employee';
+        $filename = 'Payslip_' . $employeeName . '_' . str_replace(' ', '_', $periodLabel) . '.pdf';
 
         return $pdf->stream($filename);
+    }
+
+    private function generateSinglePayslipPdfAjax(PayrollBatch $payroll, $entry)
+    {
+        // Pre-load snapshots for cutoff split computation
+        $snapshots = AttendanceSnapshot::where('payroll_batch_id', $payroll->id)
+            ->get()
+            ->keyBy('employee_id');
+
+        $computationService = app(PayrollComputationService::class);
+        $dedMap             = fn ($e) => $e
+            ? $e->deductions->keyBy(fn ($d) => $d->deductionType->code ?? $d->name)
+            : collect();
+
+        $snapshot    = $snapshots->get($entry->employee_id);
+        $cutoffSplit = $snapshot
+            ? $computationService->computeCutoffSplit($entry, $snapshot)
+            : null;
+
+        $payslips = collect([[
+            'employee'    => $entry->employee,
+            'entry'       => $entry,
+            'cutoffSplit' => $cutoffSplit,
+            'dedMap'      => $dedMap($entry),
+        ]]);
+
+        $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        $periodLabel = ($months[$payroll->period_month] ?? '') . ' ' . $payroll->period_year;
+        $signatory   = Signatory::where('role_type', 'hrmo_designate')->where('is_active', true)->first();
+
+        $pdf = Pdf::loadView('payroll::payroll.payslip', [
+            'batch'       => $payroll,
+            'payslips'    => $payslips,
+            'rows'        => $this->payslipRows(),
+            'periodLabel' => $periodLabel,
+            'signatory'   => $signatory,
+            'mode'        => 'monthly',
+        ])->setPaper('a4', 'portrait');
+
+        $employeeName = $entry->employee
+            ? str_replace(' ', '_', $entry->employee->full_name)
+            : 'Employee';
+        $filename = 'Payslip_' . $employeeName . '_' . str_replace(' ', '_', $periodLabel) . '.pdf';
+
+        // Get PDF content as string
+        $pdfContent = $pdf->output();
+
+        // Return JSON with file content as base64
+        return response()->json([
+            'success' => true,
+            'file_content' => base64_encode($pdfContent),
+            'filename' => $filename,
+            'content_type' => 'application/pdf'
+        ]);
+    }
+
+    private function generateChunkedPayslipsZip(PayrollBatch $payroll, $entries)
+    {
+        // Increase memory limit for this operation
+        ini_set('memory_limit', '1024M');
+        set_time_limit(300);
+
+        $chunkSize = 20; // Process 20 employees per PDF to avoid memory issues
+        $chunks = $entries->chunk($chunkSize);
+
+        // Pre-load all snapshots for cutoff split computation
+        $snapshots = AttendanceSnapshot::where('payroll_batch_id', $payroll->id)
+            ->get()
+            ->keyBy('employee_id');
+
+        $computationService = app(PayrollComputationService::class);
+        $dedMap             = fn ($e) => $e
+            ? $e->deductions->keyBy(fn ($d) => $d->deductionType->code ?? $d->name)
+            : collect();
+
+        $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        $periodLabel = ($months[$payroll->period_month] ?? '') . ' ' . $payroll->period_year;
+        $signatory   = Signatory::where('role_type', 'hrmo_designate')->where('is_active', true)->first();
+
+        // Create temporary directory for PDFs
+        $tempDir = storage_path('app/temp/payslips_' . $payroll->id . '_' . time());
+        if (! file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $pdfFiles = [];
+
+        foreach ($chunks as $index => $chunk) {
+            // Clear memory before processing each chunk
+            gc_collect_cycles();
+
+            $payslips = $chunk->map(function ($entry) use ($snapshots, $computationService, $dedMap) {
+                $snapshot    = $snapshots->get($entry->employee_id);
+                $cutoffSplit = $snapshot
+                    ? $computationService->computeCutoffSplit($entry, $snapshot)
+                    : null;
+
+                return [
+                    'employee'    => $entry->employee,
+                    'entry'       => $entry,
+                    'cutoffSplit' => $cutoffSplit,
+                    'dedMap'      => $dedMap($entry),
+                ];
+            });
+
+            $pdf = Pdf::loadView('payroll::payroll.payslip', [
+                'batch'       => $payroll,
+                'payslips'    => $payslips,
+                'rows'        => $this->payslipRows(),
+                'periodLabel' => $periodLabel,
+                'signatory'   => $signatory,
+                'mode'        => 'monthly',
+            ])->setPaper('a4', 'portrait');
+
+            $chunkFilename = $tempDir . '/Payslips_Part' . ($index + 1) . '.pdf';
+            $pdf->save($chunkFilename);
+            $pdfFiles[] = $chunkFilename;
+
+            // Free memory
+            unset($pdf);
+            unset($payslips);
+        }
+
+        // Create ZIP file
+        $zipFilename = $tempDir . '/Payslips_' . str_replace(' ', '_', $periodLabel) . '.zip';
+        $zip = new \ZipArchive();
+        if ($zip->open($zipFilename, \ZipArchive::CREATE) === true) {
+            foreach ($pdfFiles as $pdfFile) {
+                $zip->addFile($pdfFile, basename($pdfFile));
+            }
+            $zip->close();
+        }
+
+        // Stream the ZIP file
+        return response()->download($zipFilename, 'Payslips_' . str_replace(' ', '_', $periodLabel) . '.zip')->deleteFileAfterSend(true);
+    }
+
+    private function generateChunkedPayslipsZipAjax(PayrollBatch $payroll, $entries)
+    {
+        // Increase memory limit for this operation
+        ini_set('memory_limit', '1024M');
+        set_time_limit(300);
+
+        $chunkSize = 20; // Process 20 employees per PDF to avoid memory issues
+        $chunks = $entries->chunk($chunkSize);
+
+        // Pre-load all snapshots for cutoff split computation
+        $snapshots = AttendanceSnapshot::where('payroll_batch_id', $payroll->id)
+            ->get()
+            ->keyBy('employee_id');
+
+        $computationService = app(PayrollComputationService::class);
+        $dedMap             = fn ($e) => $e
+            ? $e->deductions->keyBy(fn ($d) => $d->deductionType->code ?? $d->name)
+            : collect();
+
+        $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        $periodLabel = ($months[$payroll->period_month] ?? '') . ' ' . $payroll->period_year;
+        $signatory   = Signatory::where('role_type', 'hrmo_designate')->where('is_active', true)->first();
+
+        // Create temporary directory for PDFs
+        $tempDir = storage_path('app/temp/payslips_' . $payroll->id . '_' . time());
+        if (! file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $pdfFiles = [];
+
+        foreach ($chunks as $index => $chunk) {
+            // Clear memory before processing each chunk
+            gc_collect_cycles();
+
+            $payslips = $chunk->map(function ($entry) use ($snapshots, $computationService, $dedMap) {
+                $snapshot    = $snapshots->get($entry->employee_id);
+                $cutoffSplit = $snapshot
+                    ? $computationService->computeCutoffSplit($entry, $snapshot)
+                    : null;
+
+                return [
+                    'employee'    => $entry->employee,
+                    'entry'       => $entry,
+                    'cutoffSplit' => $cutoffSplit,
+                    'dedMap'      => $dedMap($entry),
+                ];
+            });
+
+            $pdf = Pdf::loadView('payroll::payroll.payslip', [
+                'batch'       => $payroll,
+                'payslips'    => $payslips,
+                'rows'        => $this->payslipRows(),
+                'periodLabel' => $periodLabel,
+                'signatory'   => $signatory,
+                'mode'        => 'monthly',
+            ])->setPaper('a4', 'portrait');
+
+            $chunkFilename = $tempDir . '/Payslips_Part' . ($index + 1) . '.pdf';
+            $pdf->save($chunkFilename);
+            $pdfFiles[] = $chunkFilename;
+
+            // Free memory
+            unset($pdf);
+            unset($payslips);
+        }
+
+        // Create ZIP file
+        $zipFilename = $tempDir . '/Payslips_' . str_replace(' ', '_', $periodLabel) . '.zip';
+        $zip = new \ZipArchive();
+        if ($zip->open($zipFilename, \ZipArchive::CREATE) === true) {
+            foreach ($pdfFiles as $pdfFile) {
+                $zip->addFile($pdfFile, basename($pdfFile));
+            }
+            $zip->close();
+        }
+
+        // Read ZIP file content
+        $zipContent = file_get_contents($zipFilename);
+
+        // Clean up temp directory
+        foreach ($pdfFiles as $pdfFile) {
+            if (file_exists($pdfFile)) {
+                unlink($pdfFile);
+            }
+        }
+        if (file_exists($zipFilename)) {
+            unlink($zipFilename);
+        }
+        if (is_dir($tempDir)) {
+            rmdir($tempDir);
+        }
+
+        // Return JSON with file content as base64
+        return response()->json([
+            'success' => true,
+            'file_content' => base64_encode($zipContent),
+            'filename' => 'Payslips_' . str_replace(' ', '_', $periodLabel) . '.zip',
+            'content_type' => 'application/zip'
+        ]);
+    }
+
+    public function downloadPayslip(Request $request, $file)
+    {
+        // Sanitize filename to prevent directory traversal
+        $file = basename($file);
+
+        // Search for the file in temp directories
+        $tempDirs = glob(storage_path('app/temp/payslips_*'));
+        $filePath = null;
+
+        foreach ($tempDirs as $dir) {
+            $potentialPath = $dir . '/' . $file;
+            if (file_exists($potentialPath)) {
+                $filePath = $potentialPath;
+                break;
+            }
+        }
+
+        if (! $filePath || ! file_exists($filePath)) {
+            abort(404, 'File not found or has expired.');
+        }
+
+        // Determine content type
+        $extension = pathinfo($file, PATHINFO_EXTENSION);
+        $contentType = match($extension) {
+            'pdf' => 'application/pdf',
+            'zip' => 'application/zip',
+            default => 'application/octet-stream',
+        };
+
+        return response()->download($filePath, $file, ['Content-Type' => $contentType])->deleteFileAfterSend(true);
     }
 
     // ═══════════════════════════════════════════════════════════════════
