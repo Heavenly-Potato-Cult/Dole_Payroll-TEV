@@ -145,7 +145,7 @@ class EmployeeController extends Controller
                 // Map API field names → local database columns
                 $dbData = [
                     'division_id'               => $division->id,
-                    'employee_no'               => $empData['employee_id']               ?? null, // Use employee_id (EMP001 format) to match HRIS login
+                    'hris_employee_id'          => $empData['employee_id']               ?? null, // Store original HRIS employee_id for reference
                     'last_name'                 => $empData['last_name'],
                     'first_name'                => $empData['first_name'],
                     'middle_name'               => $empData['middle_name']               ?? null,
@@ -169,43 +169,72 @@ class EmployeeController extends Controller
                     'status'                    => 'active',
                 ];
 
-                // Match by employee_no only - this is the unique identifier from HRIS
+                // Match by hris_employee_id - this is the unique identifier from HRIS
                 // Include soft-deleted records to restore them during sync
                 $existing = Employee::withTrashed()
-                    ->where('employee_no', $dbData['employee_no'])
+                    ->where('hris_employee_id', $dbData['hris_employee_id'])
                     ->first();
 
                 if ($existing) {
                     Log::info('Updating existing employee', [
-                        'employee_no' => $dbData['employee_no'],
+                        'hris_employee_id' => $dbData['hris_employee_id'],
                         'existing_id' => $existing->id,
                     ]);
-                    
+
                     // Restore if soft-deleted
                     if ($existing->trashed()) {
                         $existing->restore();
                     }
-                    
-                    // Preserve locally managed plantilla_item_no on updates
-                    unset($dbData['plantilla_item_no']);
+
+                    // Generate employee_no only if it's currently null
+                    if (is_null($existing->employee_no) && !empty($dbData['hris_employee_id'])) {
+                        // Extract numeric part from HRIS employee_id (e.g., "EMP001" → "1", "1" → "1")
+                        $numericId = preg_replace('/[^0-9]/', '', $dbData['hris_employee_id']);
+                        $dbData['employee_no'] = 'EMP-' . str_pad($numericId, 4, '0', STR_PAD_LEFT);
+                        Log::info('Generated employee_no for existing employee', [
+                            'hris_employee_id' => $dbData['hris_employee_id'],
+                            'employee_no' => $dbData['employee_no'],
+                        ]);
+                    } else {
+                        // Preserve existing employee_no
+                        unset($dbData['employee_no']);
+                    }
+
+                    // Preserve locally managed plantilla_item_no on updates only if it already has a value
+                    // If it's NULL, allow the HRIS API value to be set
+                    if (!is_null($existing->plantilla_item_no)) {
+                        unset($dbData['plantilla_item_no']);
+                    }
                     $existing->update($dbData);
                     $updated++;
                 } else {
                     Log::info('Creating new employee', [
-                        'employee_no' => $dbData['employee_no'],
+                        'hris_employee_id' => $dbData['hris_employee_id'],
                         'plantilla' => $dbData['plantilla_item_no'],
                     ]);
-                    
+
+                    // Generate employee_no for new employees
+                    if (!empty($dbData['hris_employee_id'])) {
+                        // Extract numeric part from HRIS employee_id (e.g., "EMP001" → "1", "1" → "1")
+                        $numericId = preg_replace('/[^0-9]/', '', $dbData['hris_employee_id']);
+                        $dbData['employee_no'] = 'EMP-' . str_pad($numericId, 4, '0', STR_PAD_LEFT);
+                        Log::info('Generated employee_no for new employee', [
+                            'hris_employee_id' => $dbData['hris_employee_id'],
+                            'employee_no' => $dbData['employee_no'],
+                        ]);
+                    }
+
                     try {
                         $newEmployee = Employee::create($dbData);
                         Log::info('Successfully created employee', [
+                            'hris_employee_id' => $dbData['hris_employee_id'],
                             'employee_no' => $dbData['employee_no'],
                             'new_id' => $newEmployee->id,
                         ]);
                         $synced++;
                     } catch (\Exception $e) {
                         Log::error('Failed to create employee', [
-                            'employee_no' => $dbData['employee_no'],
+                            'hris_employee_id' => $dbData['hris_employee_id'],
                             'error' => $e->getMessage(),
                             'dbData' => $dbData,
                         ]);

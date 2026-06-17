@@ -15,6 +15,7 @@ class Employee extends Model
     protected $fillable = [
         // Identification
         'employee_no',
+        'hris_employee_id',
         'plantilla_item_no',
 
         // Personal info

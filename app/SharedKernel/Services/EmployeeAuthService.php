@@ -11,9 +11,9 @@ class EmployeeAuthService
 {
     /**
      * Authenticate employee using employee_id and password.
-     * Returns employee data if valid, null otherwise.
+     * Returns user data if valid, null otherwise.
      */
-    public function authenticate(string $employeeId, string $password): ?Employee
+    public function authenticate(string $employeeId, string $password): ?User
     {
         $employee = Employee::where('employee_no', $employeeId)->first();
 
@@ -24,9 +24,19 @@ class EmployeeAuthService
             return null;
         }
 
-        // For now, use the same demo password as HRIS: "pass123"
-        // In production, this should be replaced with proper password hashing
-        if ($password !== 'pass123') {
+        // Find the linked User record
+        $user = User::where('employee_id', $employee->id)->first();
+
+        if (!$user) {
+            Log::warning('Employee login failed: no linked user account', [
+                'employee_id' => $employeeId,
+                'employee_db_id' => $employee->id,
+            ]);
+            return null;
+        }
+
+        // Check password using proper hash verification
+        if (!Hash::check($password, $user->password)) {
             Log::warning('Employee login failed: invalid password', [
                 'employee_id' => $employeeId,
             ]);
@@ -35,10 +45,11 @@ class EmployeeAuthService
 
         Log::info('Employee authenticated successfully', [
             'employee_id' => $employeeId,
+            'user_id' => $user->id,
             'name' => $employee->full_name,
         ]);
 
-        return $employee;
+        return $user;
     }
 
     /**
