@@ -561,13 +561,17 @@ class AttendanceService
      * Compute late minutes based on AM clock-in time.
      * If clock-in is after 08:00:00, returns the delta in whole minutes.
      *
-     * @param  string $timeIn  HH:MM:SS format
+     * @param  string $timeIn  HH:MM:SS format (may include date prefix)
      * @return int  Late minutes (0 if on time or early)
      */
     protected function computeLateMinutes(string $timeIn): int
     {
         try {
-            $inTime        = strtotime($timeIn);
+            // Extract just the time portion (HH:MM:SS) in case a full datetime is provided
+            $timeParts = explode(' ', $timeIn);
+            $timeOnly = end($timeParts);
+
+            $inTime        = strtotime($timeOnly);
             $thresholdTime = strtotime(self::MORNING_START_THRESHOLD);
 
             return $inTime > $thresholdTime
@@ -583,13 +587,17 @@ class AttendanceService
      * Compute undertime minutes based on PM clock-out time.
      * If clock-out is before 17:00:00, returns the missing minutes.
      *
-     * @param  string $timeOut  HH:MM:SS format
+     * @param  string $timeOut  HH:MM:SS format (may include date prefix)
      * @return int  Undertime minutes (0 if on time or overtime)
      */
     protected function computeUndertimeMinutes(string $timeOut): int
     {
         try {
-            $outTime       = strtotime($timeOut);
+            // Extract just the time portion (HH:MM:SS) in case a full datetime is provided
+            $timeParts = explode(' ', $timeOut);
+            $timeOnly = end($timeParts);
+
+            $outTime       = strtotime($timeOnly);
             $thresholdTime = strtotime(self::AFTERNOON_END_THRESHOLD);
 
             return $outTime < $thresholdTime
