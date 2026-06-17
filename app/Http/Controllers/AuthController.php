@@ -35,16 +35,22 @@ class AuthController extends Controller
     private function handleEmployeeLogin(string $employeeId, string $password, Request $request)
     {
         $employeeAuthService = app(EmployeeAuthService::class);
-        $employee = $employeeAuthService->authenticate($employeeId, $password);
+        $user = $employeeAuthService->authenticate($employeeId, $password);
 
-        if (!$employee) {
+        if (!$user) {
             return back()
                 ->withInput($request->only('login_field'))
                 ->withErrors(['login_field' => 'Invalid Employee ID or password.']);
         }
 
-        // Resolve or create user account
-        $user = $employeeAuthService->resolveUser($employee);
+        // Get the employee from the user relationship
+        $employee = $user->employee;
+
+        if (!$employee) {
+            return back()
+                ->withInput($request->only('login_field'))
+                ->withErrors(['login_field' => 'Employee record not found.']);
+        }
         
         // Login the user
         Auth::login($user, $request->boolean('remember'));

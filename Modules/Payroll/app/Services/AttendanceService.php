@@ -69,13 +69,22 @@ class AttendanceService
 
         foreach ($employees as $employee) {
             try {
-                // Map DB id (8–89) to API key (EMP001–EMP082)
-                $apiKey = 'EMP' . str_pad($employee->id - $firstId + 1, 3, '0', STR_PAD_LEFT);
+                // Map DB id (8–89) to API key (EMP001–EMP082) for legacy format
+                $legacyApiKey = 'EMP' . str_pad($employee->id - $firstId + 1, 3, '0', STR_PAD_LEFT);
 
-                $raw = $attendanceMap[$apiKey] ?? null;
+                // For new granular format, try multiple possible user_id mappings:
+                // 1. Direct employee ID (e.g., 8, 9, 10)
+                // 2. Sequential index (e.g., 1, 2, 3) if API uses 1-based indexing
+                $sequentialIndex = (string) ($employee->id - $firstId + 1);
+
+                // Try legacy format first, then new format variations
+                $raw = $attendanceMap[$legacyApiKey]
+                    ?? $attendanceMap[(string) $employee->id]
+                    ?? $attendanceMap[$sequentialIndex]
+                    ?? null;
 
                 if (! $raw) {
-                    $errors[] = "#{$employee->id} {$employee->full_name}: not found in API (key: {$apiKey})";
+                    $errors[] = "#{$employee->id} {$employee->full_name}: not found in API (tried keys: {$legacyApiKey}, {$employee->id}, {$sequentialIndex})";
                     continue;
                 }
 

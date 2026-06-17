@@ -73,7 +73,7 @@ class UserController extends Controller
             $user = User::create([
                 'name'              => $employee->first_name . ' ' . ($employee->middle_name ? $employee->middle_name . '. ' : '') . $employee->last_name,
                 'email'             => null, // No email needed for HRIS SSO users
-                'password'          => Hash::make(uniqid()), // Random password - not used for HRIS SSO
+                'password'          => bcrypt('pass123'), // Default password for super admin management
                 'email_verified_at' => null,
                 'employee_id'       => $employee->id,
             ]);
@@ -133,11 +133,17 @@ class UserController extends Controller
         $request->validate([
             'role'          => ['required', 'string', 'exists:roles,name'],
             'secondary_role'=> ['nullable', 'string', 'exists:roles,name', 'different:role'],
+            'password'      => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
         DB::transaction(function () use ($request, $user) {
             // No name/email updates needed - they come from employee record
-            // Password not updated - HRIS users authenticate via JWT SSO
+
+            // Update password if provided
+            if ($request->filled('password')) {
+                $user->password = bcrypt($request->password);
+                $user->save();
+            }
 
             // Build the new set of roles
             $newRoles = array_filter([

@@ -168,6 +168,12 @@
     margin: 0;
 }
 
+.users-table .user-employee-no {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin: 0;
+}
+
 .you-badge {
     font-size: 0.65rem;
     font-weight: 600;
@@ -464,6 +470,9 @@
                             @endif
                         </div>
                         <div class="user-email">{{ $user->email }}</div>
+                        @if ($user->employee && $user->employee->employee_no)
+                            <div class="user-employee-no">{{ $user->employee->employee_no }}</div>
+                        @endif
                     </div>
                 </div>
             </td>

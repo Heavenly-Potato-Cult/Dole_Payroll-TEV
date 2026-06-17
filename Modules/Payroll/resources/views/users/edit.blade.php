@@ -100,6 +100,22 @@
                         @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
+                    @role('super_admin')
+                    <div class="form-group">
+                        <label for="password">Password <span style="font-weight:400; color:var(--text-light); font-size:0.82rem;">(optional)</span></label>
+                        <input type="password" id="password" name="password"
+                               class="{{ $errors->has('password') ? 'is-invalid' : '' }}"
+                               placeholder="Leave blank to keep current password">
+                        @error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password_confirmation">Confirm Password</label>
+                        <input type="password" id="password_confirmation" name="password_confirmation"
+                               placeholder="Leave blank to keep current password">
+                    </div>
+                    @endrole
+
                     {{-- ── Primary role ──────────────────────────────────────── --}}
                     <div class="form-group">
                         <label for="role">Primary Role <span style="color:var(--red)">*</span></label>

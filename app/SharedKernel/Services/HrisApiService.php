@@ -22,24 +22,72 @@ class HrisApiService
 
     /**
      * Fetch all employees from HRIS API.
-     * Dummy API: GET /employees → { total: 82, data: [...] }
+     *
+     * Old API format: GET /employees → { total: 82, data: [...] }
+     * New API format: GET /employees → { success: true, data: { current_page: 1, data: [...] } }
+     *
+     * Handles pagination by fetching all pages if the new format is used.
      */
     public function fetchEmployees(): array
     {
         try {
-            $response = Http::withToken($this->apiKey)
-                ->timeout(30)
-                ->get("{$this->baseUrl}/employees");
+            $allEmployees = [];
+            $currentPage = 1;
 
-            if ($response->successful()) {
-                $data = $response->json();
-                return $data['data'] ?? [];
-            }
+            do {
+                $response = Http::withToken($this->apiKey)
+                    ->timeout(30)
+                    ->get("{$this->baseUrl}/employees", ['page' => $currentPage]);
 
-            Log::warning('HRIS API employees non-200', [
-                'status' => $response->status(),
-                'body'   => $response->body(),
-            ]);
+                if ($response->successful()) {
+                    $data = $response->json();
+
+                    // Handle new API format: { success: true, data: { current_page: 1, data: [...] } }
+                    if (isset($data['success']) && isset($data['data']['data'])) {
+                        $employees = $data['data']['data'] ?? [];
+                        $allEmployees = array_merge($allEmployees, $employees);
+
+                        // Check if there are more pages
+                        $lastPage = $data['data']['last_page'] ?? 1;
+                        $currentPage = $data['data']['current_page'] ?? 1;
+
+                        Log::info('HRIS API employees page fetched', [
+                            'page' => $currentPage,
+                            'last_page' => $lastPage,
+                            'employees_on_page' => count($employees),
+                        ]);
+
+                        // Continue to next page if available
+                        if ($currentPage < $lastPage) {
+                            $currentPage++;
+                            continue;
+                        }
+                    }
+                    // Handle old API format: { total: 82, data: [...] }
+                    elseif (isset($data['data']) && is_array($data['data'])) {
+                        $allEmployees = $data['data'];
+                        Log::info('HRIS API employees fetched (old format)', [
+                            'total' => count($allEmployees),
+                        ]);
+                    }
+                    // Unknown format
+                    else {
+                        Log::warning('HRIS API employees: unknown response format', [
+                            'response' => $data,
+                        ]);
+                    }
+
+                    break; // Exit loop after processing
+                } else {
+                    Log::warning('HRIS API employees non-200', [
+                        'status' => $response->status(),
+                        'body'   => $response->body(),
+                    ]);
+                    break;
+                }
+            } while (true);
+
+            return $allEmployees;
         } catch (\Exception $e) {
             Log::error('HRIS API employees error', ['error' => $e->getMessage()]);
         }
@@ -195,6 +243,10 @@ class HrisApiService
     /**
      * Fetch ALL employees' attendance for a cut-off period in ONE request.
      * Returns records keyed by employee_id (e.g. "EMP001").
+     *
+     * Supports two API response formats:
+     * 1. Legacy format: Array of aggregated records [{employee_id, days_present, ...}]
+     * 2. New format: Wrapper with granular daily logs {status, meta, data: [{user_id, date, logs, ...}]}
      */
     public function fetchAttendanceBulk(string $cutoffStart, string $cutoffEnd): array
     {
@@ -209,7 +261,13 @@ class HrisApiService
             if ($response->successful()) {
                 $data = $response->json();
 
-                if (is_array($data) && ! empty($data)) {
+                // Handle new wrapper format with granular daily logs
+                if (is_array($data) && isset($data['status']) && isset($data['data'])) {
+                    return $this->transformGranularAttendance($data['data']);
+                }
+
+                // Handle legacy format: array of aggregated records
+                if (is_array($data) && ! empty($data) && ! isset($data['status'])) {
                     return collect($data)->keyBy('employee_id')->toArray();
                 }
 
@@ -228,6 +286,80 @@ class HrisApiService
         }
 
         return [];
+    }
+
+    /**
+     * Transform granular daily log format into the structure expected by AttendanceService.
+     *
+     * Input format (new API):
+     * [
+     *   {
+     *     "user_id": 1,
+     *     "user_name": "ADMIN",
+     *     "date": "2026-05-01",
+     *     "logs": {
+     *       "am": { "in": "07:55:00", "out": "12:00:00" },
+     *       "pm": { "in": "13:00:00", "out": "17:00:00" },
+     *       "ot": { "in": null, "out": null }
+     *     },
+     *     "status": "pending",
+     *     "remarks": null
+     *   }
+     * ]
+     *
+     * Output format (expected by AttendanceService):
+     * [
+     *   "EMP001" => [
+     *     "daily_logs" => [
+     *       ["date" => "2026-05-01", "am" => [...], "pm" => [...]]
+     *     ],
+     *     "leave_credits" => 15.0
+     *   ]
+     * ]
+     *
+     * Note: user_id mapping to employee_id (EMP001 format) is handled by AttendanceService.
+     * We pass the raw user_id and let AttendanceService do the mapping based on employee DB IDs.
+     */
+    private function transformGranularAttendance(array $granularData): array
+    {
+        $groupedByEmployee = [];
+
+        foreach ($granularData as $record) {
+            $userId = $record['user_id'] ?? null;
+            $date = $record['date'] ?? null;
+
+            if (! $userId || ! $date) {
+                continue;
+            }
+
+            // Use user_id directly as the key - AttendanceService will handle the mapping
+            // to employee_id format (EMP001, etc.) based on employee DB IDs
+            $key = (string) $userId;
+
+            if (! isset($groupedByEmployee[$key])) {
+                $groupedByEmployee[$key] = [
+                    'daily_logs' => [],
+                    'leave_credits' => 15.0, // Default value - may need to be fetched separately
+                ];
+            }
+
+            // Transform the log structure
+            $logs = $record['logs'] ?? [];
+            $groupedByEmployee[$key]['daily_logs'][] = [
+                'date' => $date,
+                'am' => [
+                    'in' => $logs['am']['in'] ?? null,
+                    'out' => $logs['am']['out'] ?? null,
+                ],
+                'pm' => [
+                    'in' => $logs['pm']['in'] ?? null,
+                    'out' => $logs['pm']['out'] ?? null,
+                ],
+                // OT logs are currently not used in computation but preserved for future use
+            ];
+        }
+
+        return $groupedByEmployee;
     }
 
     // ═══════════════════════════════════════════════════════════════════

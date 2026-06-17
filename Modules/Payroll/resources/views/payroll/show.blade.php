@@ -1023,7 +1023,7 @@
                 </div>
                 <div style="font-size:0.78rem; color:var(--text-mid); margin-top:3px;">
                     Single payslip showing both 1–15 and 16–30/31 cut-offs side by side.
-                    Matches current DOLE practice.
+                    
                 </div>
             </div>
         </label>

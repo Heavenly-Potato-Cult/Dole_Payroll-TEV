@@ -135,8 +135,7 @@
             </form>
 
             <div class="login-card-footer">
-                Forgot your password? Contact the Payroll Officer<br>
-                or ICT Unit for account assistance.
+                Forgot your password? Contact the Super Admin for account assistance.
             </div>
 
         </div>
