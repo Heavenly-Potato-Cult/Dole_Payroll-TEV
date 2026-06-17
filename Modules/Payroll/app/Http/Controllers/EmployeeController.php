@@ -124,22 +124,51 @@ class EmployeeController extends Controller
             $synced          = 0;
             $updated         = 0;
             $skippedDivision = 0;
+            $divisionsCreated = 0;
             $processed       = 0;
 
             foreach ($employees as $index => $empData) {
                 $processed++;
-                // Resolve division — skip the record if no local match exists
-                $division = Division::where('code', $empData['division_code'] ?? null)->first();
+                // Resolve division — auto-create if no local match exists
+                $divisionCode = $empData['division_code'] ?? null;
+                $divisionName = $empData['division_name'] ?? null;
+                $division = Division::where('code', $divisionCode)->first();
 
                 if (! $division) {
-                    Log::warning('Skipping employee: no matching division', [
-                        'employee_no'   => $empData['employee_id'],
-                        'employee_name' => $empData['first_name'] . ' ' . $empData['last_name'],
-                        'division_code' => $empData['division_code'] ?? null,
-                        'division_name' => $empData['division_name'] ?? null,
-                    ]);
-                    $skippedDivision++;
-                    continue;
+                    // Auto-create division from HRIS data
+                    if ($divisionCode && $divisionName) {
+                        try {
+                            $division = Division::create([
+                                'name'        => $divisionName,
+                                'code'        => $divisionCode,
+                                'description' => "Synced from HRIS",
+                                'is_active'   => true,
+                            ]);
+                            $divisionsCreated++;
+                            Log::info('Auto-created division from HRIS', [
+                                'division_code' => $divisionCode,
+                                'division_name' => $divisionName,
+                                'division_id' => $division->id,
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::error('Failed to auto-create division', [
+                                'division_code' => $divisionCode,
+                                'division_name' => $divisionName,
+                                'error' => $e->getMessage(),
+                            ]);
+                            $skippedDivision++;
+                            continue;
+                        }
+                    } else {
+                        Log::warning('Skipping employee: missing division data', [
+                            'employee_no'   => $empData['employee_id'],
+                            'employee_name' => $empData['first_name'] . ' ' . $empData['last_name'],
+                            'division_code' => $divisionCode,
+                            'division_name' => $divisionName,
+                        ]);
+                        $skippedDivision++;
+                        continue;
+                    }
                 }
 
                 // Map API field names → local database columns
@@ -243,15 +272,21 @@ class EmployeeController extends Controller
             }
 
             Log::info('HRIS sync completed', [
-                'processed'        => $processed,
-                'synced'           => $synced,
-                'updated'          => $updated,
-                'skipped_division' => $skippedDivision,
-                'final_db_count'   => Employee::withTrashed()->count(),
+                'processed'          => $processed,
+                'synced'             => $synced,
+                'updated'            => $updated,
+                'skipped_division'   => $skippedDivision,
+                'divisions_created'  => $divisionsCreated,
+                'final_db_count'     => Employee::withTrashed()->count(),
             ]);
 
+            $message = "Synced {$synced} new and updated {$updated} existing employees from HRIS.";
+            if ($divisionsCreated > 0) {
+                $message .= " Created {$divisionsCreated} new divisions.";
+            }
+
             return redirect()->route('employees.index')
-                ->with('success', "Synced {$synced} new and updated {$updated} existing employees from HRIS.");
+                ->with('success', $message);
 
         } catch (\Exception $e) {
             Log::error('HRIS sync failed', ['error' => $e->getMessage()]);

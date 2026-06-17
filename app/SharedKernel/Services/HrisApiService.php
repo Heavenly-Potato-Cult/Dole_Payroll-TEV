@@ -9,16 +9,82 @@ class HrisApiService
 {
     private string $baseUrl;
     private string $apiKey;
+    private bool $useDummy;
+    private ?string $authToken = null;
 
     public function __construct()
     {
-        $this->baseUrl = rtrim(config('services.hris.url', ''), '/');
-        $this->apiKey  = config('services.hris.key', '');
+        $this->useDummy = config('services.hris.use_dummy', true);
+        
+        if ($this->useDummy) {
+            $this->baseUrl = rtrim(config('services.hris.url', ''), '/');
+            $this->apiKey  = config('services.hris.key', '');
+        } else {
+            $this->baseUrl = rtrim(config('services.hris.base_url', ''), '/');
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════
     //  Employees
     // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Authenticate with HRIS API and get bearer token.
+     * Returns token string or null on failure.
+     */
+    private function authenticate(): ?string
+    {
+        $loginUrl = config('services.hris.login_url');
+        $username = config('services.hris.username');
+        $password = config('services.hris.password');
+        $deviceName = config('services.hris.device_name');
+
+        Log::info('HRIS authenticate() called', [
+            'login_url' => $loginUrl,
+            'username' => $username,
+            'device_name' => $deviceName,
+        ]);
+
+        try {
+            $response = Http::timeout(30)->post($loginUrl, [
+                'username' => $username,
+                'password' => $password,
+                'device_name' => $deviceName,
+            ]);
+
+            Log::info('HRIS authenticate() response', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+
+                // Extract token from response - adjust based on actual API response structure
+                $token = $data['token'] ?? $data['access_token'] ?? $data['api_token'] ?? null;
+
+                if ($token) {
+                    Log::info('HRIS API authentication successful', [
+                        'token_extracted' => substr($token, 0, 20) . '...',
+                    ]);
+                    return $token;
+                }
+
+                Log::warning('HRIS API authentication: token not found in response', [
+                    'response' => $data,
+                ]);
+            } else {
+                Log::warning('HRIS API authentication failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('HRIS API authentication error', ['error' => $e->getMessage()]);
+        }
+
+        return null;
+    }
 
     /**
      * Fetch all employees from HRIS API.
@@ -31,15 +97,67 @@ class HrisApiService
     public function fetchEmployees(): array
     {
         try {
+            Log::info('HRIS fetchEmployees() called', [
+                'use_dummy' => $this->useDummy,
+                'base_url' => $this->baseUrl,
+            ]);
+
             $allEmployees = [];
             $currentPage = 1;
 
-            do {
-                $response = Http::withToken($this->apiKey)
-                    ->timeout(30)
-                    ->get("{$this->baseUrl}/employees", ['page' => $currentPage]);
+            // Get authentication token if not using dummy API
+            if (!$this->useDummy) {
+                $this->authToken = $this->authenticate();
+                if (!$this->authToken) {
+                    Log::error('HRIS API: failed to authenticate');
+                    return [];
+                }
+            }
 
-                if ($response->successful()) {
+            $employeesUrl = $this->useDummy
+                ? "{$this->baseUrl}/employees"
+                : config('services.hris.employees_url', "{$this->baseUrl}/employees");
+
+            Log::info('HRIS fetchEmployees() URL determined', [
+                'employees_url' => $employeesUrl,
+                'use_dummy' => $this->useDummy,
+            ]);
+
+            do {
+                $http = $this->useDummy 
+                    ? Http::withToken($this->apiKey)
+                    : Http::withToken($this->authToken);
+
+                // Retry logic for failed requests
+                $maxRetries = 3;
+                $attempt = 0;
+                $response = null;
+
+                while ($attempt < $maxRetries) {
+                    $attempt++;
+                    $response = $http
+                        ->timeout(60) // Increased from 30 to 60 seconds
+                        ->get($employeesUrl, ['page' => $currentPage]);
+
+                    if ($response->successful()) {
+                        break;
+                    }
+
+                    // Log retry attempt
+                    Log::warning('HRIS API employees fetch failed, retrying', [
+                        'page' => $currentPage,
+                        'attempt' => $attempt,
+                        'max_retries' => $maxRetries,
+                        'status' => $response->status(),
+                        'error' => $response->body(),
+                    ]);
+
+                    if ($attempt < $maxRetries) {
+                        sleep(2); // Wait 2 seconds before retry
+                    }
+                }
+
+                if ($response && $response->successful()) {
                     $data = $response->json();
 
                     // Handle new API format: { success: true, data: { current_page: 1, data: [...] } }
@@ -50,11 +168,15 @@ class HrisApiService
                         // Check if there are more pages
                         $lastPage = $data['data']['last_page'] ?? 1;
                         $currentPage = $data['data']['current_page'] ?? 1;
+                        $total = $data['data']['total'] ?? 0;
 
                         Log::info('HRIS API employees page fetched', [
                             'page' => $currentPage,
                             'last_page' => $lastPage,
+                            'total' => $total,
+                            'per_page' => $data['data']['per_page'] ?? null,
                             'employees_on_page' => count($employees),
+                            'cumulative_count' => count($allEmployees),
                         ]);
 
                         // Continue to next page if available
@@ -79,20 +201,43 @@ class HrisApiService
 
                     break; // Exit loop after processing
                 } else {
-                    Log::warning('HRIS API employees non-200', [
-                        'status' => $response->status(),
-                        'body'   => $response->body(),
+                    Log::error('HRIS API employees fetch failed after retries', [
+                        'page' => $currentPage,
+                        'status' => $response ? $response->status() : 'no response',
+                        'body'   => $response ? $response->body() : 'no response',
                     ]);
                     break;
                 }
             } while (true);
 
+            Log::info('HRIS API employees fetch completed', [
+                'total_employees' => count($allEmployees),
+                'pages_fetched' => $currentPage,
+                'expected_total_pages' => $lastPage ?? 'unknown',
+            ]);
+
+            // Return whatever data we successfully fetched (even if incomplete)
+            // Only fall back to mock data if using dummy API and got nothing
+            if ($this->useDummy && empty($allEmployees)) {
+                Log::warning('HRIS dummy API returned no data, using mock');
+                return $this->mockEmployees();
+            }
+
             return $allEmployees;
         } catch (\Exception $e) {
             Log::error('HRIS API employees error', ['error' => $e->getMessage()]);
-        }
 
-        return $this->mockEmployees();
+            // Return partial data if we have any, otherwise empty array
+            // Don't fall back to mock data for real API
+            if (!empty($allEmployees)) {
+                Log::info('Returning partial employee data due to error', [
+                    'count' => count($allEmployees),
+                ]);
+                return $allEmployees;
+            }
+
+            return [];
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════

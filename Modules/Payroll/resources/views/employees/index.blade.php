@@ -361,12 +361,12 @@
                             @role('payroll_officer|hrmo|super_admin')
                             <a href="{{ route('employees.edit', $emp) }}"
                                class="btn btn-outline btn-sm" title="Edit">✎</a>
-                            <button type="button" 
+                            <!-- <button type="button" 
                                     class="btn btn-sm {{ $emp->is_excluded ? 'btn-success' : 'btn-warning' }}"
                                     onclick="toggleExclusion({{ $emp->id }}, {{ $emp->is_excluded ? 'false' : 'true' }}, '{{ addslashes($emp->full_name) }}')"
                                     title="{{ $emp->is_excluded ? 'Include in payroll' : 'Exclude from payroll' }}">
                                 {{ $emp->is_excluded ? '✓' : '✕' }}
-                            </button>
+                            </button> -->
                             <form method="POST" action="{{ route('employees.destroy', $emp) }}"
                                   onsubmit="return confirm('Remove {{ addslashes($emp->full_name) }} from the active plantilla?\n(Soft delete — record is preserved.)')">
                                 @csrf

@@ -32,8 +32,15 @@ return [
     ],
 
     'hris' => [
+        'use_dummy' => env('HRIS_USE_DUMMY', true),
         'url' => env('HRIS_API_URL'),
         'key' => env('HRIS_API_KEY'),
+        'base_url' => env('HRIS_BASE_URL'),
+        'login_url' => env('HRIS_LOGIN_URL'),
+        'employees_url' => env('HRIS_EMPLOYEES_URL'),
+        'username' => env('HRIS_USERNAME'),
+        'password' => env('HRIS_PASSWORD'),
+        'device_name' => env('HRIS_DEVICE_NAME'),
     ],
 
 ];
