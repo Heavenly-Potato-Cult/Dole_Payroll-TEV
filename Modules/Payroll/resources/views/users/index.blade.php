@@ -456,10 +456,10 @@
 {{-- ── Tab Navigation ─────────────────────────────────────────── --}}
 <div class="tab-navigation">
     <button class="tab-btn {{ $tab === 'officers' ? 'active' : '' }}" onclick="switchTab('officers')">
-        Officers <span class="count">{{ User::whereHas('roles', fn($q) => $q->where('name', '!=', 'employee'))->count() }}</span>
+        Officers <span class="count">{{ $officerCount ?? 0 }}</span>
     </button>
     <button class="tab-btn {{ $tab === 'employees' ? 'active' : '' }}" onclick="switchTab('employees')">
-        Employees <span class="count">{{ User::whereHas('roles', fn($q) => $q->where('name', 'employee'))->count() }}</span>
+        Employees <span class="count">{{ $employeeCount ?? 0 }}</span>
     </button>
 </div>
 

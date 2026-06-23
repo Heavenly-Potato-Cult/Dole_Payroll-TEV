@@ -11,6 +11,50 @@
     margin-bottom: 24px;
 }
 
+/* ── Tab Navigation ─────────────────────────────────────────── */
+.tab-navigation {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: -2px;
+}
+
+.tab-btn:hover {
+    color: #1e3a5f;
+}
+
+.tab-btn.active {
+    color: #1e3a5f;
+    border-bottom-color: #1e3a5f;
+}
+
+.tab-btn .count {
+    background: #f3f4f6;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    margin-left: 8px;
+    color: #6b7280;
+}
+
+.tab-btn.active .count {
+    background: #1e3a5f;
+    color: white;
+}
+
 .page-header-left h1 {
     margin: 0 0 4px 0;
     font-size: 1.5rem;
@@ -400,9 +444,21 @@
 <div class="page-header">
     <div class="page-header-left">
         <h1>User Management</h1>
-        <p><?php echo e($users->count()); ?> <?php echo e(Str::plural('account', $users->count())); ?> registered</p>
+        <p>Manage officer accounts and employee passwords</p>
     </div>
-    <a href="<?php echo e(route('users.create')); ?>" class="btn btn-primary">+ Add User</a>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($tab === 'officers'): ?>
+    <a href="<?php echo e(route('users.create')); ?>" class="btn btn-primary">+ Add Officer</a>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+</div>
+
+
+<div class="tab-navigation">
+    <button class="tab-btn <?php echo e($tab === 'officers' ? 'active' : ''); ?>" onclick="switchTab('officers')">
+        Officers <span class="count"><?php echo e($officerCount ?? 0); ?></span>
+    </button>
+    <button class="tab-btn <?php echo e($tab === 'employees' ? 'active' : ''); ?>" onclick="switchTab('employees')">
+        Employees <span class="count"><?php echo e($employeeCount ?? 0); ?></span>
+    </button>
 </div>
 
 
@@ -512,7 +568,11 @@
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
         <tr>
             <td colspan="5" style="text-align: center; padding: 40px; color: #7f8c8d;">
-                No users yet. <a href="<?php echo e(route('users.create')); ?>">Add the first user →</a>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($tab === 'employees'): ?>
+                    No employee accounts yet. Employees will be auto-created when they first log in.
+                <?php else: ?>
+                    No officers yet. <a href="<?php echo e(route('users.create')); ?>">Add the first officer →</a>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </td>
         </tr>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -615,6 +675,13 @@
 </div>
 
 <script>
+// Switch between Officers and Employees tabs
+function switchTab(tab) {
+    const url = new URL(window.location);
+    url.searchParams.set('tab', tab);
+    window.location.href = url.toString();
+}
+
 // Toggle role guide collapse/expand
 function toggleRoleGuide() {
     const header = document.getElementById('roleGuideHeader');

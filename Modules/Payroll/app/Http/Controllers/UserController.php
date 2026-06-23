@@ -37,6 +37,10 @@ class UserController extends Controller
     {
         $tab = $request->query('tab', 'officers');
 
+        // Calculate counts for tabs
+        $officerCount = User::whereHas('roles', fn($q) => $q->where('name', '!=', 'employee'))->count();
+        $employeeCount = User::whereHas('roles', fn($q) => $q->where('name', 'employee'))->count();
+
         if ($tab === 'employees') {
             $users = User::with(['roles', 'roleAssignments', 'employee'])
                 ->whereHas('roles', fn($q) => $q->where('name', 'employee'))
@@ -49,7 +53,7 @@ class UserController extends Controller
                 ->get();
         }
 
-        return view('payroll::users.index', compact('users', 'tab'));
+        return view('payroll::users.index', compact('users', 'tab', 'officerCount', 'employeeCount'));
     }
 
     public function create()
