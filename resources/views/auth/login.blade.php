@@ -92,13 +92,13 @@
                 @csrf
 
                 <div class="lf-group">
-                    <label for="login_field">Employee ID or Email</label>
+                    <label for="login_field">Employee No.</label>
                     <input
                         type="text"
                         id="login_field"
                         name="login_field"
                         value="{{ old('employee_id') ?? old('email') }}"
-                        placeholder="Employee ID (e.g. EMP001) or Email"
+                        placeholder="Employee No. (EMP-0000) "
                         required
                         autofocus
                         class="{{ $errors->has('employee_id') || $errors->has('email') ? 'is-invalid' : '' }}"
