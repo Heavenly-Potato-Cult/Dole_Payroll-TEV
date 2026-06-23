@@ -85,11 +85,11 @@
                                 </option>
                             @endforeach
                         </select>
-                        <a href="{{ route('deduction-type-categories.create') }}"
+                        <a href="{{ route('deduction-type-categories.index') }}"
                            target="_blank"
                            style="font-size:0.78rem;white-space:nowrap;color:var(--navy);text-decoration:underline;"
                            title="Manage categories (opens in new tab)">
-                            + Manage
+                            Manage
                         </a>
                     </div>
                     @error('deduction_type_category_id')
@@ -247,14 +247,15 @@
 
 @section('scripts')
 <script>
-// ── Build existing-orders map keyed by category code ─────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+//  Order conflict detection
+// ══════════════════════════════════════════════════════════════════════════
 const existingOrders = @json($existingOrders);
 const loanCategories = @json($loanCategories);
 
-// Map category option id → code for conflict + loan checks
 function selectedCategoryCode() {
     const sel = document.getElementById('deduction_type_category_id');
-    const opt = sel.options[sel.selectedIndex];
+    const opt = sel ? sel.options[sel.selectedIndex] : null;
     return opt ? (opt.dataset.code || '') : '';
 }
 
@@ -263,24 +264,65 @@ function checkOrderConflict() {
     const order  = parseInt(document.getElementById('display_order').value, 10);
     const orders = existingOrders[code] || [];
     const warn   = document.getElementById('orderConflictWarning');
-    warn.style.display = (!isNaN(order) && orders.includes(order)) ? 'inline' : 'none';
+    if (warn) warn.style.display = (!isNaN(order) && orders.includes(order)) ? 'inline' : 'none';
 }
 
-document.getElementById('deduction_type_category_id').addEventListener('change', function () {
+const catEl = document.getElementById('deduction_type_category_id');
+const ordEl = document.getElementById('display_order');
+
+if (catEl) catEl.addEventListener('change', function () {
     checkOrderConflict();
     const code     = selectedCategoryCode();
     const loanWarn = document.getElementById('loanLockWarning');
-    if (loanWarn) {
-        loanWarn.style.display = loanCategories.includes(code) ? 'block' : 'none';
-    }
+    if (loanWarn) loanWarn.style.display = loanCategories.includes(code) ? 'block' : 'none';
 });
-document.getElementById('display_order').addEventListener('input', checkOrderConflict);
 
-// ── Disable save while submitting ────────────────────────────────────────
-document.getElementById('createTypeForm').addEventListener('submit', function () {
-    const btn = document.getElementById('submitBtn');
-    btn.disabled    = true;
-    btn.textContent = 'Saving…';
+if (ordEl) ordEl.addEventListener('input', checkOrderConflict);
+checkOrderConflict();
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Save confirm (matches edit blade pattern)
+// ══════════════════════════════════════════════════════════════════════════
+let __createTypeSubmitting = false;
+document.getElementById('createTypeForm').addEventListener('submit', function (e) {
+    if (__createTypeSubmitting) return;
+    e.preventDefault();
+
+    const form = this;
+    const btn  = document.getElementById('submitBtn');
+
+    Swal.fire({
+        title: 'Save new deduction type?',
+        html: `<div style="text-align:left;">
+            <div style="font-weight:700;color:#0F1B4C;margin-bottom:6px;">${document.getElementById('name').value || '(unnamed)'}</div>
+            <div style="font-size:0.9rem;color:#6b7280;">The <strong>Code</strong> is permanent and cannot be changed after saving.</div>
+        </div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Save',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#0F1B4C',
+        cancelButtonColor: '#6B7280',
+        reverseButtons: true,
+        focusCancel: true,
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        __createTypeSubmitting = true;
+        btn.disabled    = true;
+        btn.textContent = 'Saving…';
+
+        Swal.fire({
+            title: '<span style="color:#0F1B4C;">Saving…</span>',
+            html: '<div style="color:#6b7280;font-size:0.9rem;">Please wait.</div>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        form.submit();
+    });
 });
 </script>
 @endsection
