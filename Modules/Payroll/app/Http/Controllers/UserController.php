@@ -33,14 +33,23 @@ class UserController extends Controller
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
 
-    public function index()
+    public function index(Request $request)
     {
-        $users = User::with(['roles', 'roleAssignments', 'employee'])
-            ->whereHas('roles', fn($q) => $q->where('name', '!=', 'employee'))
-            ->orderBy('name')
-            ->get();
+        $tab = $request->query('tab', 'officers');
 
-        return view('payroll::users.index', compact('users'));
+        if ($tab === 'employees') {
+            $users = User::with(['roles', 'roleAssignments', 'employee'])
+                ->whereHas('roles', fn($q) => $q->where('name', 'employee'))
+                ->orderBy('name')
+                ->get();
+        } else {
+            $users = User::with(['roles', 'roleAssignments', 'employee'])
+                ->whereHas('roles', fn($q) => $q->where('name', '!=', 'employee'))
+                ->orderBy('name')
+                ->get();
+        }
+
+        return view('payroll::users.index', compact('users', 'tab'));
     }
 
     public function create()
@@ -130,6 +139,22 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user)
     {
+        $isEmployee = $user->roles->count() === 1 && $user->hasRole('employee');
+
+        if ($isEmployee) {
+            // Employee: only password update
+            $request->validate([
+                'password' => ['required', 'string', 'min:8', 'confirmed'],
+            ]);
+
+            $user->password = bcrypt($request->password);
+            $user->save();
+
+            return redirect()->route('users.index', ['tab' => 'employees'])
+                ->with('success', "Password updated for {$user->name}.");
+        }
+
+        // Officer: full role and password update
         $request->validate([
             'role'          => ['required', 'string', 'exists:roles,name'],
             'secondary_role'=> ['nullable', 'string', 'exists:roles,name', 'different:role'],
@@ -175,7 +200,7 @@ class UserController extends Controller
             }
         });
 
-        return redirect()->route('users.index')
+        return redirect()->route('users.index', ['tab' => 'officers'])
             ->with('success', "User {$user->name} updated.");
     }
 

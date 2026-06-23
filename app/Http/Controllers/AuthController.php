@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use App\SharedKernel\Models\Employee;
 use App\SharedKernel\Services\EmployeeAuthService;
 use App\Models\User;
@@ -34,24 +35,35 @@ class AuthController extends Controller
 
     private function handleEmployeeLogin(string $employeeId, string $password, Request $request)
     {
-        $employeeAuthService = app(EmployeeAuthService::class);
-        $user = $employeeAuthService->authenticate($employeeId, $password);
+        $employee = Employee::where('employee_no', $employeeId)->first();
 
-        if (!$user) {
+        if (!$employee) {
             return back()
                 ->withInput($request->only('login_field'))
                 ->withErrors(['login_field' => 'Invalid Employee ID or password.']);
         }
 
-        // Get the employee from the user relationship
-        $employee = $user->employee;
+        // Find or create the linked User record
+        $user = User::where('employee_id', $employee->id)->first();
 
-        if (!$employee) {
-            return back()
-                ->withInput($request->only('login_field'))
-                ->withErrors(['login_field' => 'Employee record not found.']);
+        if (!$user) {
+            // Auto-provision user with employee role only
+            $user = User::create([
+                'name' => $employee->full_name,
+                'email' => null,
+                'password' => Hash::make($password),
+                'employee_id' => $employee->id,
+            ]);
+            $user->assignRole('employee');
+        } else {
+            // Verify password for existing user
+            if (!Hash::check($password, $user->password)) {
+                return back()
+                    ->withInput($request->only('login_field'))
+                    ->withErrors(['login_field' => 'Invalid Employee ID or password.']);
+            }
         }
-        
+
         // Login the user
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
@@ -63,6 +75,7 @@ class AuthController extends Controller
         ]);
 
         // Get redirect destination
+        $employeeAuthService = app(EmployeeAuthService::class);
         $redirectTo = $employeeAuthService->getRedirectDestination($user);
 
         return redirect($redirectTo)->with('success', 'Welcome, ' . $employee->full_name . '!');

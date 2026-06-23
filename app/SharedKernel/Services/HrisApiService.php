@@ -264,7 +264,20 @@ class HrisApiService
         string $cutoffEnd
     ): array {
         try {
-            $response = Http::withToken($this->apiKey)
+            // Get authentication token if not using dummy API
+            if (!$this->useDummy) {
+                $this->authToken = $this->authenticate();
+                if (!$this->authToken) {
+                    Log::error('HRIS API: failed to authenticate for attendance');
+                    return $this->perfectAttendance($employeeNo, $cutoffStart, $cutoffEnd);
+                }
+            }
+
+            $http = $this->useDummy 
+                ? Http::withToken($this->apiKey)
+                : Http::withToken($this->authToken);
+
+            $response = $http
                 ->timeout(30)
                 ->get("{$this->baseUrl}/attendance", [
                     'employee_id'  => $employeeNo,   // dummy API param name
@@ -396,7 +409,20 @@ class HrisApiService
     public function fetchAttendanceBulk(string $cutoffStart, string $cutoffEnd): array
     {
         try {
-            $response = Http::withToken($this->apiKey)
+            // Get authentication token if not using dummy API
+            if (!$this->useDummy) {
+                $this->authToken = $this->authenticate();
+                if (!$this->authToken) {
+                    Log::error('HRIS API: failed to authenticate for attendance bulk');
+                    return [];
+                }
+            }
+
+            $http = $this->useDummy 
+                ? Http::withToken($this->apiKey)
+                : Http::withToken($this->authToken);
+
+            $response = $http
                 ->timeout(30)
                 ->get("{$this->baseUrl}/attendance", [
                     'cutoff_start' => $cutoffStart,
@@ -518,7 +544,20 @@ class HrisApiService
     public function fetchOfficeOrders(): array
     {
         try {
-            $response = Http::withToken($this->apiKey)
+            // Get authentication token if not using dummy API
+            if (!$this->useDummy) {
+                $this->authToken = $this->authenticate();
+                if (!$this->authToken) {
+                    Log::error('HRIS API: failed to authenticate for office orders');
+                    return [];
+                }
+            }
+
+            $http = $this->useDummy 
+                ? Http::withToken($this->apiKey)
+                : Http::withToken($this->authToken);
+
+            $response = $http
                 ->timeout(30)
                 ->get("{$this->baseUrl}/office-orders");
 
@@ -552,7 +591,20 @@ class HrisApiService
     public function fetchLeaveCredits(string $employeeNo): float
     {
         try {
-            $response = Http::withToken($this->apiKey)
+            // Get authentication token if not using dummy API
+            if (!$this->useDummy) {
+                $this->authToken = $this->authenticate();
+                if (!$this->authToken) {
+                    Log::error('HRIS API: failed to authenticate for leave credits');
+                    return 0.0;
+                }
+            }
+
+            $http = $this->useDummy 
+                ? Http::withToken($this->apiKey)
+                : Http::withToken($this->authToken);
+
+            $response = $http
                 ->timeout(30)
                 ->get("{$this->baseUrl}/employees/{$employeeNo}/leave-credits");
 
