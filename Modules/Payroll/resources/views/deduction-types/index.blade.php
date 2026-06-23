@@ -183,77 +183,6 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-/* ── Category Accordion ───────────────────────────────────────────── */
-.dt-category {
-    margin-bottom: 20px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    background: var(--surface);
-    box-shadow: var(--shadow);
-}
-.dt-category-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    user-select: none;
-    transition: background-color 0.2s;
-}
-.dt-category-header:hover {
-    background: var(--navy-light);
-}
-.dt-category-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-.dt-category-label {
-    font-size: 0.85rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .1em;
-    color: var(--navy);
-    margin: 0;
-    font-family: var(--font);
-}
-.dt-category-count {
-    background: var(--navy);
-    color: var(--white);
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 12px;
-    min-width: 20px;
-    text-align: center;
-}
-.dt-category-toggle {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--text-mid);
-    transition: transform 0.2s;
-    font-size: 1.2rem;
-}
-.dt-category-toggle.collapsed {
-    transform: rotate(-90deg);
-}
-.dt-category-content {
-    transition: max-height 0.3s ease-out;
-    overflow: hidden;
-}
-.dt-category-content.collapsed {
-    max-height: 0;
-}
-
 /* ── Expand/Collapse All ─────────────────────────────────────────── */
 .dt-expand-controls {
     display: flex;
@@ -388,7 +317,6 @@
     background: var(--bg);
 }
 
-
 /* Inactive row */
 .dt-table tr.dt-inactive td {
     opacity: 0.5;
@@ -440,6 +368,30 @@
     padding: 3px 10px;
     border-radius: 99px;
     font-weight: 700;
+    font-family: var(--font);
+}
+.badge-locked {
+    background: #dcfce7;
+    color: #166534;
+    font-size: 0.63rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    padding: 3px 8px;
+    border-radius: 99px;
+    border: 1px solid #16a34a;
+    white-space: nowrap;
+    font-family: var(--font);
+}
+.badge-modified {
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 0.60rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 99px;
+    border: 1px solid #fbbf24;
+    white-space: nowrap;
     font-family: var(--font);
 }
 
@@ -506,7 +458,7 @@
 
 /* ── Notes truncation ────────────────────────────────────────────── */
 .dt-notes {
-    max-width: 280px;
+    max-width: 240px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -514,41 +466,43 @@
     font-size: 0.78rem;
 }
 
-/* ── Legend Footer ────────────────────────────────────────────────── */
-.dt-legend {
-    background: #fff;
-    border: 0.5px solid #e2e8f0;
-    border-radius: 12px;
-    margin-top: 32px;
-    margin-bottom: 40px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-.dt-legend-content {
+/* ── Formula rate summary (computed types) ───────────────────────── */
+.dt-formula-summary {
+    margin-top: 5px;
+    font-size: 0.70rem;
+    color: var(--text-mid);
     display: flex;
-    gap: 32px;
+    align-items: center;
+    gap: 6px;
     flex-wrap: wrap;
-    align-items: center;
-    padding: 20px 24px;
+    line-height: 1.4;
 }
-.dt-legend-title {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--text-mid);
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    margin-right: 8px;
-    font-family: var(--font);
-}
-.dt-legend-item {
-    display: flex;
+.dt-formula-pill {
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.78rem;
-    color: var(--text-mid);
+    gap: 3px;
+    background: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+    border-radius: 99px;
+    padding: 1px 7px;
+    font-size: 0.65rem;
+    font-weight: 600;
     font-family: var(--font);
+    white-space: nowrap;
+}
+.dt-formula-pill.default {
+    background: var(--bg);
+    color: var(--text-mid);
+    border-color: #e2e8f0;
+}
+.dt-formula-pill.wht {
+    background: #fef9c3;
+    color: #78350f;
+    border-color: #fbbf24;
 }
 
-/* ── Alternative: Collapsible Legend ───────────────────────────────── */
+/* ── Legend ──────────────────────────────────────────────────────── */
 .dt-legend-collapsible {
     background: #fff;
     border: 0.5px solid #e2e8f0;
@@ -592,45 +546,30 @@
     max-height: 0;
     padding: 0 24px;
 }
-
-.badge-locked {
-    background: #dcfce7;
-    color: #166534;
-    font-size: 0.63rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    padding: 3px 8px;
-    border-radius: 99px;
-    border: 1px solid #16a34a;
-    white-space: nowrap;
+.dt-legend-content {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+.dt-legend-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.78rem;
+    color: var(--text-mid);
     font-family: var(--font);
+    max-width: 320px;
 }
 
-/* ── Responsive Design ───────────────────────────────────────────── */
+/* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-    .dt-search-filter {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .dt-search-input {
-        min-width: auto;
-    }
-    .dt-legend {
-        position: static;
-    }
-    .dt-notes {
-        max-width: 120px;
-    }
+    .dt-search-filter { flex-direction: column; align-items: stretch; }
+    .dt-search-input  { min-width: auto; }
+    .dt-notes         { max-width: 120px; }
     .dt-table th.dt-col-notes,
-    .dt-table td.dt-col-notes {
-        display: none;
-    }
-    .dt-legend-content {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 12px;
-    }
+    .dt-table td.dt-col-notes { display: none; }
+    .dt-legend-content { flex-direction: column; align-items: flex-start; gap: 12px; }
 }
 </style>
 @endsection
@@ -638,27 +577,28 @@
 @section('content')
 
 <div class="page-content">
-    {{-- Greeting Section --}}
+
+    {{-- ── Greeting ────────────────────────────────────────────────── --}}
     <div class="db-greeting">
         <div class="db-greeting-header">
             <div>
                 <h1>Deduction Types</h1>
                 <p class="db-greeting-location">Manage all deduction and loan types used across payroll and employee enrollments.</p>
             </div>
-            <div class="dt-header-actions" style="display:flex;gap:10px;align-items:center;">
+            <div style="display:flex;gap:10px;align-items:center;">
                 <a href="{{ route('deduction-type-categories.index') }}" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.4);">☰ Categories</a>
                 <a href="{{ route('deduction-types.create') }}" class="btn btn-primary">+ New Deduction Type</a>
             </div>
         </div>
     </div>
 
-    {{-- Summary Stats Grid --}}
+    {{-- ── Summary Stats ────────────────────────────────────────────── --}}
     @php
-        $allTypes   = $grouped->flatten();
-        $totalCount = $allTypes->count();
-        $activeCount    = $allTypes->where('is_active', true)->count();
-        $computedCount  = $allTypes->where('is_computed', true)->count();
-        $inactiveCount  = $allTypes->where('is_active', false)->count();
+        $allTypes      = $grouped->flatten();
+        $totalCount    = $allTypes->count();
+        $activeCount   = $allTypes->where('is_active', true)->count();
+        $computedCount = $allTypes->where('is_computed', true)->count();
+        $inactiveCount = $allTypes->where('is_active', false)->count();
     @endphp
 
     <div class="db-stat-grid">
@@ -672,7 +612,6 @@
                 <div class="db-stat-value">{{ $totalCount }}</div>
             </div>
         </div>
-
         <div class="db-stat">
             <div class="db-stat-left">
                 <div class="db-stat-title">Active</div>
@@ -680,10 +619,9 @@
             </div>
             <div class="db-stat-divider"></div>
             <div class="db-stat-right">
-                <div class="db-stat-value" style="color: var(--success);">{{ $activeCount }}</div>
+                <div class="db-stat-value" style="color:var(--success);">{{ $activeCount }}</div>
             </div>
         </div>
-
         <div class="db-stat">
             <div class="db-stat-left">
                 <div class="db-stat-title">Inactive</div>
@@ -691,10 +629,9 @@
             </div>
             <div class="db-stat-divider"></div>
             <div class="db-stat-right">
-                <div class="db-stat-value" style="color: var(--red);">{{ $inactiveCount }}</div>
+                <div class="db-stat-value" style="color:var(--red);">{{ $inactiveCount }}</div>
             </div>
         </div>
-
         <div class="db-stat">
             <div class="db-stat-left">
                 <div class="db-stat-title">Auto-Computed</div>
@@ -702,193 +639,301 @@
             </div>
             <div class="db-stat-divider"></div>
             <div class="db-stat-right">
-                <div class="db-stat-value" style="color: #534AB7;">{{ $computedCount }}</div>
+                <div class="db-stat-value" style="color:#534AB7;">{{ $computedCount }}</div>
             </div>
         </div>
     </div>
 
-{{-- Search & Filter Bar --}}
-<div class="dt-search-filter">
-    <input type="text" class="dt-search-input" id="searchInput" placeholder="Search by Code or Name...">
-    <select class="dt-filter-select" id="typeFilter">
-        <option value="">All Types</option>
-        <option value="computed">Auto-Computed</option>
-        <option value="manual">Manual</option>
-    </select>
-    <select class="dt-filter-select" id="statusFilter">
-        <option value="">All Status</option>
-        <option value="active">Active</option>
-        <option value="inactive">Inactive</option>
-    </select>
-</div>
-
-{{-- Expand/Collapse All Controls --}}
-<div class="dt-expand-controls">
-    <button type="button" class="dt-expand-btn" onclick="toggleAllCategories(true)">Expand All</button>
-    <button type="button" class="dt-expand-btn" onclick="toggleAllCategories(false)">Collapse All</button>
-</div>
-
-@if ($grouped->isEmpty())
-    <div class="card">
-        <div class="card-body" style="text-align:center;padding:48px;color:var(--text-light);">
-            <div style="font-size:2rem;margin-bottom:12px;">📋</div>
-            <p>No deduction types found. <a href="{{ route('deduction-types.create') }}">Create the first one</a> or run the seeder.</p>
-        </div>
+    {{-- ── Search & Filter ─────────────────────────────────────────── --}}
+    <div class="dt-search-filter">
+        <input type="text" class="dt-search-input" id="searchInput" placeholder="Search by Code or Name…">
+        <select class="dt-filter-select" id="typeFilter">
+            <option value="">All Types</option>
+            <option value="computed">Auto-Computed</option>
+            <option value="manual">Manual</option>
+        </select>
+        <select class="dt-filter-select" id="statusFilter">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+        </select>
     </div>
-@endif
 
-<div id="categoriesContainer">
-@foreach ($categoryLabels as $catKey => $catLabel)
-    @if (isset($grouped[$catKey]))
-    <div class="dt-category" data-category="{{ $catKey }}">
-        <div class="dt-category-header" onclick="toggleCategory('{{ $catKey }}')">
-            <div class="dt-category-title">
-                <h3 class="dt-category-label">{{ $catLabel }}</h3>
-                <span class="dt-category-count">{{ $grouped[$catKey]->count() }}</span>
+    {{-- ── Expand/Collapse Controls ─────────────────────────────────── --}}
+    <div class="dt-expand-controls">
+        <button type="button" class="dt-expand-btn" onclick="toggleAllCategories(true)">Expand All</button>
+        <button type="button" class="dt-expand-btn" onclick="toggleAllCategories(false)">Collapse All</button>
+    </div>
+
+    @if ($grouped->isEmpty())
+        <div class="card">
+            <div class="card-body" style="text-align:center;padding:48px;color:var(--text-light);">
+                <div style="font-size:2rem;margin-bottom:12px;">📋</div>
+                <p>No deduction types found. <a href="{{ route('deduction-types.create') }}">Create the first one</a> or run the seeder.</p>
             </div>
-            <button class="dt-category-toggle" aria-label="Toggle category">▼</button>
         </div>
-        <div class="dt-category-content" id="category-{{ $catKey }}">
-            <table class="dt-table">
-                <thead>
-                    <tr>
-                        <th style="width:42px;">#</th>
-                        <th style="width:160px;">Code</th>
-                        <th>Name</th>
-                        <th style="width:110px;">Type</th>
-                        <th style="width:80px;">Status</th>
-                        <th class="dt-col-notes">Notes</th>
-                        <th style="width:100px;text-align:right;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($grouped[$catKey]->sortBy('display_order') as $type)
-                    <tr class="{{ $type->is_active ? '' : 'dt-inactive' }} {{ $type->is_computed ? 'dt-computed' : '' }}" 
-                        data-code="{{ strtolower($type->code) }}" 
-                        data-name="{{ strtolower($type->name) }}" 
-                        data-type="{{ $type->is_computed ? 'computed' : 'manual' }}" 
-                        data-status="{{ $type->is_active ? 'active' : 'inactive' }}">
-
-                        {{-- Order --}}
-                        <td><span class="dt-order">{{ $loop->iteration }}</span></td>
-
-                        {{-- Code (immutable) --}}
-                        <td><span class="code-chip">{{ $type->code }}</span></td>
-
-                        {{-- Name --}}
-                        <td>
-                            <span style="font-weight:600;color:var(--navy);">{{ $type->name }}</span>
-                        </td>
-
-{{-- Type badge --}}
-<td>
-    @if ($type->is_computed)
-        <span class="badge-computed">⚙️ Auto-computed</span>
-    @elseif ($type->isEffectivelyLocked())
-        <span class="badge-locked">🔒 Global Fixed</span>
-    @else
-        <span class="badge-manual">Manual</span>
     @endif
-</td>
 
-                        {{-- Status --}}
-                        <td>
-                            @if ($type->is_active)
-                                <span class="badge-active">Active</span>
-                            @else
-                                <span class="badge-inactive">Inactive</span>
-                            @endif
-                        </td>
+    <div id="categoriesContainer">
+    @foreach ($categoryLabels as $catKey => $catLabel)
+        @if (isset($grouped[$catKey]))
+        <div class="dt-category" data-category="{{ $catKey }}">
+            <div class="dt-category-header" onclick="toggleCategory('{{ $catKey }}')">
+                <div class="dt-category-title">
+                    <h3 class="dt-category-label">{{ $catLabel }}</h3>
+                    <span class="dt-category-count">{{ $grouped[$catKey]->count() }}</span>
+                </div>
+                <button class="dt-category-toggle" aria-label="Toggle category">▼</button>
+            </div>
+            <div class="dt-category-content" id="category-{{ $catKey }}">
+                <table class="dt-table">
+                    <thead>
+                        <tr>
+                            <th style="width:42px;">#</th>
+                            <th style="width:160px;">Code</th>
+                            <th>Name / Formula</th>
+                            <th style="width:130px;">Type</th>
+                            <th style="width:80px;">Status</th>
+                            <th class="dt-col-notes">Notes</th>
+                            <th style="width:100px;text-align:right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($grouped[$catKey]->sortBy('display_order') as $type)
 
-                        {{-- Notes --}}
-                        <td class="dt-col-notes">
-                            <span class="dt-notes" title="{{ $type->notes }}">
-                                {{ $type->notes ?: '—' }}
-                            </span>
-                        </td>
+                        @php
+                            // ── Formula rate summary for computed types ──────────
+                            $isPagibig    = in_array($type->code, ['PAG_IBIG_1', 'PAGIBIG_1']);
+                            $isPhilhealth = $type->code === 'PHILHEALTH';
+                            $isGsis       = in_array($type->code, ['GSIS_LIFE_RETIREMENT', 'GSIS_LIFE_RET']);
+                            $isWht        = in_array($type->code, ['WITHHOLDING_TAX', 'WHT']);
 
-                        {{-- Actions --}}
-                        <td>
-                            <div class="dt-actions" style="justify-content:flex-end;">
-                                {{-- Edit --}}
-                                <a href="{{ route('deduction-types.edit', $type) }}"
-                                   class="btn-icon" title="Edit">✎</a>
+                            $formulaPills    = [];   // each: ['label' => '…', 'isDefault' => bool]
+                            $hasCustomRates  = false;
 
-                                {{-- Toggle active --}}
-                                <form id="toggleForm-{{ $type->id }}" method="POST"
-                                      action="{{ route('deduction-types.toggle', $type) }}"
-                                      style="display:inline;">
-                                    @csrf
-                                    @method('PATCH')
-                                    <button type="button"
-                                            class="btn-icon {{ $type->is_active ? 'danger' : '' }}"
-                                            title="{{ $type->is_active ? 'Deactivate' : 'Activate' }}"
-                                            onclick="confirmToggleDeductionType({{ $type->id }}, '{{ $type->name }}', {{ $type->is_active ? 'true' : 'false' }})">
-                                        {{ $type->is_active ? '⊘' : '✓' }}
-                                    </button>
-                                </form>
-                            </div>
-                        </td>
+                            if ($type->is_computed) {
+                                if ($isWht) {
+                                    $formulaPills[] = ['label' => 'BIR TRAIN Law — developer-managed', 'isDefault' => false, 'isWht' => true];
+                                } elseif ($isPagibig) {
+                                    $rate      = $type->formula_rate;
+                                    $rateLow   = $type->formula_rate_low;
+                                    $threshold = $type->formula_rate_threshold;
+                                    $cap       = $type->formula_monthly_cap;
 
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                                    $formulaPills[] = [
+                                        'label'     => 'Main: ' . ($rate ? number_format($rate * 100, 2) . '%' : '2.00%'),
+                                        'isDefault' => !$rate,
+                                        'isWht'     => false,
+                                    ];
+                                    $formulaPills[] = [
+                                        'label'     => 'Low: ' . ($rateLow ? number_format($rateLow * 100, 2) . '%' : '1.00%'),
+                                        'isDefault' => !$rateLow,
+                                        'isWht'     => false,
+                                    ];
+                                    $formulaPills[] = [
+                                        'label'     => 'Threshold: ₱' . number_format($threshold ?? 1500, 0),
+                                        'isDefault' => !$threshold,
+                                        'isWht'     => false,
+                                    ];
+                                    $formulaPills[] = [
+                                        'label'     => 'Cap: ₱' . number_format($cap ?? 100, 0) . '/mo',
+                                        'isDefault' => !$cap,
+                                        'isWht'     => false,
+                                    ];
+                                    $hasCustomRates = $rate || $rateLow || $threshold || $cap;
+
+                                } elseif ($isPhilhealth) {
+                                    $rate    = $type->formula_rate;
+                                    $floor   = $type->formula_monthly_floor;
+                                    $ceiling = $type->formula_monthly_ceiling;
+
+                                    $formulaPills[] = [
+                                        'label'     => 'Rate: ' . ($rate ? number_format($rate * 100, 2) . '%' : '5.00%'),
+                                        'isDefault' => !$rate,
+                                        'isWht'     => false,
+                                    ];
+                                    $formulaPills[] = [
+                                        'label'     => 'Floor: ₱' . number_format($floor ?? 500, 0) . '/mo',
+                                        'isDefault' => !$floor,
+                                        'isWht'     => false,
+                                    ];
+                                    $formulaPills[] = [
+                                        'label'     => 'Ceiling: ₱' . number_format($ceiling ?? 5000, 0) . '/mo',
+                                        'isDefault' => !$ceiling,
+                                        'isWht'     => false,
+                                    ];
+                                    $hasCustomRates = $rate || $floor || $ceiling;
+
+                                } elseif ($isGsis) {
+                                    $rate = $type->formula_rate;
+                                    $formulaPills[] = [
+                                        'label'     => 'Rate: ' . ($rate ? number_format($rate * 100, 2) . '%' : '9.00%') . ' of basic',
+                                        'isDefault' => !$rate,
+                                        'isWht'     => false,
+                                    ];
+                                    $hasCustomRates = (bool) $rate;
+                                }
+
+                                // Override active?
+                                if ($type->isOverridden()) {
+                                    $formulaPills = [[
+                                        'label'     => '★ Fixed override: ₱' . number_format((float)$type->override_amount, 2) . '/cut-off',
+                                        'isDefault' => false,
+                                        'isWht'     => false,
+                                    ]];
+                                    $hasCustomRates = true;
+                                }
+                            }
+                        @endphp
+
+                        <tr class="{{ $type->is_active ? '' : 'dt-inactive' }}"
+                            data-code="{{ strtolower($type->code) }}"
+                            data-name="{{ strtolower($type->name) }}"
+                            data-type="{{ $type->is_computed ? 'computed' : 'manual' }}"
+                            data-status="{{ $type->is_active ? 'active' : 'inactive' }}">
+
+                            {{-- # --}}
+                            <td><span class="dt-order">{{ $loop->iteration }}</span></td>
+
+                            {{-- Code --}}
+                            <td><span class="code-chip">{{ $type->code }}</span></td>
+
+                            {{-- Name + formula summary --}}
+                            <td>
+                                <span style="font-weight:600;color:var(--navy);">{{ $type->name }}</span>
+
+                                @if ($type->is_computed && count($formulaPills))
+                                <div class="dt-formula-summary">
+                                    @foreach ($formulaPills as $pill)
+                                        <span class="dt-formula-pill {{ $pill['isWht'] ? 'wht' : ($pill['isDefault'] ? 'default' : '') }}">
+                                            {{ $pill['label'] }}
+                                        </span>
+                                    @endforeach
+                                    @if ($hasCustomRates && !$type->isOverridden())
+                                        <span class="badge-modified">★ Modified</span>
+                                    @endif
+                                </div>
+                                @endif
+                            </td>
+
+                            {{-- Type badge --}}
+                            <td>
+                                @if ($type->is_computed)
+                                    <span class="badge-computed">⚙️ Auto-computed</span>
+                                @elseif ($type->isEffectivelyLocked())
+                                    <span class="badge-locked">🔒 Global Fixed</span>
+                                @else
+                                    <span class="badge-manual">Manual</span>
+                                @endif
+                            </td>
+
+                            {{-- Status --}}
+                            <td>
+                                @if ($type->is_active)
+                                    <span class="badge-active">Active</span>
+                                @else
+                                    <span class="badge-inactive">Inactive</span>
+                                @endif
+                            </td>
+
+                            {{-- Notes --}}
+                            <td class="dt-col-notes">
+                                <span class="dt-notes" title="{{ $type->notes }}">
+                                    {{ $type->notes ?: '—' }}
+                                </span>
+                            </td>
+
+                            {{-- Actions --}}
+                            <td>
+                                <div class="dt-actions" style="justify-content:flex-end;">
+                                    <a href="{{ route('deduction-types.edit', $type) }}"
+                                       class="btn-icon" title="Edit">✎</a>
+
+                                    <form id="toggleForm-{{ $type->id }}" method="POST"
+                                          action="{{ route('deduction-types.toggle', $type) }}"
+                                          style="display:inline;">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="button"
+                                                class="btn-icon {{ $type->is_active ? 'danger' : '' }}"
+                                                title="{{ $type->is_active ? 'Deactivate' : 'Activate' }}"
+                                                onclick="confirmToggleDeductionType({{ $type->id }}, '{{ addslashes($type->name) }}', {{ $type->is_active ? 'true' : 'false' }})">
+                                            {{ $type->is_active ? '⊘' : '✓' }}
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        @endif
+    @endforeach
+    </div>
+
+    <div id="noResults" class="dt-no-results" style="display:none;">
+        <div style="font-size:2rem;margin-bottom:12px;">🔍</div>
+        <p>No results found. Try adjusting your search or filters.</p>
+    </div>
+
+    {{-- ── Legend ───────────────────────────────────────────────────── --}}
+    <div class="dt-legend-collapsible">
+        <button class="dt-legend-toggle" onclick="toggleLegend()">
+            <span>Legend &amp; Help</span>
+            <span class="dt-legend-toggle-icon" id="legendToggleIcon">▼</span>
+        </button>
+        <div class="dt-legend-body" id="legendBody">
+            <div class="dt-legend-content">
+                <div class="dt-legend-item">
+                    <span class="badge-computed" style="flex-shrink:0;">⚙️ Auto-computed</span>
+                    <span>Amount is calculated by the payroll engine (GSIS, PhilHealth, Pag-IBIG, WHT). Rates shown inline — click Edit to adjust them.</span>
+                </div>
+                <div class="dt-legend-item">
+                    <span class="badge-locked" style="flex-shrink:0;">🔒 Global Fixed</span>
+                    <span>A single amount is applied to all employees automatically.</span>
+                </div>
+                <div class="dt-legend-item">
+                    <span class="badge-manual" style="flex-shrink:0;">Manual</span>
+                    <span>Amount is set individually per employee via the Deductions enrollment form.</span>
+                </div>
+                <div class="dt-legend-item">
+                    <span class="badge-modified" style="flex-shrink:0;">★ Modified</span>
+                    <span>Formula rates have been customized from statutory defaults.</span>
+                </div>
+                <div class="dt-legend-item">
+                    <span class="dt-formula-pill default" style="flex-shrink:0;">Rate: 5.00%</span>
+                    <span>Grey pills = statutory default (no custom value saved yet).</span>
+                </div>
+                <div class="dt-legend-item">
+                    <span class="dt-formula-pill" style="flex-shrink:0;">Rate: 6.00%</span>
+                    <span>Blue pills = custom rate currently active in the system.</span>
+                </div>
+            </div>
         </div>
     </div>
-    @endif
-@endforeach
-</div>
 
-<div id="noResults" class="dt-no-results" style="display: none;">
-    <div style="font-size:2rem;margin-bottom:12px;">🔍</div>
-    <p>No results found. Try adjusting your search or filters.</p>
-</div>
-
-{{-- Legend --}}
-<div class="dt-legend-collapsible">
-    <button class="dt-legend-toggle" onclick="toggleLegend()">
-        <span>Legend & Help</span>
-        <span class="dt-legend-toggle-icon" id="legendToggleIcon">▼</span>
-    </button>
-    <div class="dt-legend-body" id="legendBody">
-        <div class="dt-legend-content">
-            <div class="dt-legend-item">
-                <span class="badge-computed">🔒 Auto-computed</span>
-                <span>Amount is calculated by the payroll engine (GSIS, PhilHealth, Pag-IBIG, WHT). Cannot be manually enrolled.</span>
-            </div>
-            <div class="dt-legend-item">
-                <span class="badge-manual">Manual</span>
-                <span>Amount is set per employee via the Deductions enrollment form.</span>
-            </div>
-            <div class="dt-legend-item">
-                <span class="code-chip">CODE</span>
-                <span>Code is permanent and cannot be changed after creation.</span>
-            </div>
-        </div>
-    </div>
-</div>
+</div>{{-- /.page-content --}}
 
 @endsection
 
 @section('scripts')
 <script>
-// Initialize category states (all expanded by default)
+// ── Category accordion ────────────────────────────────────────────────────
 const categoryStates = {};
-const categories = document.querySelectorAll('.dt-category');
+const categories     = document.querySelectorAll('.dt-category');
+
 categories.forEach(cat => {
-    const catKey = cat.dataset.category;
-    categoryStates[catKey] = true; // all expanded by default
+    categoryStates[cat.dataset.category] = true;
 });
 
-// Toggle individual category
-function toggleCategory(categoryKey) {
-    const content = document.getElementById(`category-${categoryKey}`);
-    const toggle = document.querySelector(`[data-category="${categoryKey}"] .dt-category-toggle`);
-    
-    categoryStates[categoryKey] = !categoryStates[categoryKey];
-    
-    if (categoryStates[categoryKey]) {
+function toggleCategory(key) {
+    const content = document.getElementById('category-' + key);
+    const toggle  = document.querySelector('[data-category="' + key + '"] .dt-category-toggle');
+    categoryStates[key] = !categoryStates[key];
+    if (categoryStates[key]) {
         content.classList.remove('collapsed');
         toggle.classList.remove('collapsed');
         content.style.maxHeight = content.scrollHeight + 'px';
@@ -899,15 +944,12 @@ function toggleCategory(categoryKey) {
     }
 }
 
-// Toggle all categories
 function toggleAllCategories(expand) {
     categories.forEach(cat => {
-        const catKey = cat.dataset.category;
-        const content = document.getElementById(`category-${catKey}`);
-        const toggle = cat.querySelector('.dt-category-toggle');
-        
-        categoryStates[catKey] = expand;
-        
+        const key     = cat.dataset.category;
+        const content = document.getElementById('category-' + key);
+        const toggle  = cat.querySelector('.dt-category-toggle');
+        categoryStates[key] = expand;
         if (expand) {
             content.classList.remove('collapsed');
             toggle.classList.remove('collapsed');
@@ -920,133 +962,69 @@ function toggleAllCategories(expand) {
     });
 }
 
-// Toggle legend
 function toggleLegend() {
-    const legendBody = document.getElementById('legendBody');
-    const toggleIcon = document.getElementById('legendToggleIcon');
-    
-    if (legendBody.classList.contains('collapsed')) {
-        legendBody.classList.remove('collapsed');
-        toggleIcon.classList.remove('collapsed');
-        legendBody.style.maxHeight = legendBody.scrollHeight + 'px';
+    const body = document.getElementById('legendBody');
+    const icon = document.getElementById('legendToggleIcon');
+    if (body.classList.contains('collapsed')) {
+        body.classList.remove('collapsed');
+        icon.classList.remove('collapsed');
+        body.style.maxHeight = body.scrollHeight + 'px';
     } else {
-        legendBody.classList.add('collapsed');
-        toggleIcon.classList.add('collapsed');
-        legendBody.style.maxHeight = '0';
+        body.classList.add('collapsed');
+        icon.classList.add('collapsed');
+        body.style.maxHeight = '0';
     }
 }
 
-// Initialize max-height for animations
-document.addEventListener('DOMContentLoaded', function() {
-    categories.forEach(cat => {
-        const catKey = cat.dataset.category;
-        const content = document.getElementById(`category-${catKey}`);
-        content.style.maxHeight = content.scrollHeight + 'px';
-    });
-    
-    // Initialize legend height
-    const legendBody = document.getElementById('legendBody');
-    if (legendBody) {
-        legendBody.style.maxHeight = legendBody.scrollHeight + 'px';
-    }
-    
-    // Setup search and filter functionality
-    setupSearchAndFilter();
-});
-
+// ── Search & filter ───────────────────────────────────────────────────────
 function setupSearchAndFilter() {
     const searchInput = document.getElementById('searchInput');
-    const typeFilter = document.getElementById('typeFilter');
-    const statusFilter = document.getElementById('statusFilter');
-    const categoriesContainer = document.getElementById('categoriesContainer');
-    const noResults = document.getElementById('noResults');
-    
+    const typeFilter  = document.getElementById('typeFilter');
+    const statusFilter= document.getElementById('statusFilter');
+    const container   = document.getElementById('categoriesContainer');
+    const noResults   = document.getElementById('noResults');
+
     function applyFilters() {
-        const searchTerm = searchInput.value.toLowerCase().trim();
-        const typeValue = typeFilter.value;
-        const statusValue = statusFilter.value;
-        
-        let hasVisibleResults = false;
-        let categoriesWithVisibleResults = new Set();
-        
-        // Filter each row
-        const rows = document.querySelectorAll('.dt-table tbody tr');
-        rows.forEach(row => {
-            const code = row.dataset.code || '';
-            const name = row.dataset.name || '';
-            const type = row.dataset.type || '';
-            const status = row.dataset.status || '';
-            
-            const matchesSearch = !searchTerm || code.includes(searchTerm) || name.includes(searchTerm);
-            const matchesType = !typeValue || type === typeValue;
-            const matchesStatus = !statusValue || status === statusValue;
-            
-            const isVisible = matchesSearch && matchesType && matchesStatus;
-            row.style.display = isVisible ? '' : 'none';
-            
-            if (isVisible) {
-                hasVisibleResults = true;
-                // Find which category this row belongs to
-                const category = row.closest('.dt-category');
-                if (category) {
-                    categoriesWithVisibleResults.add(category.dataset.category);
-                }
-            }
+        const search = searchInput.value.toLowerCase().trim();
+        const type   = typeFilter.value;
+        const status = statusFilter.value;
+        let hasVisible = false;
+
+        document.querySelectorAll('.dt-table tbody tr').forEach(row => {
+            const matchSearch = !search || row.dataset.code.includes(search) || row.dataset.name.includes(search);
+            const matchType   = !type   || row.dataset.type   === type;
+            const matchStatus = !status || row.dataset.status === status;
+            const visible     = matchSearch && matchType && matchStatus;
+            row.style.display = visible ? '' : 'none';
+            if (visible) hasVisible = true;
         });
-        
-        // Show/hide categories and expand those with results
+
+        const isFiltered = search || type || status;
         categories.forEach(cat => {
-            const catKey = cat.dataset.category;
-            const categoryRows = cat.querySelectorAll('.dt-table tbody tr');
-            const hasVisibleRows = Array.from(categoryRows).some(row => row.style.display !== 'none');
-            
-            if (hasVisibleRows) {
-                cat.style.display = '';
-                // Auto-expand category if it has visible results and search is active
-                if (searchTerm || typeValue || statusValue) {
-                    if (!categoryStates[catKey]) {
-                        toggleCategory(catKey);
-                    }
-                }
-            } else {
-                // Only hide category if there's a filter active
-                if (searchTerm || typeValue || statusValue) {
-                    cat.style.display = 'none';
-                } else {
-                    cat.style.display = '';
-                }
-            }
+            const key        = cat.dataset.category;
+            const anyVisible = Array.from(cat.querySelectorAll('.dt-table tbody tr'))
+                                   .some(r => r.style.display !== 'none');
+            cat.style.display = (!isFiltered || anyVisible) ? '' : 'none';
+            if (isFiltered && anyVisible && !categoryStates[key]) toggleCategory(key);
         });
-        
-        // Show/hide no results message
-        if (searchTerm || typeValue || statusValue) {
-            categoriesContainer.style.display = hasVisibleResults ? '' : 'none';
-            noResults.style.display = hasVisibleResults ? 'none' : '';
-        } else {
-            categoriesContainer.style.display = '';
-            noResults.style.display = 'none';
-            // Show all categories when no filters
-            categories.forEach(cat => {
-                cat.style.display = '';
-            });
-        }
+
+        container.style.display = (!isFiltered || hasVisible) ? '' : 'none';
+        noResults.style.display  = (isFiltered && !hasVisible) ? ''  : 'none';
     }
-    
-    // Add event listeners
-    searchInput.addEventListener('input', applyFilters);
-    typeFilter.addEventListener('change', applyFilters);
-    statusFilter.addEventListener('change', applyFilters);
+
+    searchInput.addEventListener('input',  applyFilters);
+    typeFilter.addEventListener('change',  applyFilters);
+    statusFilter.addEventListener('change',applyFilters);
 }
 
+// ── Toggle confirm ────────────────────────────────────────────────────────
 function confirmToggleDeductionType(typeId, typeName, isActive) {
-    const formId = typeId ? 'toggleForm-' + typeId : 'toggleForm';
     const action = isActive ? 'Deactivate' : 'Activate';
-    const actionLower = isActive ? 'deactivate' : 'activate';
     Swal.fire({
         title: action + ' Deduction Type?',
         html: `<div style="text-align:center;">
-            <div style="font-size:1.2rem;font-weight:600;color:#dc3545;margin-bottom:8px;">${typeName}</div>
-            <p style="color:#6b7280;font-size:0.95rem;">Are you sure you want to ${actionLower} this deduction type?</p>
+            <div style="font-size:1.1rem;font-weight:600;color:#0F1B4C;margin-bottom:8px;">${typeName}</div>
+            <p style="color:#6b7280;font-size:0.9rem;">Are you sure you want to ${action.toLowerCase()} this deduction type?</p>
         </div>`,
         icon: 'warning',
         showCancelButton: true,
@@ -1055,20 +1033,27 @@ function confirmToggleDeductionType(typeId, typeName, isActive) {
         confirmButtonColor: isActive ? '#dc3545' : '#10B981',
         cancelButtonColor: '#6B7280',
         reverseButtons: true,
-        focusCancel: true
-    }).then((result) => {
-        if (result.isConfirmed) {
-            const form = document.getElementById(formId);
-            if (form) {
-                const buttons = form.querySelectorAll('button');
-                buttons.forEach(btn => {
-                    btn.disabled = true;
-                    btn.textContent = 'Processing...';
-                });
-                form.submit();
-            }
+        focusCancel: true,
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        const form = document.getElementById('toggleForm-' + typeId);
+        if (form) {
+            form.querySelectorAll('button').forEach(b => { b.disabled = true; b.textContent = '…'; });
+            form.submit();
         }
     });
 }
+
+// ── Init ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+    categories.forEach(cat => {
+        const content = document.getElementById('category-' + cat.dataset.category);
+        content.style.maxHeight = content.scrollHeight + 'px';
+    });
+    const legendBody = document.getElementById('legendBody');
+    if (legendBody) legendBody.style.maxHeight = legendBody.scrollHeight + 'px';
+
+    setupSearchAndFilter();
+});
 </script>
 @endsection
