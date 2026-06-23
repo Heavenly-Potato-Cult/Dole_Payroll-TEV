@@ -10,6 +10,7 @@ class EmployeeDeductionEnrollment extends Model
     protected $fillable = [
         'employee_id',
         'deduction_type_id',
+        'account_number',    // ← new: distinguishes multiple accounts of the same loan-category type
         'amount',
         'percentage_override',
         'effective_from',

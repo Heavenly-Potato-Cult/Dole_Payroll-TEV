@@ -7,6 +7,7 @@ use Modules\Payroll\Models\DeductionType;
 use Modules\Payroll\Models\DeductionTypeCategory;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 /**
  * DeductionTypeController
@@ -312,12 +313,33 @@ class DeductionTypeController extends Controller
 
     /**
      * Permanently delete a deduction type.
-     * Only allowed when inactive.
+     *
+     * Guards:
+     *   1. Must be inactive — active types cannot be deleted.
+     *   2. Must have no payroll history — types referenced in payroll_deductions
+     *      must be kept for audit trail integrity.
+     *   3. Must have no active employee enrollments — belt-and-suspenders check.
      */
     public function destroy(DeductionType $deductionType)
     {
         if ($deductionType->is_active) {
-            return back()->with('error', "Cannot delete an active deduction type. Deactivate it first.");
+            return back()->with('error', "Cannot delete \"{$deductionType->name}\" — deactivate it first.");
+        }
+
+$payrollUsage = DB::table('payroll_deductions')
+    ->where('deduction_type_id', $deductionType->id)
+    ->count();
+
+        if ($payrollUsage > 0) {
+            return back()->with('error', "Cannot delete \"{$deductionType->name}\" — it appears in {$payrollUsage} payroll record(s) and must be kept for audit purposes.");
+        }
+
+$enrollmentUsage = DB::table('employee_deduction_enrollments')
+    ->where('deduction_type_id', $deductionType->id)
+    ->count();
+
+        if ($enrollmentUsage > 0) {
+            return back()->with('error', "Cannot delete \"{$deductionType->name}\" — it has {$enrollmentUsage} employee enrollment record(s) referencing it.");
         }
 
         $name = $deductionType->name;

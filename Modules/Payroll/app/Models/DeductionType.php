@@ -52,6 +52,7 @@ class DeductionType extends Model
         'display_order',
         'category',
         'deduction_type_category_id',    // ← new: FK to managed categories table
+        'allow_multiple_accounts',       // ← new: gates the multi-account UI, independent of category
         'is_computed',
         'is_active',
         'notes',
@@ -72,6 +73,7 @@ class DeductionType extends Model
         'is_computed'                 => 'boolean',
         'is_active'                   => 'boolean',
         'is_locked'                   => 'boolean',
+        'allow_multiple_accounts'     => 'boolean',
         'display_order'               => 'integer',
         'deduction_type_category_id'  => 'integer',
         'override_amount'             => 'decimal:2',
@@ -202,5 +204,28 @@ class DeductionType extends Model
     public function clearOverride(): void
     {
         $this->update(['override_amount' => null, 'override_note' => null]);
+    }
+
+    // ── Multi-account helper ──────────────────────────────────────────────
+
+    /**
+     * True when this type should render repeatable account slots
+     * (Monthly Amortization / Account Number / dates / notes) on the
+     * employee deductions form instead of a single set of fields.
+     *
+     * Deliberately independent of `category`: category also drives
+     * display grouping and may be relied on by remittance reporting,
+     * so it can't double as the multi-account gate. LOAN_CATEGORIES
+     * types get this by default; any other type (e.g. PAG-IBIG loan
+     * products filed under category = 'pagibig') needs the
+     * allow_multiple_accounts column explicitly set.
+     */
+    public function supportsMultipleAccounts(): bool
+    {
+        if (in_array($this->category, self::LOAN_CATEGORIES)) {
+            return true;
+        }
+
+        return (bool) $this->allow_multiple_accounts;
     }
 }

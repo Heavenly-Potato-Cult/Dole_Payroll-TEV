@@ -455,6 +455,16 @@
     border-color: var(--red);
     color: #fff;
 }
+.btn-icon.btn-delete {
+    color: var(--red);
+    border-color: #fca5a5;
+    background: #fff5f5;
+}
+.btn-icon.btn-delete:hover {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+}
 
 /* ── Notes truncation ────────────────────────────────────────────── */
 .dt-notes {
@@ -861,6 +871,21 @@
                                             {{ $type->is_active ? '⊘' : '✓' }}
                                         </button>
                                     </form>
+
+                                    @if (! $type->is_active)
+                                    <form id="deleteForm-{{ $type->id }}" method="POST"
+                                          action="{{ route('deduction-types.destroy', $type) }}"
+                                          style="display:inline;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="button"
+                                                class="btn-icon btn-delete"
+                                                title="Delete permanently"
+                                                onclick="confirmDeleteDeductionType({{ $type->id }}, '{{ addslashes($type->name) }}')">
+                                            🗑
+                                        </button>
+                                    </form>
+                                    @endif
                                 </div>
                             </td>
 
@@ -1037,6 +1062,33 @@ function confirmToggleDeductionType(typeId, typeName, isActive) {
     }).then(result => {
         if (!result.isConfirmed) return;
         const form = document.getElementById('toggleForm-' + typeId);
+        if (form) {
+            form.querySelectorAll('button').forEach(b => { b.disabled = true; b.textContent = '…'; });
+            form.submit();
+        }
+    });
+}
+
+// ── Delete confirm ────────────────────────────────────────────────────────
+function confirmDeleteDeductionType(typeId, typeName) {
+    Swal.fire({
+        title: 'Permanently Delete?',
+        html: `<div style="text-align:center;">
+            <div style="font-size:1.1rem;font-weight:600;color:#0F1B4C;margin-bottom:8px;">${typeName}</div>
+            <p style="color:#6b7280;font-size:0.9rem;">This will permanently remove the deduction type. This action <strong>cannot be undone</strong>.</p>
+            <p style="color:#6b7280;font-size:0.85rem;margin-top:6px;">Types with payroll or enrollment history cannot be deleted.</p>
+        </div>`,
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonText: '🗑 Delete Permanently',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6B7280',
+        reverseButtons: true,
+        focusCancel: true,
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        const form = document.getElementById('deleteForm-' + typeId);
         if (form) {
             form.querySelectorAll('button').forEach(b => { b.disabled = true; b.textContent = '…'; });
             form.submit();
