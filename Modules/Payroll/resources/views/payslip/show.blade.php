@@ -425,9 +425,17 @@ body {
                         $a1 = $entry1st ? (float) $entry1st->basic_salary : null;
                         $a2 = $entry2nd ? (float) $entry2nd->basic_salary : null;
                     } elseif ($label === 'ALLOWANCE') {
-                        $a1 = $entry1st ? (float) $entry1st->pera : null;
-                        $a2 = $entry2nd ? (float) $entry2nd->pera : null;
+                        $a1 = $entry1st ? (float) ($entry1st->allowances?->sum('amount') ?? $entry1st->pera) : null;
+                        $a2 = $entry2nd ? (float) ($entry2nd->allowances?->sum('amount') ?? $entry2nd->pera) : null;
                     }
+                    break;
+                case 'allowance':
+                    $a1 = $entry1st
+                        ? (float) ($entry1st->allowances?->firstWhere('code', $code)?->amount ?? 0)
+                        : null;
+                    $a2 = $entry2nd
+                        ? (float) ($entry2nd->allowances?->firstWhere('code', $code)?->amount ?? 0)
+                        : null;
                     break;
                 case 'deduction':
                 case 'sub':
@@ -450,8 +458,9 @@ body {
             }
 
             $rowClass = match ($type) {
-                'income'  => 'row-income',
-                'spacer'  => 'row-spacer',
+                'income'    => 'row-income',
+                'allowance' => 'row-income',
+                'spacer'    => 'row-spacer',
                 'sub'     => 'row-sub',
                 'divider' => 'row-divider',
                 'net'     => 'row-net',

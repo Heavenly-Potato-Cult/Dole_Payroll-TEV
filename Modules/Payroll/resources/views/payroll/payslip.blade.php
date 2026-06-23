@@ -282,6 +282,7 @@ body {
     $entry       = $slip['entry'];
     $cutoffSplit = $slip['cutoffSplit'] ?? null;
     $dedMap      = $slip['dedMap'];
+    $slipRows    = $slip['rows'] ?? $rows;
 
     $ded = function($code) use ($dedMap) {
         $d = $dedMap->get($code);
@@ -352,7 +353,7 @@ body {
         <tr><td>
         <table class="slip-rows">
 
-        @foreach ($rows as $row)
+        @foreach ($slipRows as $row)
         @php
             $type  = $row['type'];
             $label = $row['label'];
@@ -366,7 +367,11 @@ body {
                 case 'income':
                     $amt = $label === 'BASIC'
                         ? (float) $entry->basic_salary
-                        : (float) $entry->pera;
+                        : (float) ($entry->allowances?->sum('amount') ?? $entry->pera);
+                    break;
+                case 'allowance':
+                    $line = $entry->allowances?->firstWhere('code', $code);
+                    $amt  = $line ? (float) $line->amount : null;
                     break;
                 case 'deduction':
                 case 'sub':
@@ -378,8 +383,9 @@ body {
             }
 
             $rowClass = match ($type) {
-                'income'  => 'row-income',
-                'spacer'  => 'row-spacer',
+                'income'    => 'row-income',
+                'allowance' => 'row-income',
+                'spacer'    => 'row-spacer',
                 'sub'     => 'row-sub',
                 'divider' => 'row-divider',
                 default   => 'row-deduction',

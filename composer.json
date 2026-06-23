@@ -35,7 +35,9 @@
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/",
             "Modules\\Payroll\\": "Modules/Payroll/app/",
-            "Modules\\Tev\\": "Modules/Tev/app/"
+            "Modules\\Tev\\": "Modules/Tev/app/",
+            "Modules\\Allowances\\": "Modules/Allowances/app/",
+            "Modules\\Allowances\\Database\\Seeders\\": "Modules/Allowances/database/seeders/"
         }
     },
     "autoload-dev": {

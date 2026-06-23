@@ -258,6 +258,14 @@
                     </svg>
                 </span> Deduction Types
             </a>
+            <a href="{{ route('allowances.types.index') }}"
+               class="nav-item {{ request()->routeIs('allowances.types.*') ? 'active' : '' }}">
+                <span class="nav-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white" style="display: block;">
+                        <path d="M19,3H5C3.897,3,3,3.897,3,5v14c0,1.103,0.897,2,2,2h14c1.103,0,2-0.897,2-2V5C21,3.897,20.103,3,19,3z M7,7h10v2H7V7z M7,11h10v2H7V11z M7,15h7v2H7V15z"/>
+                    </svg>
+                </span> Allowance Types
+            </a>
             @endrole
 
             {{-- ── Reports ─────────────────────────────────────────────── --}}

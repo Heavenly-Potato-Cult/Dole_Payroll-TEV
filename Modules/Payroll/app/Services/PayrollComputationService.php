@@ -26,7 +26,8 @@ class PayrollComputationService
     const DENOMINATOR_MONTHLY      = 44;
 
     public function __construct(
-        protected DeductionService $deductionService
+        protected DeductionService $deductionService,
+        protected \Modules\Allowances\Services\AllowanceService $allowanceService
     ) {}
 
     // ═══════════════════════════════════════════════════════════════════
@@ -88,14 +89,16 @@ class PayrollComputationService
 
         // ── 2. Gross income components (full month) ───────────────────────
         $basicMonthly = (float) $employee->basic_monthly_salary;
-        $peraMonthly  = (float) $employee->pera_amount;   // ₱2,000 for most
-        $rataMonthly  = (float) ($employee->rata ?? 0);
+
+        $allowanceLines = $this->allowanceService->resolveForPayroll($employee, $batch);
+        $allowanceSum   = $this->allowanceService->summarize($allowanceLines);
 
         // Full monthly salary — no longer divided by 2
         $salaryEarned = round($basicMonthly, 2);
-        $peraEarned   = round($peraMonthly,  2);
-        $rataEarned   = round($rataMonthly,  2);
-        $grossEarned  = $salaryEarned + $peraEarned + $rataEarned;
+        $peraEarned   = $allowanceSum['pera'];
+        $rataEarned   = $allowanceSum['rata'];
+        $totalAllowances = $allowanceSum['total'];
+        $grossEarned  = $salaryEarned + $totalAllowances;
 
         // ── 3. Attendance deductions (monthly denominator = 44) ───────────
         //
@@ -159,7 +162,8 @@ class PayrollComputationService
         // ── 6. Persist ────────────────────────────────────────────────────
         return DB::transaction(function () use (
             $employee, $batch,
-            $salaryEarned, $peraEarned, $rataEarned,
+            $salaryEarned, $peraEarned, $rataEarned, $totalAllowances,
+            $allowanceLines,
             $lwopDeduction, $tardiness, $undertimeDed,
             $totalDeductions, $netAmount,
             $deductionLines
@@ -174,7 +178,7 @@ class PayrollComputationService
                     'basic_salary'     => $salaryEarned,
                     'pera'             => $peraEarned,
                     'rata'             => $rataEarned,
-                    'gross_income'     => round($salaryEarned + $peraEarned + $rataEarned, 2),
+                    'gross_income'     => round($salaryEarned + $totalAllowances, 2),
                     'lwop_deduction'   => $lwopDeduction,
                     'tardiness'        => $tardiness,
                     'undertime'        => $undertimeDed,
@@ -196,7 +200,9 @@ class PayrollComputationService
                 ]);
             }
 
-            return $entry->load('deductions');
+            $this->allowanceService->syncPayrollEntryAllowances($entry, $allowanceLines);
+
+            return $entry->load(['deductions', 'allowances']);
         });
     }
 

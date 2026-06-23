@@ -126,6 +126,11 @@ class Employee extends Model
         return $this->hasMany(\Modules\Payroll\Models\PayrollEntry::class);
     }
 
+    public function employeeAllowances(): HasMany
+    {
+        return $this->hasMany(\Modules\Allowances\Models\EmployeeAllowance::class);
+    }
+
     // ── Computed helpers ─────────────────────────────────────────
 
     /**

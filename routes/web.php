@@ -16,7 +16,6 @@ use Modules\Payroll\Http\Controllers\UserController;
 use Modules\Payroll\Http\Controllers\SalaryIndexTableController;
 use Modules\Payroll\Http\Controllers\SignatoryController;
 use Modules\Tev\Http\Controllers\TevReportController;
-use App\Http\Controllers\Modules\Payroll\Http\Controllers\AllowanceTypeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -82,19 +81,6 @@ Route::middleware(['auth'])->group(function () {
                 '/deduction-types/reorder',
                 [DeductionTypeController::class, 'reorder']
             )->name('deduction-types.reorder');
-        });
-
-    // ── Allowance Types CMS ──────────────────────────────────────
-    Route::middleware(['role:payroll_officer|super_admin'])
-        ->group(function () {
-            Route::resource('allowance-types', AllowanceTypeController::class)
-                ->except(['show']);
-
-            // Toggle active/inactive
-            Route::patch(
-                '/allowance-types/{allowanceType}/toggle',
-                [AllowanceTypeController::class, 'toggle']
-            )->name('allowance-types.toggle');
         });
 
     // ── Divisions ────────────────────────────────────────────────

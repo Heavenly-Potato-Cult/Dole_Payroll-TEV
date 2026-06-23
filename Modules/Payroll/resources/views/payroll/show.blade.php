@@ -560,7 +560,7 @@
         <div class="stat-card gold">
             <div class="stat-label">Total Gross</div>
             <div class="stat-value">₱{{ number_format($totalGross, 2) }}</div>
-            <div class="stat-sub">Basic + PERA + RATA</div>
+            <div class="stat-sub">Basic + all allowances</div>
         </div>
         <div class="stat-card red">
             <div class="stat-label">Total Deductions</div>
@@ -714,8 +714,9 @@
                     <col style="width:180px;">
                     <col style="width:80px;">
                     <col style="width:100px;">
+                    @foreach ($allowanceColumns as $col)
                     <col style="width:85px;">
-                    <col style="width:85px;">
+                    @endforeach
                     <col style="width:110px;">
                     <col style="width:100px;">
                     <col style="width:80px;">
@@ -731,8 +732,9 @@
                         <th style="color:white;">Employee</th>
                         <th style="color:white;">SG–Step</th>
                         <th style="color:white;" class="text-right">Basic Earned</th>
-                        <th style="color:white;" class="text-right">PERA</th>
-                        <th style="color:white;" class="text-right">RATA</th>
+                        @foreach ($allowanceColumns as $col)
+                        <th style="color:white;" class="text-right">{{ $col->name }}</th>
+                        @endforeach
                         <th style="background:rgba(249,168,37,0.22); color:white;" class="text-right">Gross</th>
                         <th style="color:white;" class="text-right">Tardiness</th>
                         <th style="color:white;" class="text-right">LWOP</th>
@@ -776,8 +778,9 @@
                     <col style="width:180px;">
                     <col style="width:80px;">
                     <col style="width:100px;">
+                    @foreach ($allowanceColumns as $col)
                     <col style="width:85px;">
-                    <col style="width:85px;">
+                    @endforeach
                     <col style="width:110px;">
                     <col style="width:100px;">
                     <col style="width:80px;">
@@ -798,13 +801,12 @@
                         <td class="text-right" style="color:white;">
                             ₱{{ number_format($payroll->entries->sum('basic_salary'), 2) }}
                         </td>
+                        @foreach ($allowanceColumns as $col)
                         <td class="text-right" style="color:white;">
-                            ₱{{ number_format($payroll->entries->sum('pera'), 2) }}
+                            @php $colTotal = $allowanceTotals[$col->code] ?? 0; @endphp
+                            {{ $colTotal > 0 ? '₱' . number_format($colTotal, 2) : '' }}
                         </td>
-                        <td class="text-right" style="color:rgba(255,255,255,0.5);">
-                            {{ $payroll->entries->sum('rata') > 0
-                               ? '₱' . number_format($payroll->entries->sum('rata'), 2) : '' }}
-                        </td>
+                        @endforeach
                         <td class="text-right" style="color:var(--gold); background:rgba(249,168,37,0.15);">
                             ₱{{ number_format($totalGross, 2) }}
                         </td>
@@ -861,8 +863,7 @@
                         'sg' => $entry->employee->salary_grade,
                         'step' => $entry->employee->step,
                         'basic_salary' => $entry->basic_salary,
-                        'pera' => $entry->pera,
-                        'rata' => $entry->rata,
+                        'allowances' => $allowanceAmounts($entry),
                         'gross_income' => $entry->gross_income,
                         'tardy' => $tardy,
                         'lwop' => $lwop,
@@ -880,6 +881,7 @@
             @endphp
             <script>
                 window.virtualRowData = @json($virtualRows);
+                window.allowanceColumnCodes = @json($allowanceColumns->pluck('code'));
                 window.payrollStatus = @json($payroll->status);
                 window.payrollId = @json($payroll->id);
                 window.canRemoveEntry = @json($canRemoveEntry);
@@ -1593,7 +1595,12 @@ async function confirmNextAction() {
 
         const tardyDisplay = row.tardy > 0 ? formatCurrency(row.tardy) : '—';
         const lwopDisplay = row.lwop > 0 ? formatCurrency(row.lwop) : '—';
-        const rataDisplay = row.rata > 0 ? formatCurrency(row.rata) : '—';
+
+        const allowanceCells = (window.allowanceColumnCodes || []).map(code => {
+            const amt = row.allowances?.[code] || 0;
+            const display = amt > 0 ? formatCurrency(amt) : '—';
+            return `<td class="text-right" style="white-space:nowrap; color:var(--text-light);">${display}</td>`;
+        }).join('');
 
         const dedToggle = row.dedCount > 0
             ? `<div style="display:flex; gap:6px; align-items:center; justify-content:flex-end;">
@@ -1629,8 +1636,7 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
             </td>
             <td style="font-size:0.82rem; white-space:nowrap;">SG ${row.sg}–${row.step}</td>
             <td class="text-right" style="white-space:nowrap;">${formatCurrency(row.basic_salary)}</td>
-            <td class="text-right" style="white-space:nowrap;">${formatCurrency(row.pera)}</td>
-            <td class="text-right" style="white-space:nowrap; color:var(--text-light);">${rataDisplay}</td>
+            ${allowanceCells}
             <td class="text-right fw-bold" style="white-space:nowrap; background:rgba(249,168,37,0.06);">${formatCurrency(row.gross_income)}</td>
             <td class="text-right ${tardyClass}" style="white-space:nowrap;">${tardyDisplay}</td>
             <td class="text-right ${lwopClass}" style="white-space:nowrap;">${lwopDisplay}</td>
@@ -1662,12 +1668,14 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
             ? `· Attendance deduction: <strong class="text-red">${formatCurrency(row.attendance_deduction)}</strong>`
             : '';
 
+        const registerColspan = 12 + (window.allowanceColumnCodes || []).length;
+
         const dedRow = document.createElement('tr');
         dedRow.className = `${netWarnClass} deduction-detail-row`;
         dedRow.id = `ded-row-${row.id}`;
         dedRow.hidden = true;
         dedRow.innerHTML = `
-            <td colspan="14" style="padding:0;">
+            <td colspan="${registerColspan}" style="padding:0;">
                 <div class="ded-panel" id="ded-panel-${row.id}" hidden>
                     <div class="ded-grid">${dedGrid}</div>
                     <div style="text-align:right; margin-top:6px; font-size:0.78rem; color:var(--text-mid);">

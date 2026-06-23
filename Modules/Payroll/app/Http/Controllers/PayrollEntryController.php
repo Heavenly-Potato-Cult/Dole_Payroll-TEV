@@ -175,7 +175,7 @@ class PayrollEntryController extends Controller
     public function payslip(PayrollBatch $payrollBatch, PayrollEntry $entry)
     {
         // FIX 1: eager-load deductionType so keyBy can resolve the code
-        $entry->load(['employee.division', 'deductions.deductionType', 'batch']);
+        $entry->load(['employee.division', 'deductions.deductionType', 'allowances', 'batch']);
 
         $employee = $entry->employee;
         $batch    = $payrollBatch;
@@ -190,7 +190,7 @@ class PayrollEntryController extends Controller
 
         // FIX 2: eager-load deductionType on the companion entry as well
         $companionEntry = $companionBatch
-            ? PayrollEntry::with('deductions.deductionType')
+            ? PayrollEntry::with(['deductions.deductionType', 'allowances'])
                 ->where('payroll_batch_id', $companionBatch->id)
                 ->where('employee_id', $employee->id)
                 ->first()
@@ -214,7 +214,10 @@ class PayrollEntryController extends Controller
                             'July', 'August', 'September', 'October', 'November', 'December'];
         $periodLabel = ($months[$batch->period_month] ?? '') . ' 1–31, ' . $batch->period_year;
 
-        $rows = $this->payslipRowDefinitions();
+        $rows = \Modules\Allowances\Support\PayslipAllowanceRows::merge(
+            $this->payslipDeductionRows(),
+            $entry
+        );
 
         // FIX 4: resolve the active HRMO Designate and pass to view
         $signatory = Signatory::where('role_type', 'hrmo_designate')
@@ -261,13 +264,9 @@ class PayrollEntryController extends Controller
      *   divider   → Totals row
      *   net       → Net pay row (gold highlight)
      */
-    private function payslipRowDefinitions(): array
+    private function payslipDeductionRows(): array
     {
         return [
-            // ── Earnings ─────────────────────────────────────────────
-            ['label' => 'BASIC',      'code' => null, 'type' => 'income'],
-            ['label' => 'ALLOWANCE',  'code' => null, 'type' => 'income'],
-
             // ── Deductions header ─────────────────────────────────────
             ['label' => 'DEDUCTIONS', 'code' => null, 'type' => 'spacer'],
 

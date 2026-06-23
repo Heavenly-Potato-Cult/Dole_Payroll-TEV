@@ -13,11 +13,13 @@ class AllowanceType extends Model
         'code',
         'name',
         'description',
+        'default_amount',
         'is_taxable',
         'is_gsis_deductible',
         'is_philhealth_deductible',
         'is_pagibig_deductible',
         'display_order',
+        'sort_order',
         'is_active',
     ];
 
@@ -33,5 +35,10 @@ class AllowanceType extends Model
     public function employeeAllowances()
     {
         return $this->hasMany(EmployeeAllowance::class);
+    }
+
+    public function getDisplayOrderAttribute($value): int
+    {
+        return (int) ($value ?? $this->attributes['sort_order'] ?? 0);
     }
 }

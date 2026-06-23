@@ -64,4 +64,9 @@ class PayrollEntry extends Model
     {
         return $this->hasMany(PayrollDeduction::class);
     }
+
+    public function allowances()
+    {
+        return $this->hasMany(\Modules\Allowances\Models\PayrollEntryAllowance::class, 'payroll_entry_id');
+    }
 }

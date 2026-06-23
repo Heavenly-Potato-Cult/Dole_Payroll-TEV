@@ -123,7 +123,7 @@ class PayrollController extends Controller
             abort(403, 'You are not authorized to view this payslip.');
         }
 
-        $entry->load(['employee.division', 'deductions.deductionType']);
+        $entry->load(['employee.division', 'deductions.deductionType', 'allowances']);
 
         // Compute cutoff split on the fly from daily_logs
         $snapshot = AttendanceSnapshot::where('payroll_batch_id', $payroll->id)
@@ -140,9 +140,10 @@ class PayrollController extends Controller
 
         $payslips = collect([[
             'employee'    => $entry->employee,
-            'entry'       => $entry,               // full monthly entry
-            'cutoffSplit' => $cutoffSplit,          // ['first_cutoff' => [...], 'second_cutoff' => [...]]
+            'entry'       => $entry,
+            'cutoffSplit' => $cutoffSplit,
             'dedMap'      => $dedMap($entry),
+            'rows'        => $this->payslipRows($entry),
         ]]);
 
         $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -152,7 +153,7 @@ class PayrollController extends Controller
         $pdf = Pdf::loadView('payroll::payroll.payslip', [
             'batch'       => $payroll,
             'payslips'    => $payslips,
-            'rows'        => $this->payslipRows(),
+            'rows'        => $this->payslipRows($entry),
             'periodLabel' => $periodLabel,
             'signatory'   => $signatory,
             'mode'        => 'monthly',
@@ -223,7 +224,7 @@ class PayrollController extends Controller
 
     public function show(PayrollBatch $payroll)
     {
-        $payroll->load(['entries.employee', 'entries.deductions.deductionType', 'creator', 'auditLogs.user']);
+        $payroll->load(['entries.employee', 'entries.deductions.deductionType', 'entries.allowances', 'creator', 'auditLogs.user']);
 
         $entries       = $payroll->entries->sortBy(fn ($e) => optional($e->employee)->last_name ?? '');
         $totalGross    = $payroll->entries->sum('gross_income');
@@ -231,6 +232,12 @@ class PayrollController extends Controller
         $totalNet      = $payroll->entries->sum('net_amount');
         $employeeCount = $payroll->entries->count();
         $auditLogs     = $payroll->auditLogs->sortByDesc('performed_at');
+
+        $registerAllowances = app(\Modules\Allowances\Services\AllowanceService::class)
+            ->buildRegisterColumns($entries);
+        $allowanceColumns = $registerAllowances['columns'];
+        $allowanceTotals  = $registerAllowances['totals'];
+        $allowanceAmounts = $registerAllowances['amountsForEntry'];
 
         $attendanceService = app(AttendanceService::class);
         $snapshotCount     = $attendanceService->snapshotCount($payroll);
@@ -250,7 +257,8 @@ class PayrollController extends Controller
             'payroll', 'entries',
             'totalGross', 'totalDeds', 'totalNet', 'employeeCount',
             'auditLogs',
-            'snapshotCount', 'correctedCount', 'activeCount', 'snapshots'
+            'snapshotCount', 'correctedCount', 'activeCount', 'snapshots',
+            'allowanceColumns', 'allowanceTotals', 'allowanceAmounts'
         ));
     }
 
@@ -679,7 +687,7 @@ class PayrollController extends Controller
         $isAjax = $request->expectsJson();
 
         $query = $payroll->entries()
-            ->with(['employee.division', 'deductions.deductionType'])
+            ->with(['employee.division', 'deductions.deductionType', 'allowances'])
             ->orderBy(
                 \App\SharedKernel\Models\Employee::select('last_name')
                     ->whereColumn('employees.id', 'payroll_entries.employee_id'),
@@ -740,6 +748,7 @@ class PayrollController extends Controller
             'entry'       => $entry,
             'cutoffSplit' => $cutoffSplit,
             'dedMap'      => $dedMap($entry),
+            'rows'        => $this->payslipRows($entry),
         ]]);
 
         $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -749,7 +758,7 @@ class PayrollController extends Controller
         $pdf = Pdf::loadView('payroll::payroll.payslip', [
             'batch'       => $payroll,
             'payslips'    => $payslips,
-            'rows'        => $this->payslipRows(),
+            'rows'        => $this->payslipRows($entry),
             'periodLabel' => $periodLabel,
             'signatory'   => $signatory,
             'mode'        => 'monthly',
@@ -785,6 +794,7 @@ class PayrollController extends Controller
             'entry'       => $entry,
             'cutoffSplit' => $cutoffSplit,
             'dedMap'      => $dedMap($entry),
+            'rows'        => $this->payslipRows($entry),
         ]]);
 
         $months      = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -794,7 +804,7 @@ class PayrollController extends Controller
         $pdf = Pdf::loadView('payroll::payroll.payslip', [
             'batch'       => $payroll,
             'payslips'    => $payslips,
-            'rows'        => $this->payslipRows(),
+            'rows'        => $this->payslipRows($entry),
             'periodLabel' => $periodLabel,
             'signatory'   => $signatory,
             'mode'        => 'monthly',
@@ -863,13 +873,14 @@ class PayrollController extends Controller
                     'entry'       => $entry,
                     'cutoffSplit' => $cutoffSplit,
                     'dedMap'      => $dedMap($entry),
+                    'rows'        => $this->payslipRows($entry),
                 ];
             });
 
             $pdf = Pdf::loadView('payroll::payroll.payslip', [
                 'batch'       => $payroll,
                 'payslips'    => $payslips,
-                'rows'        => $this->payslipRows(),
+                'rows'        => [],
                 'periodLabel' => $periodLabel,
                 'signatory'   => $signatory,
                 'mode'        => 'monthly',
@@ -944,13 +955,14 @@ class PayrollController extends Controller
                     'entry'       => $entry,
                     'cutoffSplit' => $cutoffSplit,
                     'dedMap'      => $dedMap($entry),
+                    'rows'        => $this->payslipRows($entry),
                 ];
             });
 
             $pdf = Pdf::loadView('payroll::payroll.payslip', [
                 'batch'       => $payroll,
                 'payslips'    => $payslips,
-                'rows'        => $this->payslipRows(),
+                'rows'        => [],
                 'periodLabel' => $periodLabel,
                 'signatory'   => $signatory,
                 'mode'        => 'monthly',
@@ -1075,15 +1087,9 @@ class PayrollController extends Controller
         ]);
     }
 
-    private function payslipRows(): array
+    private function payslipRows(?\Modules\Payroll\Models\PayrollEntry $entry = null): array
     {
-        return [
-            // ── Earnings ─────────────────────────────────────────────────
-            ['type' => 'spacer',  'label' => 'EARNINGS',              'code' => null],
-            ['type' => 'income',  'label' => 'BASIC',                 'code' => null],
-            ['type' => 'income',  'label' => 'ALLOWANCE',             'code' => null],
-
-            // ── Mandatory Deductions ──────────────────────────────────────
+        $deductionRows = [
             ['type' => 'spacer',     'label' => 'MANDATORY DEDUCTIONS',    'code' => null],
             ['type' => 'deduction',  'label' => 'GSIS — Life/Retirement',  'code' => 'GSIS_LIFE_RETIREMENT'],
             ['type' => 'deduction',  'label' => 'PhilHealth',               'code' => 'PHILHEALTH'],
@@ -1126,5 +1132,7 @@ class PayrollController extends Controller
             ['type' => 'net',     'label' => 'NET PAY 16–31',    'code' => null],
             ['type' => 'net',     'label' => 'TOTAL NET PAY',    'code' => null],
         ];
+
+        return \Modules\Allowances\Support\PayslipAllowanceRows::merge($deductionRows, $entry);
     }
 }

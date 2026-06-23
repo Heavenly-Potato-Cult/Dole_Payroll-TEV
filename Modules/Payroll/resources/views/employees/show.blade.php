@@ -246,6 +246,7 @@
     <div class="employee-header-right">
         @role('payroll_officer|hrmo')
         <a href="{{ route('employees.deductions', $employee) }}" class="btn btn-outline">💳 Deductions</a>
+        <a href="{{ route('employees.allowances', $employee) }}" class="btn btn-outline">🎫 Allowances</a>
         <a href="{{ route('employees.edit', $employee) }}" class="btn btn-primary">✎ Edit</a>
         @endrole
         <a href="{{ route('employees.index') }}" class="btn btn-outline">← Back</a>
