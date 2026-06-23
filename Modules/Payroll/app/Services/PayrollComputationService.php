@@ -27,7 +27,7 @@ class PayrollComputationService
 
     public function __construct(
         protected DeductionService $deductionService,
-        protected \Modules\Allowances\Services\AllowanceService $allowanceService
+        protected \Modules\Payroll\Services\AllowanceService $allowanceService
     ) {}
 
     // ═══════════════════════════════════════════════════════════════════

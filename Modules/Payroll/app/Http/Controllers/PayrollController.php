@@ -233,7 +233,7 @@ class PayrollController extends Controller
         $employeeCount = $payroll->entries->count();
         $auditLogs     = $payroll->auditLogs->sortByDesc('performed_at');
 
-        $registerAllowances = app(\Modules\Allowances\Services\AllowanceService::class)
+        $registerAllowances = app(\Modules\Payroll\Services\AllowanceService::class)
             ->buildRegisterColumns($entries);
         $allowanceColumns = $registerAllowances['columns'];
         $allowanceTotals  = $registerAllowances['totals'];
@@ -1133,6 +1133,6 @@ class PayrollController extends Controller
             ['type' => 'net',     'label' => 'TOTAL NET PAY',    'code' => null],
         ];
 
-        return \Modules\Allowances\Support\PayslipAllowanceRows::merge($deductionRows, $entry);
+        return \Modules\Payroll\Support\PayslipAllowanceRows::merge($deductionRows, $entry);
     }
 }

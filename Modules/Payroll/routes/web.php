@@ -7,6 +7,9 @@ use Modules\Payroll\Http\Controllers\PayrollEntryController;
 use Modules\Payroll\Http\Controllers\SpecialPayrollController;
 use Modules\Payroll\Http\Controllers\DeductionTypeController;
 use Modules\Payroll\Http\Controllers\DeductionTypeCategoryController;
+use Modules\Payroll\Http\Controllers\Allowances\AllowanceBatchController;
+use Modules\Payroll\Http\Controllers\Allowances\AllowanceTypeController;
+use Modules\Payroll\Http\Controllers\Allowances\EmployeeAllowanceController;
 
 /*
 |--------------------------------------------------------------------------
@@ -137,5 +140,38 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/nosi-nosa/{id}',         [SpecialPayrollController::class, 'nosiNosaShow'])   ->name('nosi-nosa.show');
             Route::post('/nosi-nosa/{id}/approve',[SpecialPayrollController::class, 'nosiNosaApprove'])->name('nosi-nosa.approve');
             Route::delete('/nosi-nosa/{id}',      [SpecialPayrollController::class, 'nosiNosaDestroy'])->name('nosi-nosa.destroy');
+        });
+
+    // ── Allowances ─────────────────────────────────────────────────────
+    Route::middleware(['role:' . implode('|', array_diff(\App\SharedKernel\Services\RoleService::getRoleGroup('payroll'), ['cashier']))])
+        ->group(function () {
+
+            // ── Allowance batches (main Allowances section) ──────────────
+            Route::prefix('allowances')->name('payroll.allowances.')->group(function () {
+                Route::get('/', [AllowanceBatchController::class, 'index'])->name('index');
+
+                Route::get('/batches/create', [AllowanceBatchController::class, 'create'])->name('batches.create');
+                Route::post('/batches', [AllowanceBatchController::class, 'store'])->name('batches.store');
+                Route::get('/batches/{batch}', [AllowanceBatchController::class, 'show'])->name('batches.show');
+                Route::get('/batches/{batch}/edit', [AllowanceBatchController::class, 'edit'])->name('batches.edit');
+                Route::put('/batches/{batch}', [AllowanceBatchController::class, 'update'])->name('batches.update');
+                Route::delete('/batches/{batch}', [AllowanceBatchController::class, 'destroy'])->name('batches.destroy');
+                Route::post('/batches/{batch}/advance', [AllowanceBatchController::class, 'advance'])->name('batches.advance');
+
+                // ── Allowance types CMS ──────────────────────────────────
+                Route::get('/types', [AllowanceTypeController::class, 'index'])->name('types.index');
+                Route::get('/types/create', [AllowanceTypeController::class, 'create'])->name('types.create');
+                Route::post('/types', [AllowanceTypeController::class, 'store'])->name('types.store');
+                Route::get('/types/{type}/edit', [AllowanceTypeController::class, 'edit'])->name('types.edit');
+                Route::put('/types/{type}', [AllowanceTypeController::class, 'update'])->name('types.update');
+                Route::patch('/types/{type}/toggle', [AllowanceTypeController::class, 'toggle'])->name('types.toggle');
+                Route::delete('/types/{type}', [AllowanceTypeController::class, 'destroy'])->name('types.destroy');
+            });
+
+            // ── Per-employee standing allowances ───────────────────────────
+            Route::get('/employees/{employee}/allowances', [EmployeeAllowanceController::class, 'index'])
+                ->name('payroll.employees.allowances');
+            Route::post('/employees/{employee}/allowances', [EmployeeAllowanceController::class, 'update'])
+                ->name('payroll.employees.allowances.update');
         });
 });

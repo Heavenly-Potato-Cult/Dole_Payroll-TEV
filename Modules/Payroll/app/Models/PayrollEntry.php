@@ -67,6 +67,6 @@ class PayrollEntry extends Model
 
     public function allowances()
     {
-        return $this->hasMany(\Modules\Allowances\Models\PayrollEntryAllowance::class, 'payroll_entry_id');
+        return $this->hasMany(\Modules\Payroll\Models\Allowances\PayrollEntryAllowance::class, 'payroll_entry_id');
     }
 }

@@ -214,7 +214,7 @@ class PayrollEntryController extends Controller
                             'July', 'August', 'September', 'October', 'November', 'December'];
         $periodLabel = ($months[$batch->period_month] ?? '') . ' 1–31, ' . $batch->period_year;
 
-        $rows = \Modules\Allowances\Support\PayslipAllowanceRows::merge(
+        $rows = \Modules\Payroll\Support\PayslipAllowanceRows::merge(
             $this->payslipDeductionRows(),
             $entry
         );

@@ -1,9 +1,7 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', $employee->full_name); ?>
+<?php $__env->startSection('page-title', 'Employee Profile'); ?>
 
-@section('title', $employee->full_name)
-@section('page-title', 'Employee Profile')
-
-@section('styles')
+<?php $__env->startSection('styles'); ?>
 <style>
 /* ── Header Section ──────────────────────────────────────── */
 .employee-header {
@@ -229,31 +227,32 @@
     }
 }
 </style>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('content')
+<?php $__env->startSection('content'); ?>
 
 <div class="employee-header">
     <div class="employee-header-left">
         <div class="employee-avatar">
-            {{ strtoupper(substr($employee->first_name, 0, 1) . substr($employee->last_name, 0, 1)) }}
+            <?php echo e(strtoupper(substr($employee->first_name, 0, 1) . substr($employee->last_name, 0, 1))); ?>
+
         </div>
         <div class="employee-info">
-            <h1>{{ $employee->full_name }}</h1>
-            <p>{{ $employee->position_title }}</p>
+            <h1><?php echo e($employee->full_name); ?></h1>
+            <p><?php echo e($employee->position_title); ?></p>
         </div>
     </div>
     <div class="employee-header-right">
-        @role('payroll_officer|hrmo')
-        <a href="{{ route('employees.deductions', $employee) }}" class="btn btn-outline">💳 Deductions</a>
-        <a href="{{ route('payroll.employees.allowances', $employee) }}" class="btn btn-outline">🎫 Allowances</a>
-        <a href="{{ route('employees.edit', $employee) }}" class="btn btn-primary">✎ Edit</a>
-        @endrole
-        <a href="{{ route('employees.index') }}" class="btn btn-outline">← Back</a>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (\Illuminate\Support\Facades\Blade::check('role', 'payroll_officer|hrmo')): ?>
+        <a href="<?php echo e(route('employees.deductions', $employee)); ?>" class="btn btn-outline">💳 Deductions</a>
+        <a href="<?php echo e(route('payroll.employees.allowances', $employee)); ?>" class="btn btn-outline">🎫 Allowances</a>
+        <a href="<?php echo e(route('employees.edit', $employee)); ?>" class="btn btn-primary">✎ Edit</a>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+        <a href="<?php echo e(route('employees.index')); ?>" class="btn btn-outline">← Back</a>
     </div>
 </div>
 
-{{-- ── Tab Navigation ─────────────────────────────────────── --}}
+
 <div class="tabs-nav">
     <button class="tab-btn active" data-tab="personal">Personal Information</button>
     <button class="tab-btn" data-tab="position">Position & Assignment</button>
@@ -261,59 +260,60 @@
     <button class="tab-btn" data-tab="government">Government IDs</button>
 </div>
 
-{{-- ── Tab: Personal Information ──────────────────────────── --}}
+
 <div class="tab-panel active" id="tab-personal">
     <div class="info-card">
         <div class="info-row">
             <span class="info-label">Full Name</span>
-            <span class="info-value bold">{{ $employee->full_name }}</span>
+            <span class="info-value bold"><?php echo e($employee->full_name); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Last Name</span>
-            <span class="info-value">{{ $employee->last_name }}</span>
+            <span class="info-value"><?php echo e($employee->last_name); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">First Name</span>
-            <span class="info-value">{{ $employee->first_name }}</span>
+            <span class="info-value"><?php echo e($employee->first_name); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Middle Name</span>
-            <span class="info-value">{{ $employee->middle_name ?: '—' }}</span>
+            <span class="info-value"><?php echo e($employee->middle_name ?: '—'); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Suffix</span>
-            <span class="info-value">{{ $employee->suffix ?: '—' }}</span>
+            <span class="info-value"><?php echo e($employee->suffix ?: '—'); ?></span>
         </div>
     </div>
 </div>
 
-{{-- ── Tab: Position & Assignment ─────────────────────────── --}}
+
 <div class="tab-panel" id="tab-position">
     <div class="info-card">
         <div class="info-row">
             <span class="info-label">Plantilla Item No.</span>
-            <span class="info-value mono">{{ $employee->plantilla_item_no ?: '—' }}</span>
+            <span class="info-value mono"><?php echo e($employee->plantilla_item_no ?: '—'); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Position Title</span>
-            <span class="info-value">{{ $employee->position_title }}</span>
+            <span class="info-value"><?php echo e($employee->position_title); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Division</span>
-            <span class="info-value">{{ $employee->division ? $employee->division->code . ' — ' . $employee->division->name : '—' }}</span>
+            <span class="info-value"><?php echo e($employee->division ? $employee->division->code . ' — ' . $employee->division->name : '—'); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Hire Date</span>
-            <span class="info-value">{{ $employee->hire_date ? $employee->hire_date->format('F d, Y') : '—' }}</span>
+            <span class="info-value"><?php echo e($employee->hire_date ? $employee->hire_date->format('F d, Y') : '—'); ?></span>
         </div>
     </div>
 
-    @if ($employee->promotionHistory->count())
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($employee->promotionHistory->count()): ?>
     <div class="history-card" style="margin-top: 20px; margin-left: auto; margin-right: auto;">
         <div class="card-header">
             <h3>Promotion / Step History</h3>
             <span class="record-count">
-                {{ $employee->promotionHistory->count() }} {{ Str::plural('record', $employee->promotionHistory->count()) }}
+                <?php echo e($employee->promotionHistory->count()); ?> <?php echo e(Str::plural('record', $employee->promotionHistory->count())); ?>
+
             </span>
         </div>
         <div class="table-wrap">
@@ -328,100 +328,97 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach ($employee->promotionHistory as $hist)
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $employee->promotionHistory; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $hist): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                     <tr>
-                        <td style="white-space:nowrap;">{{ \Carbon\Carbon::parse($hist->effectivity_date)->format('M d, Y') }}</td>
-                        <td>{{ $hist->new_salary_grade }}</td>
-                        <td>{{ $hist->new_step }}</td>
-                        <td style="text-align:right;font-family:monospace;">₱{{ number_format($hist->new_basic_salary, 2) }}</td>
-                        <td style="font-size:0.82rem;color:var(--text-mid);">{{ $hist->remarks ?? '—' }}</td>
+                        <td style="white-space:nowrap;"><?php echo e(\Carbon\Carbon::parse($hist->effectivity_date)->format('M d, Y')); ?></td>
+                        <td><?php echo e($hist->new_salary_grade); ?></td>
+                        <td><?php echo e($hist->new_step); ?></td>
+                        <td style="text-align:right;font-family:monospace;">₱<?php echo e(number_format($hist->new_basic_salary, 2)); ?></td>
+                        <td style="font-size:0.82rem;color:var(--text-mid);"><?php echo e($hist->remarks ?? '—'); ?></td>
                     </tr>
-                    @endforeach
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
-    @endif
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </div>
 
-{{-- ── Tab: Salary Information ────────────────────────────── --}}
+
 <div class="tab-panel" id="tab-salary">
     <div class="info-card">
         <div class="info-row">
             <span class="info-label">Salary Grade</span>
-            <span class="info-value">SG {{ $employee->salary_grade }}</span>
+            <span class="info-value">SG <?php echo e($employee->salary_grade); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Step</span>
-            <span class="info-value">Step {{ $employee->step }}</span>
+            <span class="info-value">Step <?php echo e($employee->step); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">SIT Year</span>
-            <span class="info-value">CY {{ $employee->sit_year }}</span>
+            <span class="info-value">CY <?php echo e($employee->sit_year); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Basic Salary</span>
-            <span class="info-value bold">₱{{ number_format($employee->basic_salary, 2) }}</span>
+            <span class="info-value bold">₱<?php echo e(number_format($employee->basic_salary, 2)); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">PERA</span>
-            <span class="info-value">₱{{ number_format($employee->pera, 2) }}</span>
+            <span class="info-value">₱<?php echo e(number_format($employee->pera, 2)); ?></span>
         </div>
         <hr style="border:none;border-top:1px solid var(--border);margin:8px 0;">
         <div class="info-row">
             <span class="info-label">Daily Rate (÷22)</span>
-            <span class="info-value mono">₱{{ number_format($employee->daily_rate, 4) }}</span>
+            <span class="info-value mono">₱<?php echo e(number_format($employee->daily_rate, 4)); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Hourly Rate (÷22÷8)</span>
-            <span class="info-value mono">₱{{ number_format($employee->hourly_rate, 4) }}</span>
+            <span class="info-value mono">₱<?php echo e(number_format($employee->hourly_rate, 4)); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Minute Rate</span>
-            <span class="info-value mono">₱{{ number_format($employee->minute_rate, 6) }}</span>
+            <span class="info-value mono">₱<?php echo e(number_format($employee->minute_rate, 6)); ?></span>
         </div>
-        {{-- Semi-monthly gross hidden per requirement --}}
-        {{-- <div class="info-row">
-            <span class="info-label">Semi-monthly Gross</span>
-            <span class="info-value bold">₱{{ number_format($employee->semi_monthly_gross, 2) }}</span>
-        </div> --}}
+        
+        
     </div>
 </div>
 
-{{-- ── Tab: Government IDs ────────────────────────────────── --}}
+
 <div class="tab-panel" id="tab-government">
     <div class="info-card">
         <div class="info-row">
             <span class="info-label">TIN</span>
-            <span class="info-value mono">{{ $employee->tin ?: '—' }}</span>
+            <span class="info-value mono"><?php echo e($employee->tin ?: '—'); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">GSIS No.</span>
-            <span class="info-value mono">{{ $employee->gsis_bp_no ?: '—' }}</span>
+            <span class="info-value mono"><?php echo e($employee->gsis_bp_no ?: '—'); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">Pag-IBIG</span>
-            <span class="info-value mono">{{ $employee->pagibig_no ?: '—' }}</span>
+            <span class="info-value mono"><?php echo e($employee->pagibig_no ?: '—'); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">PhilHealth</span>
-            <span class="info-value mono">{{ $employee->philhealth_no ?: '—' }}</span>
+            <span class="info-value mono"><?php echo e($employee->philhealth_no ?: '—'); ?></span>
         </div>
         <div class="info-row">
             <span class="info-label">SSS No.</span>
-            <span class="info-value mono">{{ $employee->sss_no ?: '—' }}</span>
+            <span class="info-value mono"><?php echo e($employee->sss_no ?: '—'); ?></span>
         </div>
     </div>
 </div>
 
 <div class="footer-meta">
-    <span>Record created: {{ $employee->created_at->format('M d, Y g:i A') }}</span>
-    <span>Last updated: {{ $employee->updated_at->format('M d, Y g:i A') }}</span>
+    <span>Record created: <?php echo e($employee->created_at->format('M d, Y g:i A')); ?></span>
+    <span>Last updated: <?php echo e($employee->updated_at->format('M d, Y g:i A')); ?></span>
 </div>
 
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('scripts')
+<?php $__env->startSection('scripts'); ?>
 <script>
 // Tab switching functionality
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -439,4 +436,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 </script>
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\Training_Ground\Visual Studio Code\DOLESYSTEM2\Dole_Payroll\Modules/Payroll\resources/views/employees/show.blade.php ENDPATH**/ ?>

@@ -1,9 +1,7 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'User Management'); ?>
+<?php $__env->startSection('page-title', 'User Management'); ?>
 
-@section('title', 'User Management')
-@section('page-title', 'User Management')
-
-@section('styles')
+<?php $__env->startSection('styles'); ?>
 <style>
 /* ── User Management Table ─────────────────────────────────── */
 .page-header {
@@ -395,19 +393,19 @@
     }
 }
 </style>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('content')
+<?php $__env->startSection('content'); ?>
 
 <div class="page-header">
     <div class="page-header-left">
         <h1>User Management</h1>
-        <p>{{ $users->count() }} {{ Str::plural('account', $users->count()) }} registered</p>
+        <p><?php echo e($users->count()); ?> <?php echo e(Str::plural('account', $users->count())); ?> registered</p>
     </div>
-    <a href="{{ route('users.create') }}" class="btn btn-primary">+ Add User</a>
+    <a href="<?php echo e(route('users.create')); ?>" class="btn btn-primary">+ Add User</a>
 </div>
 
-{{-- ── Search and Filter Section ─────────────────────────────── --}}
+
 <div class="search-filter-section">
     <div class="ff-group">
         <label for="userSearch">SEARCH</label>
@@ -431,7 +429,7 @@
     </div>
 </div>
 
-{{-- ── Users Table ───────────────────────────────────────────── --}}
+
 <table class="users-table" id="usersTable">
     <thead>
         <tr>
@@ -443,12 +441,12 @@
         </tr>
     </thead>
     <tbody>
-        @forelse ($users as $user)
-        <tr data-name="@if ($user->employee) {{ $user->employee->first_name }} {{ $user->employee->last_name }} @else {{ $user->name }} @endif" data-email="{{ $user->email }}" data-role="@if ($user->roles->isNotEmpty()) {{ $user->roles->first()->name }} @else none @endif">
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $users; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $user): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+        <tr data-name="<?php if($user->employee): ?> <?php echo e($user->employee->first_name); ?> <?php echo e($user->employee->last_name); ?> <?php else: ?> <?php echo e($user->name); ?> <?php endif; ?>" data-email="<?php echo e($user->email); ?>" data-role="<?php if($user->roles->isNotEmpty()): ?> <?php echo e($user->roles->first()->name); ?> <?php else: ?> none <?php endif; ?>">
             <td>
                 <div class="user-cell">
                     <div class="user-avatar">
-                        @php
+                        <?php
                             if ($user->employee) {
                                 $fullName = $user->employee->first_name . ' ' . ($user->employee->middle_name ? $user->employee->middle_name . '. ' : '') . $user->employee->last_name;
                             } else {
@@ -456,69 +454,72 @@
                             }
                             $parts = explode(' ', trim($fullName));
                             echo strtoupper(substr($parts[0], 0, 1)) . strtoupper(substr($parts[1] ?? '', 0, 1));
-                        @endphp
+                        ?>
                     </div>
                     <div class="user-details">
                         <div class="user-name">
-                            @if ($user->employee)
-                                {{ $user->employee->first_name }} {{ $user->employee->middle_name ? $user->employee->middle_name . '. ' : '' }}{{ $user->employee->last_name }}
-                            @else
-                                {{ $user->name }}
-                            @endif
-                            @if ($user->id === auth()->id())
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->employee): ?>
+                                <?php echo e($user->employee->first_name); ?> <?php echo e($user->employee->middle_name ? $user->employee->middle_name . '. ' : ''); ?><?php echo e($user->employee->last_name); ?>
+
+                            <?php else: ?>
+                                <?php echo e($user->name); ?>
+
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->id === auth()->id()): ?>
                                 <span class="you-badge">You</span>
-                            @endif
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </div>
-                        <div class="user-email">{{ $user->email }}</div>
-                        @if ($user->employee && $user->employee->employee_no)
-                            <div class="user-employee-no">{{ $user->employee->employee_no }}</div>
-                        @endif
+                        <div class="user-email"><?php echo e($user->email); ?></div>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->employee && $user->employee->employee_no): ?>
+                            <div class="user-employee-no"><?php echo e($user->employee->employee_no); ?></div>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                 </div>
             </td>
-            <td>{{ $user->email }}</td>
+            <td><?php echo e($user->email); ?></td>
             <td>
-                @foreach ($user->roles as $role)
-                    <span class="role-badge role-{{ str_replace('_', '-', $role->name) }}">
-                        {{ ucwords(str_replace('_', ' ', $role->name)) }}
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $user->roles; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $role): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                    <span class="role-badge role-<?php echo e(str_replace('_', '-', $role->name)); ?>">
+                        <?php echo e(ucwords(str_replace('_', ' ', $role->name))); ?>
+
                     </span>
-                @endforeach
-                @if ($user->roles->isEmpty())
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->roles->isEmpty()): ?>
                     <span class="role-badge role-none">No Role</span>
-                @endif
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </td>
             <td>
                 <span class="status-badge status-active">Active</span>
             </td>
             <td>
                 <div class="action-buttons">
-                    <a href="{{ route('users.edit', $user) }}" class="action-btn edit" title="Edit">
+                    <a href="<?php echo e(route('users.edit', $user)); ?>" class="action-btn edit" title="Edit">
                         ✎
                     </a>
-                    @if ($user->id !== auth()->id())
-                    <form method="POST" action="{{ route('users.destroy', $user) }}" id="deleteForm-{{ $user->id }}" style="display: inline;">
-                        @csrf
-                        @method('DELETE')
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->id !== auth()->id()): ?>
+                    <form method="POST" action="<?php echo e(route('users.destroy', $user)); ?>" id="deleteForm-<?php echo e($user->id); ?>" style="display: inline;">
+                        <?php echo csrf_field(); ?>
+                        <?php echo method_field('DELETE'); ?>
                         <button type="button" class="action-btn delete" title="Delete" 
-                                onclick="confirmDeleteUser({{ $user->id }}, '{{ addslashes($user->name) }}')">
+                                onclick="confirmDeleteUser(<?php echo e($user->id); ?>, '<?php echo e(addslashes($user->name)); ?>')">
                             ✕
                         </button>
                     </form>
-                    @endif
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
             </td>
         </tr>
-        @empty
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
         <tr>
             <td colspan="5" style="text-align: center; padding: 40px; color: #7f8c8d;">
-                No users yet. <a href="{{ route('users.create') }}">Add the first user →</a>
+                No users yet. <a href="<?php echo e(route('users.create')); ?>">Add the first user →</a>
             </td>
         </tr>
-        @endforelse
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </tbody>
 </table>
 
-{{-- ── Collapsible Role Permissions Guide ─────────────────────── --}}
+
 <div class="role-guide-section">
     <div class="role-guide-header" id="roleGuideHeader" onclick="toggleRoleGuide()">
         <h3 class="role-guide-title">Role Permissions Guide</h3>
@@ -678,4 +679,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-@endsection
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\Training_Ground\Visual Studio Code\DOLESYSTEM2\Dole_Payroll\Modules/Payroll\resources/views/users/index.blade.php ENDPATH**/ ?>
