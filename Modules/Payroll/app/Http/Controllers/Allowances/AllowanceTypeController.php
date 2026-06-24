@@ -11,7 +11,12 @@ class AllowanceTypeController extends Controller
 {
     public function index()
     {
-        $types = AllowanceType::orderBy('display_order')->orderBy('name')->get();
+        $types = AllowanceType::withCount([
+                'employeeAllowances as active_enrollments_count' => fn ($q) => $q->where('is_active', true),
+            ])
+            ->orderBy('display_order')
+            ->orderBy('name')
+            ->get();
 
         return view('payroll::allowances.types.index', compact('types'));
     }
