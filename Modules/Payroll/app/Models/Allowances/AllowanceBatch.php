@@ -30,6 +30,8 @@ class AllowanceBatch extends Model
     protected $casts = [
         'period_year' => 'integer',
         'period_month' => 'integer',
+        'period_start' => 'date',
+        'period_end' => 'date',
         'prepared_at' => 'datetime',
         'reviewed_at' => 'datetime',
         'approved_at' => 'datetime',

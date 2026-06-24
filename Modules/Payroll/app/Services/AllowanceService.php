@@ -25,10 +25,15 @@ class AllowanceService
     public function resolveForPayroll(Employee $employee, PayrollBatch $batch): array
     {
         $periodStart = Carbon::parse($batch->period_start ?? "{$batch->period_year}-{$batch->period_month}-01");
-        $periodEnd   = Carbon::parse($batch->period_end ?? $periodStart->copy()->endOfMonth());
+
+        // period_end is now optional; fall back to end-of-month when absent.
+        $periodEnd = $batch->period_end
+            ? Carbon::parse($batch->period_end)
+            : $periodStart->copy()->endOfMonth();
 
         $lines = [];
 
+        // --- 1. Standing / recurring allowances -----------------------------------
         $standing = EmployeeAllowance::query()
             ->with('allowanceType')
             ->where('employee_id', $employee->id)
@@ -48,7 +53,7 @@ class AllowanceService
             );
         }
 
-        // Fallback: legacy employee.pera column when no PERA enrollment exists yet
+        // --- 2. Legacy PERA fallback (employee.pera column) -----------------------
         $hasPera = collect($lines)->contains(fn ($l) => $l['code'] === 'PERA');
         if (! $hasPera) {
             $peraType = AllowanceType::where('code', 'PERA')->first();
@@ -58,6 +63,7 @@ class AllowanceService
             }
         }
 
+        // --- 3. Batch entries (override standing for the same type) ---------------
         $batchEntries = AllowanceEntry::query()
             ->with(['allowanceType', 'batch'])
             ->where('employee_id', $employee->id)
@@ -102,12 +108,12 @@ class AllowanceService
     /** @return array{pera: float, rata: float, total: float} */
     public function summarize(array $lines): array
     {
-        $pera = 0.0;
-        $rata = 0.0;
+        $pera  = 0.0;
+        $rata  = 0.0;
         $total = 0.0;
 
         foreach ($lines as $line) {
-            $amt = (float) $line['amount'];
+            $amt   = (float) $line['amount'];
             $total += $amt;
             if ($line['code'] === 'PERA') {
                 $pera += $amt;

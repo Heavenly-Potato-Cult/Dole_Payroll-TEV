@@ -62,7 +62,21 @@
                     <td>{{ $batch->entries_count ?? $batch->entries->count() }}</td>
                     <td><span class="badge">{{ str_replace('_', ' ', ucfirst($batch->status)) }}</span></td>
                     <td>{{ $batch->prepared_at?->format('M d, Y') ?? '—' }}</td>
-                    <td><a href="{{ route('payroll.allowances.batches.show', $batch) }}" class="btn btn-sm btn-outline">View</a></td>
+                    <td>
+                        <div style="display:flex;gap:6px;justify-content:flex-end;">
+                            <a href="{{ route('payroll.allowances.batches.show', $batch) }}" class="btn btn-sm btn-outline">View</a>
+                            @if ($batch->status === 'draft')
+                                <form method="POST"
+                                      action="{{ route('payroll.allowances.batches.destroy', $batch) }}"
+                                      onsubmit="return confirm('Delete this draft batch ({{ \Carbon\Carbon::create($batch->period_year, $batch->period_month)->format('F Y') }}, {{ ucfirst($batch->cutoff) }}) and its {{ $batch->entries_count ?? $batch->entries->count() }} entries? This cannot be undone.');"
+                                      style="display:inline;">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline" style="color:#dc2626;border-color:#dc2626;">Delete</button>
+                                </form>
+                            @endif
+                        </div>
+                    </td>
                 </tr>
                 @empty
                 <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-light);">No allowance batches yet.</td></tr>

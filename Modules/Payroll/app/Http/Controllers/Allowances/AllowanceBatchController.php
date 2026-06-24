@@ -43,7 +43,9 @@ class AllowanceBatchController extends Controller
             ->orderBy('first_name')
             ->get(['id', 'last_name', 'first_name', 'middle_name', 'position_title']);
 
-        return view('payroll::allowances.batches.create', compact('types', 'employees'));
+        $standingPairs = $this->getStandingPairs();
+
+        return view('payroll::allowances.batches.create', compact('types', 'employees', 'standingPairs'));
     }
 
     public function store(Request $request)
@@ -53,9 +55,13 @@ class AllowanceBatchController extends Controller
             'period_month'  => ['required', 'integer', 'min:1', 'max:12'],
             'cutoff'        => ['required', 'string', 'in:1st,2nd,monthly'],
             'period_start'  => ['required', 'date'],
-            'period_end'    => ['required', 'date', 'after_or_equal:period_start'],
+            'period_end'    => ['nullable', 'date', 'after_or_equal:period_start'],
             'remarks'       => ['nullable', 'string'],
-            'entries'       => ['required', 'array', 'min:1'],
+            'entries'       => [
+                'required', 'array', 'min:1',
+                $this->noDuplicateEntriesRule(),
+                $this->noCrossBatchDuplicateRule($request),
+            ],
             'entries.*.employee_id'       => ['required', 'exists:employees,id'],
             'entries.*.allowance_type_id' => ['required', 'exists:allowance_types,id'],
             'entries.*.amount'            => ['required', 'numeric', 'min:0'],
@@ -68,7 +74,7 @@ class AllowanceBatchController extends Controller
                 'period_month' => $validated['period_month'],
                 'cutoff'       => $validated['cutoff'],
                 'period_start' => $validated['period_start'],
-                'period_end'   => $validated['period_end'],
+                'period_end'   => $validated['period_end'] ?? null,
                 'status'       => 'draft',
                 'created_by'   => Auth::id(),
                 'prepared_at'  => now(),
@@ -116,7 +122,9 @@ class AllowanceBatchController extends Controller
             ->orderBy('first_name')
             ->get(['id', 'last_name', 'first_name', 'middle_name', 'position_title']);
 
-        return view('payroll::allowances.batches.edit', compact('batch', 'types', 'employees'));
+        $standingPairs = $this->getStandingPairs();
+
+        return view('payroll::allowances.batches.edit', compact('batch', 'types', 'employees', 'standingPairs'));
     }
 
     public function update(Request $request, AllowanceBatch $batch)
@@ -131,9 +139,13 @@ class AllowanceBatchController extends Controller
             'period_month'  => ['required', 'integer', 'min:1', 'max:12'],
             'cutoff'        => ['required', 'string', 'in:1st,2nd,monthly'],
             'period_start'  => ['required', 'date'],
-            'period_end'    => ['required', 'date', 'after_or_equal:period_start'],
+            'period_end'    => ['nullable', 'date', 'after_or_equal:period_start'],
             'remarks'       => ['nullable', 'string'],
-            'entries'       => ['required', 'array', 'min:1'],
+            'entries'       => [
+                'required', 'array', 'min:1',
+                $this->noDuplicateEntriesRule(),
+                $this->noCrossBatchDuplicateRule($request, $batch->id),
+            ],
             'entries.*.employee_id'       => ['required', 'exists:employees,id'],
             'entries.*.allowance_type_id' => ['required', 'exists:allowance_types,id'],
             'entries.*.amount'            => ['required', 'numeric', 'min:0'],
@@ -146,7 +158,7 @@ class AllowanceBatchController extends Controller
                 'period_month' => $validated['period_month'],
                 'cutoff'       => $validated['cutoff'],
                 'period_start' => $validated['period_start'],
-                'period_end'   => $validated['period_end'],
+                'period_end'   => $validated['period_end'] ?? null,
                 'remarks'      => $validated['remarks'] ?? null,
             ]);
 
@@ -175,9 +187,9 @@ class AllowanceBatchController extends Controller
         $action = $request->validate(['action' => 'required|in:submit,approve,release'])['action'];
 
         $transitions = [
-            'submit'  => ['from' => ['draft'],              'to' => 'pending_review', 'field' => 'reviewed'],
-            'approve' => ['from' => ['pending_review'],     'to' => 'approved',       'field' => 'approved'],
-            'release' => ['from' => ['approved'],           'to' => 'released',       'field' => 'released'],
+            'submit'  => ['from' => ['draft'],          'to' => 'pending_review', 'field' => 'reviewed'],
+            'approve' => ['from' => ['pending_review'], 'to' => 'approved',       'field' => 'approved'],
+            'release' => ['from' => ['approved'],       'to' => 'released',       'field' => 'released'],
         ];
 
         $rule = $transitions[$action];
@@ -214,5 +226,130 @@ class AllowanceBatchController extends Controller
 
         return redirect()->route('payroll.allowances.index')
             ->with('success', 'Allowance batch deleted.');
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Return a flat array of "employee_id-allowance_type_id" strings for every
+     * active standing allowance record.  Used by the create/edit views so the
+     * bulk-add button can skip employees who are already covered by a standing
+     * (recurring) allowance for the chosen type.
+     *
+     * @return array<int, string>
+     */
+    private function getStandingPairs(): array
+    {
+        return EmployeeAllowance::query()
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->whereNull('expiry_date')
+                  ->orWhere('expiry_date', '>=', now()->toDateString());
+            })
+            ->get(['employee_id', 'allowance_type_id'])
+            ->map(fn ($r) => $r->employee_id . '-' . $r->allowance_type_id)
+            ->values()
+            ->all();
+    }
+
+    // -------------------------------------------------------------------------
+    // Validation rules
+    // -------------------------------------------------------------------------
+
+    /**
+     * Rejects entries arrays that contain more than one row for the same
+     * employee_id + allowance_type_id pair within this batch.
+     */
+    private function noDuplicateEntriesRule(): \Closure
+    {
+        return function (string $attribute, $value, \Closure $fail) {
+            $seen = [];
+
+            foreach ((array) $value as $row) {
+                $employeeId = $row['employee_id'] ?? null;
+                $typeId     = $row['allowance_type_id'] ?? null;
+
+                if (! $employeeId || ! $typeId) {
+                    continue;
+                }
+
+                $key = $employeeId . '-' . $typeId;
+
+                if (isset($seen[$key])) {
+                    $fail('Each employee can only have one entry per allowance type in a batch. Please remove duplicate rows.');
+
+                    return;
+                }
+
+                $seen[$key] = true;
+            }
+        };
+    }
+
+    /**
+     * Rejects entries that contain an employee_id + allowance_type_id pair
+     * already present in *another* batch for the same period_year + period_month
+     * + cutoff combination.
+     *
+     * This prevents the "two RATA batches for the same month, same 82
+     * employees" scenario that the within-batch duplicate rule alone cannot
+     * catch.
+     */
+    private function noCrossBatchDuplicateRule(Request $request, ?int $excludeBatchId = null): \Closure
+    {
+        return function (string $attribute, $value, \Closure $fail) use ($request, $excludeBatchId) {
+            $periodYear  = $request->input('period_year');
+            $periodMonth = $request->input('period_month');
+            $cutoff      = $request->input('cutoff');
+
+            if (! $periodYear || ! $periodMonth || ! $cutoff) {
+                return;
+            }
+
+            $pairs = collect((array) $value)
+                ->filter(fn ($row) => ! empty($row['employee_id']) && ! empty($row['allowance_type_id']))
+                ->map(fn ($row) => $row['employee_id'] . '-' . $row['allowance_type_id'])
+                ->unique();
+
+            if ($pairs->isEmpty()) {
+                return;
+            }
+
+            $employeeIds = collect((array) $value)->pluck('employee_id')->filter()->unique();
+            $typeIds     = collect((array) $value)->pluck('allowance_type_id')->filter()->unique();
+
+            $conflicts = AllowanceEntry::query()
+                ->whereIn('employee_id', $employeeIds)
+                ->whereIn('allowance_type_id', $typeIds)
+                ->whereHas('batch', function ($q) use ($periodYear, $periodMonth, $cutoff, $excludeBatchId) {
+                    $q->where('period_year', $periodYear)
+                      ->where('period_month', $periodMonth)
+                      ->where('cutoff', $cutoff);
+
+                    if ($excludeBatchId) {
+                        $q->where('id', '!=', $excludeBatchId);
+                    }
+                })
+                ->with(['employee', 'allowanceType'])
+                ->get()
+                ->filter(fn ($e) => $pairs->contains($e->employee_id . '-' . $e->allowance_type_id));
+
+            if ($conflicts->isNotEmpty()) {
+                $sample = $conflicts->take(5)->map(function ($e) {
+                    $name = trim(($e->employee->last_name ?? '?') . ', ' . ($e->employee->first_name ?? ''));
+                    $type = $e->allowanceType->name ?? 'this allowance';
+
+                    return "{$name} ({$type}, Batch #{$e->allowance_batch_id})";
+                })->implode('; ');
+
+                $more = $conflicts->count() > 5
+                    ? ' and ' . ($conflicts->count() - 5) . ' more'
+                    : '';
+
+                $fail("These employees already have an entry for this allowance type in this period, in another batch: {$sample}{$more}. Remove them here or edit the existing batch instead.");
+            }
+        };
     }
 }

@@ -12,7 +12,7 @@
 <div class="page-header">
     <div class="page-header-left">
         <h1>Allowance Batch — {{ $periodLabel }}</h1>
-        <p>{{ ucfirst($batch->cutoff) }} cutoff · {{ $batch->period_start->format('M d') }} – {{ $batch->period_end->format('M d, Y') }}</p>
+        <p>{{ ucfirst($batch->cutoff) }} cutoff · {{ $batch->period_start->format('M d') }}{{ $batch->period_end ? ' – ' . $batch->period_end->format('M d, Y') : '' }}</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <a href="{{ route('payroll.allowances.index') }}" class="btn btn-outline">← Back</a>
