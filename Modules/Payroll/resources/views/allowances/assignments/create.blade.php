@@ -1,12 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'New Allowance Batch')
+@section('title', 'New Allowance Assignment')
 @section('page-title', 'Allowances')
 
 @section('content')
 <div class="page-header">
     <div class="page-header-left">
-        <h1>New Allowance Batch</h1>
+        <h1>New Allowance Assignment</h1>
         <p>Assign one or more allowance lines to employees for a specific period.</p>
     </div>
     <a href="{{ route('payroll.allowances.index') }}" class="btn btn-outline">← Back</a>
@@ -14,7 +14,7 @@
 
 <div class="card">
     <div class="card-body">
-        <form method="POST" action="{{ route('payroll.allowances.batches.store') }}" id="batchForm">
+        <form method="POST" action="{{ route('payroll.allowances.assignments.store') }}" id="assignmentForm">
             @csrf
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px;">
                 <div>
@@ -77,7 +77,7 @@
                 <div class="card-body" style="padding-top:0;">
                     <small style="color:#6b7280;">
                         Adds one row per active employee for the selected allowance type.
-                        Employees who already have that type in this batch, or who already have an active
+                        Employees who already have that type in this assignment, or who already have an active
                         standing allowance for that type, are skipped automatically.
                     </small>
                 </div>
@@ -91,7 +91,7 @@
 
             <button type="button" class="btn btn-outline btn-sm" id="addRow" style="margin-bottom:20px;">+ Add Row</button>
 
-            <button type="submit" class="btn btn-primary" id="submitBtn">Create Batch</button>
+            <button type="submit" class="btn btn-primary" id="submitBtn">Create Assignment</button>
         </form>
     </div>
 </div>
@@ -122,6 +122,7 @@
 <style>
 .duplicate-row { outline: 2px solid #dc2626; border-radius: 6px; padding: 6px; }
 .alert.alert-warning { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; padding:10px 14px; border-radius:6px; }
+.bulk-added-row { background:#f0f9ff; border-radius:6px; padding:10px; }
 
 /* Modal type colour tokens */
 #appModal[data-type="info"]    #appModalHeader { background:#eff6ff; }
@@ -167,11 +168,11 @@ function closeModal() {
 modalClose.addEventListener('click', closeModal);
 modalOk.addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', closeModal);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
 
 // ─── Page data ───────────────────────────────────────────────────────────────
-const EMPLOYEES      = @json($employees->map(fn ($e) => ['id' => $e->id, 'name' => $e->last_name . ', ' . $e->first_name]));
-const TYPES          = @json($types->map(fn ($t) => ['id' => $t->id, 'name' => $t->name]));
+const EMPLOYEES      = @json($employees->map(function ($e) { return ['id' => $e->id, 'name' => $e->last_name . ', ' . $e->first_name]; })->values()->toArray());
+const TYPES          = @json($types->map(function ($t) { return ['id' => $t->id, 'name' => $t->name]; })->values()->toArray());
 const OLD_ENTRIES    = @json(old('entries', []));
 
 /**
@@ -204,20 +205,40 @@ function typeOptions(selectedId) {
     return html;
 }
 
-function addRow({ employeeId = '', typeId = '', amount = '', remarks = '' } = {}) {
+function addRow({ employeeId = '', typeId = '', amount = '', remarks = '', bulkAdded = false } = {}) {
     const index = rowIndex++;
     const row   = document.createElement('div');
-    row.className     = 'entry-row';
+    row.className     = 'entry-row' + (bulkAdded ? ' bulk-added-row' : '');
     row.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 120px 1fr auto;gap:10px;margin-bottom:10px;align-items:end;';
+    
+    let typeFieldHtml = '';
+    if (bulkAdded) {
+        const typeName = TYPES.find(t => String(t.id) === String(typeId))?.name || '';
+        typeFieldHtml = `
+            <div>
+                <label>Allowance Type</label>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <input type="hidden" name="entries[${index}][allowance_type_id]" value="${typeId}" class="type-input-hidden">
+                    <span class="type-read-only" style="padding:6px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;font-size:0.9rem;flex:1;">${typeName}</span>
+                    <button type="button" class="btn btn-outline btn-sm change-type-btn" style="padding:4px 8px;font-size:0.8rem;">Change</button>
+                </div>
+            </div>
+        `;
+    } else {
+        typeFieldHtml = `
+            <div>
+                <label>Allowance Type</label>
+                <select name="entries[${index}][allowance_type_id]" class="type-select" required>${typeOptions(typeId)}</select>
+            </div>
+        `;
+    }
+    
     row.innerHTML = `
         <div>
             <label>Employee</label>
             <select name="entries[${index}][employee_id]" class="emp-select" required>${employeeOptions(employeeId)}</select>
         </div>
-        <div>
-            <label>Allowance Type</label>
-            <select name="entries[${index}][allowance_type_id]" class="type-select" required>${typeOptions(typeId)}</select>
-        </div>
+        ${typeFieldHtml}
         <div>
             <label>Amount</label>
             <input type="number" step="0.01" min="0" name="entries[${index}][amount]" value="${amount}" required>
@@ -248,8 +269,15 @@ function checkDuplicates() {
     rows.forEach(row => row.classList.remove('duplicate-row'));
 
     rows.forEach(row => {
-        const empVal  = row.querySelector('.emp-select').value;
-        const typeVal = row.querySelector('.type-select').value;
+        const empSelect = row.querySelector('.emp-select');
+        if (!empSelect) return;
+        const empVal = empSelect.value;
+        
+        // Handle both dropdown (type-select) and hidden input (type-input-hidden) for bulk-added rows
+        const typeSelect = row.querySelector('.type-select');
+        const typeHidden = row.querySelector('.type-input-hidden');
+        const typeVal = typeSelect ? typeSelect.value : (typeHidden ? typeHidden.value : '');
+        
         if (!empVal || !typeVal) return;
         const key = empVal + '-' + typeVal;
         if (!seen.has(key)) seen.set(key, []);
@@ -264,7 +292,10 @@ function checkDuplicates() {
         }
     });
 
-    document.getElementById('duplicateWarning').style.display = hasDuplicates ? 'block' : 'none';
+    const warningEl = document.getElementById('duplicateWarning');
+    if (warningEl) {
+        warningEl.style.display = hasDuplicates ? 'block' : 'none';
+    }
     return hasDuplicates;
 }
 
@@ -277,6 +308,31 @@ entryRows.addEventListener('click', function (e) {
     if (rows.length <= 1) return;
     e.target.closest('.entry-row').remove();
     checkDuplicates();
+});
+
+// Change Type button handler
+entryRows.addEventListener('click', function (e) {
+    if (!e.target.classList.contains('change-type-btn')) return;
+    
+    const row = e.target.closest('.entry-row');
+    const typeDiv = e.target.closest('div').parentElement;
+    const hiddenInput = row.querySelector('.type-input-hidden');
+    const currentTypeId = hiddenInput.value;
+    const index = hiddenInput.name.match(/\d+/)[0];
+    
+    // Replace read-only with dropdown
+    typeDiv.innerHTML = `
+        <label>Allowance Type</label>
+        <select name="entries[${index}][allowance_type_id]" class="type-select" required>${typeOptions(currentTypeId)}</select>
+    `;
+    
+    // Remove bulk-added styling since it's now customizable
+    row.classList.remove('bulk-added-row');
+    row.style.background = '';
+    row.style.padding = '';
+    
+    // Re-attach change event for duplicate detection
+    typeDiv.querySelector('.type-select').addEventListener('change', () => checkDuplicates());
 });
 
 entryRows.addEventListener('change', function (e) {
@@ -311,9 +367,13 @@ document.getElementById('bulkAddBtn').addEventListener('click', function () {
 
     // Build a set of employee-type pairs already present in the entry table.
     const existingPairs = new Set(
-        Array.from(entryRows.querySelectorAll('.entry-row')).map(row =>
-            row.querySelector('.emp-select').value + '-' + row.querySelector('.type-select').value
-        )
+        Array.from(entryRows.querySelectorAll('.entry-row')).map(row => {
+            const empVal = row.querySelector('.emp-select').value;
+            const typeSelect = row.querySelector('.type-select');
+            const typeHidden = row.querySelector('.type-input-hidden');
+            const typeVal = typeSelect ? typeSelect.value : (typeHidden ? typeHidden.value : '');
+            return empVal + '-' + typeVal;
+        }).filter(key => key && key !== '-')
     );
 
     let added           = 0;
@@ -324,7 +384,7 @@ document.getElementById('bulkAddBtn').addEventListener('click', function () {
         const key = emp.id + '-' + typeId;
         if (existingPairs.has(key))    { skippedBatch++;    return; }
         if (STANDING_PAIRS.has(key))   { skippedStanding++; return; }
-        addRow({ employeeId: emp.id, typeId, amount, remarks });
+        addRow({ employeeId: emp.id, typeId, amount, remarks, bulkAdded: true });
         added++;
     });
 
@@ -335,14 +395,14 @@ document.getElementById('bulkAddBtn').addEventListener('click', function () {
         bodyHtml += `
             <div class="modal-stat added">
                 <span class="stat-num">${added}</span>
-                <span>employee(s) added to this batch.</span>
+                <span>employee(s) added to this assignment.</span>
             </div>`;
     }
     if (skippedBatch > 0) {
         bodyHtml += `
             <div class="modal-stat skipped">
                 <span class="stat-num">${skippedBatch}</span>
-                <span>skipped — already present in this batch.</span>
+                <span>skipped — already present in this assignment.</span>
             </div>`;
     }
     if (skippedStanding > 0) {
@@ -365,7 +425,7 @@ document.getElementById('bulkAddBtn').addEventListener('click', function () {
 });
 
 // ─── Submit guard ─────────────────────────────────────────────────────────────
-document.getElementById('batchForm').addEventListener('submit', function (e) {
+document.getElementById('assignmentForm').addEventListener('submit', function (e) {
     if (checkDuplicates()) {
         e.preventDefault();
         showModal(

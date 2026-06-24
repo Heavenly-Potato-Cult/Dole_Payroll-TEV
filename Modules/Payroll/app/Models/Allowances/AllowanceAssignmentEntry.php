@@ -5,12 +5,14 @@ namespace Modules\Payroll\Models\Allowances;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class AllowanceEntry extends Model
+class AllowanceAssignmentEntry extends Model
 {
     use SoftDeletes;
 
+    protected $table = 'allowance_assignment_entries';
+
     protected $fillable = [
-        'allowance_batch_id',
+        'allowance_assignment_id',
         'employee_id',
         'allowance_type_id',
         'amount',
@@ -35,9 +37,9 @@ class AllowanceEntry extends Model
         'net_amount' => 'decimal:2',
     ];
 
-    public function batch()
+    public function assignment()
     {
-        return $this->belongsTo(AllowanceBatch::class, 'allowance_batch_id');
+        return $this->belongsTo(AllowanceAssignment::class, 'allowance_assignment_id');
     }
 
     public function employee()

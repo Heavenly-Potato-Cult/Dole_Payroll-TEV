@@ -1,30 +1,30 @@
 @extends('layouts.app')
 
-@section('title', 'Edit Allowance Batch')
+@section('title', 'Edit Allowance Assignment')
 @section('page-title', 'Allowances')
 
 @section('content')
 <div class="page-header">
     <div class="page-header-left">
-        <h1>Edit Allowance Batch</h1>
+        <h1>Edit Allowance Assignment</h1>
     </div>
-    <a href="{{ route('payroll.allowances.batches.show', $batch) }}" class="btn btn-outline">← Back</a>
+    <a href="{{ route('payroll.allowances.assignments.show', $assignment) }}" class="btn btn-outline">← Back</a>
 </div>
 
 <div class="card">
     <div class="card-body">
-        <form method="POST" action="{{ route('payroll.allowances.batches.update', $batch) }}" id="batchForm">
+        <form method="POST" action="{{ route('payroll.allowances.assignments.update', $assignment) }}" id="assignmentForm">
             @csrf @method('PUT')
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px;">
                 <div>
                     <label>Year</label>
-                    <input type="number" name="period_year" value="{{ old('period_year', $batch->period_year) }}" required>
+                    <input type="number" name="period_year" value="{{ old('period_year', $assignment->period_year) }}" required>
                 </div>
                 <div>
                     <label>Month</label>
                     <select name="period_month" required>
                         @for ($m = 1; $m <= 12; $m++)
-                            <option value="{{ $m }}" @selected(old('period_month', $batch->period_month) == $m)>{{ date('F', mktime(0,0,0,$m,1)) }}</option>
+                            <option value="{{ $m }}" @selected(old('period_month', $assignment->period_month) == $m)>{{ date('F', mktime(0,0,0,$m,1)) }}</option>
                         @endfor
                     </select>
                 </div>
@@ -32,23 +32,23 @@
                     <label>Cutoff</label>
                     <select name="cutoff" required>
                         @foreach (['monthly','1st','2nd'] as $cutoff)
-                            <option value="{{ $cutoff }}" @selected(old('cutoff', $batch->cutoff) === $cutoff)>{{ ucfirst($cutoff) }}</option>
+                            <option value="{{ $cutoff }}" @selected(old('cutoff', $assignment->cutoff) === $cutoff)>{{ ucfirst($cutoff) }}</option>
                         @endforeach
                     </select>
                 </div>
                 <div>
                     <label>Period Start</label>
-                    <input type="date" name="period_start" value="{{ old('period_start', $batch->period_start->toDateString()) }}" required>
+                    <input type="date" name="period_start" value="{{ old('period_start', $assignment->period_start->toDateString()) }}" required>
                 </div>
                 <div>
                     <label>Period End <span style="color:#6b7280;font-weight:400;font-size:0.85em;">(optional)</span></label>
-                    <input type="date" name="period_end" value="{{ old('period_end', $batch->period_end?->toDateString()) }}">
+                    <input type="date" name="period_end" value="{{ old('period_end', $assignment->period_end?->toDateString()) }}">
                 </div>
             </div>
 
             <div style="margin-bottom:20px;">
                 <label>Remarks</label>
-                <textarea name="remarks" rows="2">{{ old('remarks', $batch->remarks) }}</textarea>
+                <textarea name="remarks" rows="2">{{ old('remarks', $assignment->remarks) }}</textarea>
             </div>
 
             <h3 style="margin-bottom:8px;">Bulk Add</h3>
@@ -76,7 +76,7 @@
                 <div class="card-body" style="padding-top:0;">
                     <small style="color:#6b7280;">
                         Adds one row per active employee for the selected allowance type.
-                        Employees who already have that type in this batch, or who already have an active
+                        Employees who already have that type in this assignment, or who already have an active
                         standing allowance for that type, are skipped automatically.
                     </small>
                 </div>
@@ -165,17 +165,22 @@ function closeModal() {
 modalClose.addEventListener('click', closeModal);
 modalOk.addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', closeModal);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
 
 // ─── Page data ────────────────────────────────────────────────────────────────
-const EMPLOYEES   = @json($employees->map(fn ($e) => ['id' => $e->id, 'name' => $e->last_name . ', ' . $e->first_name]));
-const TYPES       = @json($types->map(fn ($t) => ['id' => $t->id, 'name' => $t->name]));
-const OLD_ENTRIES = @json(old('entries', $batch->entries->map(fn ($e) => [
-    'employee_id'       => $e->employee_id,
-    'allowance_type_id' => $e->allowance_type_id,
-    'amount'            => $e->amount,
-    'remarks'           => $e->remarks,
-])->values()->toArray()));
+const EMPLOYEES   = @json($employees->map(function ($e) { return ['id' => $e->id, 'name' => $e->last_name . ', ' . $e->first_name]; })->values()->toArray());
+const TYPES       = @json($types->map(function ($t) { return ['id' => $t->id, 'name' => $t->name]; })->values()->toArray());
+@php
+    $oldEntriesData = old('entries', $assignment->entries->map(function ($e) {
+        return [
+            'employee_id'       => $e->employee_id,
+            'allowance_type_id' => $e->allowance_type_id,
+            'amount'            => $e->amount,
+            'remarks'           => $e->remarks,
+        ];
+    })->values()->toArray());
+@endphp
+const OLD_ENTRIES = @json($oldEntriesData);
 
 /**
  * A Set of "employee_id-allowance_type_id" strings for every active standing
@@ -338,14 +343,14 @@ document.getElementById('bulkAddBtn').addEventListener('click', function () {
         bodyHtml += `
             <div class="modal-stat added">
                 <span class="stat-num">${added}</span>
-                <span>employee(s) added to this batch.</span>
+                <span>employee(s) added to this assignment.</span>
             </div>`;
     }
     if (skippedBatch > 0) {
         bodyHtml += `
             <div class="modal-stat skipped">
                 <span class="stat-num">${skippedBatch}</span>
-                <span>skipped — already present in this batch.</span>
+                <span>skipped — already present in this assignment.</span>
             </div>`;
     }
     if (skippedStanding > 0) {
@@ -368,7 +373,7 @@ document.getElementById('bulkAddBtn').addEventListener('click', function () {
 });
 
 // ─── Submit guard ─────────────────────────────────────────────────────────────
-document.getElementById('batchForm').addEventListener('submit', function (e) {
+document.getElementById('assignmentForm').addEventListener('submit', function (e) {
     if (checkDuplicates()) {
         e.preventDefault();
         showModal(

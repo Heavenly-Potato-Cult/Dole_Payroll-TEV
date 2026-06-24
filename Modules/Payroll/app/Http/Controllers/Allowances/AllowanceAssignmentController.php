@@ -4,19 +4,19 @@ namespace Modules\Payroll\Http\Controllers\Allowances;
 
 use App\Http\Controllers\Controller;
 use App\SharedKernel\Models\Employee;
-use Modules\Payroll\Models\Allowances\AllowanceBatch;
-use Modules\Payroll\Models\Allowances\AllowanceEntry;
+use Modules\Payroll\Models\Allowances\AllowanceAssignment;
+use Modules\Payroll\Models\Allowances\AllowanceAssignmentEntry;
 use Modules\Payroll\Models\Allowances\AllowanceType;
 use Modules\Payroll\Models\Allowances\EmployeeAllowance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class AllowanceBatchController extends Controller
+class AllowanceAssignmentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = AllowanceBatch::with('creator')
+        $query = AllowanceAssignment::with('creator')
             ->withCount('entries')
             ->orderByDesc('period_year')
             ->orderByDesc('period_month')
@@ -29,10 +29,10 @@ class AllowanceBatchController extends Controller
             $query->where('status', $request->status);
         }
 
-        $batches     = $query->paginate(20)->withQueryString();
+        $assignments = $query->paginate(20)->withQueryString();
         $currentYear = now()->year;
 
-        return view('payroll::allowances.batches.index', compact('batches', 'currentYear'));
+        return view('payroll::allowances.assignments.index', compact('assignments', 'currentYear'));
     }
 
     public function create()
@@ -45,7 +45,7 @@ class AllowanceBatchController extends Controller
 
         $standingPairs = $this->getStandingPairs();
 
-        return view('payroll::allowances.batches.create', compact('types', 'employees', 'standingPairs'));
+        return view('payroll::allowances.assignments.create', compact('types', 'employees', 'standingPairs'));
     }
 
     public function store(Request $request)
@@ -68,8 +68,8 @@ class AllowanceBatchController extends Controller
             'entries.*.remarks'           => ['nullable', 'string'],
         ]);
 
-        $batch = DB::transaction(function () use ($validated) {
-            $batch = AllowanceBatch::create([
+        $assignment = DB::transaction(function () use ($validated) {
+            $assignment = AllowanceAssignment::create([
                 'period_year'  => $validated['period_year'],
                 'period_month' => $validated['period_month'],
                 'cutoff'       => $validated['cutoff'],
@@ -83,8 +83,8 @@ class AllowanceBatchController extends Controller
 
             foreach ($validated['entries'] as $row) {
                 $amount = round((float) $row['amount'], 2);
-                AllowanceEntry::create([
-                    'allowance_batch_id' => $batch->id,
+                AllowanceAssignmentEntry::create([
+                    'allowance_assignment_id' => $assignment->id,
                     'employee_id'        => $row['employee_id'],
                     'allowance_type_id'  => $row['allowance_type_id'],
                     'amount'             => $amount,
@@ -94,28 +94,28 @@ class AllowanceBatchController extends Controller
                 ]);
             }
 
-            return $batch;
+            return $assignment;
         });
 
-        return redirect()->route('payroll.allowances.batches.show', $batch)
-            ->with('success', 'Allowance batch created.');
+        return redirect()->route('payroll.allowances.assignments.show', $assignment)
+            ->with('success', 'Allowance assignment created.');
     }
 
-    public function show(AllowanceBatch $batch)
+    public function show(AllowanceAssignment $assignment)
     {
-        $batch->load(['entries.employee', 'entries.allowanceType', 'creator']);
+        $assignment->load(['entries.employee', 'entries.allowanceType', 'creator']);
 
-        return view('payroll::allowances.batches.show', compact('batch'));
+        return view('payroll::allowances.assignments.show', compact('assignment'));
     }
 
-    public function edit(AllowanceBatch $batch)
+    public function edit(AllowanceAssignment $assignment)
     {
-        if (! in_array($batch->status, ['draft'], true)) {
-            return redirect()->route('payroll.allowances.batches.show', $batch)
-                ->with('error', 'Only draft batches can be edited.');
+        if (! in_array($assignment->status, ['draft'], true)) {
+            return redirect()->route('payroll.allowances.assignments.show', $assignment)
+                ->with('error', 'Only draft assignments can be edited.');
         }
 
-        $batch->load(['entries.employee', 'entries.allowanceType']);
+        $assignment->load(['entries.employee', 'entries.allowanceType']);
         $types     = AllowanceType::where('is_active', true)->orderBy('display_order')->get();
         $employees = Employee::where('status', 'active')
             ->orderBy('last_name')
@@ -124,14 +124,14 @@ class AllowanceBatchController extends Controller
 
         $standingPairs = $this->getStandingPairs();
 
-        return view('payroll::allowances.batches.edit', compact('batch', 'types', 'employees', 'standingPairs'));
+        return view('payroll::allowances.assignments.edit', compact('assignment', 'types', 'employees', 'standingPairs'));
     }
 
-    public function update(Request $request, AllowanceBatch $batch)
+    public function update(Request $request, AllowanceAssignment $assignment)
     {
-        if ($batch->status !== 'draft') {
-            return redirect()->route('payroll.allowances.batches.show', $batch)
-                ->with('error', 'Only draft batches can be edited.');
+        if ($assignment->status !== 'draft') {
+            return redirect()->route('payroll.allowances.assignments.show', $assignment)
+                ->with('error', 'Only draft assignments can be edited.');
         }
 
         $validated = $request->validate([
@@ -144,7 +144,7 @@ class AllowanceBatchController extends Controller
             'entries'       => [
                 'required', 'array', 'min:1',
                 $this->noDuplicateEntriesRule(),
-                $this->noCrossBatchDuplicateRule($request, $batch->id),
+                $this->noCrossBatchDuplicateRule($request, $assignment->id),
             ],
             'entries.*.employee_id'       => ['required', 'exists:employees,id'],
             'entries.*.allowance_type_id' => ['required', 'exists:allowance_types,id'],
@@ -152,8 +152,8 @@ class AllowanceBatchController extends Controller
             'entries.*.remarks'           => ['nullable', 'string'],
         ]);
 
-        DB::transaction(function () use ($batch, $validated) {
-            $batch->update([
+        DB::transaction(function () use ($assignment, $validated) {
+            $assignment->update([
                 'period_year'  => $validated['period_year'],
                 'period_month' => $validated['period_month'],
                 'cutoff'       => $validated['cutoff'],
@@ -162,12 +162,12 @@ class AllowanceBatchController extends Controller
                 'remarks'      => $validated['remarks'] ?? null,
             ]);
 
-            $batch->entries()->delete();
+            $assignment->entries()->delete();
 
             foreach ($validated['entries'] as $row) {
                 $amount = round((float) $row['amount'], 2);
-                AllowanceEntry::create([
-                    'allowance_batch_id' => $batch->id,
+                AllowanceAssignmentEntry::create([
+                    'allowance_assignment_id' => $assignment->id,
                     'employee_id'        => $row['employee_id'],
                     'allowance_type_id'  => $row['allowance_type_id'],
                     'amount'             => $amount,
@@ -178,54 +178,36 @@ class AllowanceBatchController extends Controller
             }
         });
 
-        return redirect()->route('payroll.allowances.batches.show', $batch)
-            ->with('success', 'Allowance batch updated.');
+        return redirect()->route('payroll.allowances.assignments.show', $assignment)
+            ->with('success', 'Allowance assignment updated.');
     }
 
-    public function advance(Request $request, AllowanceBatch $batch)
+    public function advance(Request $request, AllowanceAssignment $assignment)
     {
-        $action = $request->validate(['action' => 'required|in:submit,approve,release'])['action'];
+        $action = $request->validate(['action' => 'required|in:release'])['action'];
 
-        $transitions = [
-            'submit'  => ['from' => ['draft'],          'to' => 'pending_review', 'field' => 'reviewed'],
-            'approve' => ['from' => ['pending_review'], 'to' => 'approved',       'field' => 'approved'],
-            'release' => ['from' => ['approved'],       'to' => 'released',       'field' => 'released'],
-        ];
-
-        $rule = $transitions[$action];
-
-        if (! in_array($batch->status, $rule['from'], true)) {
-            return back()->with('error', 'Invalid status transition.');
+        if ($action === 'release' && $assignment->status === 'draft') {
+            $assignment->update([
+                'status' => 'released',
+                'released_by' => Auth::id(),
+                'released_at' => now(),
+            ]);
+            return back()->with('success', 'Allowance assignment released.');
         }
 
-        $updates = ['status' => $rule['to']];
-
-        if ($rule['field'] === 'reviewed') {
-            $updates['reviewed_by'] = Auth::id();
-            $updates['reviewed_at'] = now();
-        } elseif ($rule['field'] === 'approved') {
-            $updates['approved_by'] = Auth::id();
-            $updates['approved_at'] = now();
-        } else {
-            $updates['released_by'] = Auth::id();
-            $updates['released_at'] = now();
-        }
-
-        $batch->update($updates);
-
-        return back()->with('success', 'Batch status updated to ' . str_replace('_', ' ', $rule['to']) . '.');
+        return back()->with('error', 'Invalid status transition.');
     }
 
-    public function destroy(AllowanceBatch $batch)
+    public function destroy(AllowanceAssignment $assignment)
     {
-        if ($batch->status !== 'draft') {
-            return back()->with('error', 'Only draft batches can be deleted.');
+        if ($assignment->status !== 'draft') {
+            return back()->with('error', 'Only draft assignments can be deleted.');
         }
 
-        $batch->delete();
+        $assignment->delete();
 
         return redirect()->route('payroll.allowances.index')
-            ->with('success', 'Allowance batch deleted.');
+            ->with('success', 'Allowance assignment deleted.');
     }
 
     // -------------------------------------------------------------------------
@@ -320,10 +302,10 @@ class AllowanceBatchController extends Controller
             $employeeIds = collect((array) $value)->pluck('employee_id')->filter()->unique();
             $typeIds     = collect((array) $value)->pluck('allowance_type_id')->filter()->unique();
 
-            $conflicts = AllowanceEntry::query()
+            $conflicts = AllowanceAssignmentEntry::query()
                 ->whereIn('employee_id', $employeeIds)
                 ->whereIn('allowance_type_id', $typeIds)
-                ->whereHas('batch', function ($q) use ($periodYear, $periodMonth, $cutoff, $excludeBatchId) {
+                ->whereHas('assignment', function ($q) use ($periodYear, $periodMonth, $cutoff, $excludeBatchId) {
                     $q->where('period_year', $periodYear)
                       ->where('period_month', $periodMonth)
                       ->where('cutoff', $cutoff);
@@ -341,14 +323,14 @@ class AllowanceBatchController extends Controller
                     $name = trim(($e->employee->last_name ?? '?') . ', ' . ($e->employee->first_name ?? ''));
                     $type = $e->allowanceType->name ?? 'this allowance';
 
-                    return "{$name} ({$type}, Batch #{$e->allowance_batch_id})";
+                    return "{$name} ({$type}, Assignment #{$e->allowance_assignment_id})";
                 })->implode('; ');
 
                 $more = $conflicts->count() > 5
                     ? ' and ' . ($conflicts->count() - 5) . ' more'
                     : '';
 
-                $fail("These employees already have an entry for this allowance type in this period, in another batch: {$sample}{$more}. Remove them here or edit the existing batch instead.");
+                $fail("These employees already have an entry for this allowance type in this period, in another assignment: {$sample}{$more}. Remove them here or edit the existing assignment instead.");
             }
         };
     }

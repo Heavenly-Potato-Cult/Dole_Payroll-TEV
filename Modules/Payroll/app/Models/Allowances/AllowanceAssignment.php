@@ -5,9 +5,11 @@ namespace Modules\Payroll\Models\Allowances;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class AllowanceBatch extends Model
+class AllowanceAssignment extends Model
 {
     use SoftDeletes;
+
+    protected $table = 'allowance_assignments';
 
     protected $fillable = [
         'period_year',
@@ -60,6 +62,6 @@ class AllowanceBatch extends Model
 
     public function entries()
     {
-        return $this->hasMany(AllowanceEntry::class);
+        return $this->hasMany(AllowanceAssignmentEntry::class);
     }
 }

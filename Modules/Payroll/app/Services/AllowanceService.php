@@ -4,7 +4,7 @@ namespace Modules\Payroll\Services;
 
 use App\SharedKernel\Models\Employee;
 use Carbon\Carbon;
-use Modules\Payroll\Models\Allowances\AllowanceEntry;
+use Modules\Payroll\Models\Allowances\AllowanceAssignmentEntry;
 use Modules\Payroll\Models\Allowances\AllowanceType;
 use Modules\Payroll\Models\Allowances\EmployeeAllowance;
 use Modules\Payroll\Models\Allowances\PayrollEntryAllowance;
@@ -18,7 +18,7 @@ class AllowanceService
      *
      * Sources (later sources override earlier for the same type):
      *   1. Active employee_allowances (standing/recurring)
-     *   2. Approved/released allowance_batch entries for the same period
+     *   2. Approved/released allowance_assignment entries for the same period
      *
      * @return array<int, array{allowance_type_id: int, code: string, name: string, amount: float}>
      */
@@ -63,19 +63,19 @@ class AllowanceService
             }
         }
 
-        // --- 3. Batch entries (override standing for the same type) ---------------
-        $batchEntries = AllowanceEntry::query()
-            ->with(['allowanceType', 'batch'])
+        // --- 3. Assignment entries (override standing for the same type) ---------------
+        $assignmentEntries = AllowanceAssignmentEntry::query()
+            ->with(['allowanceType', 'assignment'])
             ->where('employee_id', $employee->id)
-            ->whereHas('batch', function ($q) use ($batch) {
+            ->whereHas('assignment', function ($q) use ($batch) {
                 $q->where('period_year', $batch->period_year)
                   ->where('period_month', $batch->period_month)
-                  ->whereIn('status', ['approved', 'released']);
+                  ->whereIn('status', ['released']);
             })
             ->get()
             ->filter(fn ($row) => $row->allowanceType?->is_active);
 
-        foreach ($batchEntries as $entry) {
+        foreach ($assignmentEntries as $entry) {
             $lines[$entry->allowance_type_id] = $this->lineFromType(
                 $entry->allowanceType,
                 (float) $entry->amount

@@ -6,12 +6,12 @@
 @section('content')
 <div class="page-header">
     <div class="page-header-left">
-        <h1>Allowance Batches</h1>
-        <p>Manage period-based allowance runs for individual or bulk employee assignments.</p>
+        <h1>Allowance Assignments</h1>
+        <p>Manage period-based allowance assignments for individual or bulk employee assignments.</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <a href="{{ route('payroll.allowances.types.index') }}" class="btn btn-outline">Allowance Types</a>
-        <a href="{{ route('payroll.allowances.batches.create') }}" class="btn btn-primary">+ New Batch</a>
+        <a href="{{ route('payroll.allowances.assignments.create') }}" class="btn btn-primary">+ New Assignment</a>
     </div>
 </div>
 
@@ -27,15 +27,6 @@
                     @endfor
                 </select>
             </div>
-            <div>
-                <label style="font-size:0.72rem;font-weight:700;text-transform:uppercase;color:var(--text-mid);">Status</label>
-                <select name="status" style="height:38px;">
-                    <option value="">All</option>
-                    @foreach (['draft','pending_review','approved','released'] as $status)
-                        <option value="{{ $status }}" @selected(request('status') === $status)>{{ str_replace('_', ' ', ucfirst($status)) }}</option>
-                    @endforeach
-                </select>
-            </div>
             <button type="submit" class="btn btn-primary btn-sm">Filter</button>
         </form>
     </div>
@@ -49,26 +40,24 @@
                     <th>Period</th>
                     <th>Cutoff</th>
                     <th>Entries</th>
-                    <th>Status</th>
-                    <th>Prepared</th>
+                    <th>Created</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
-                @forelse ($batches as $batch)
+                @forelse ($assignments as $assignment)
                 <tr>
-                    <td>{{ \Carbon\Carbon::create($batch->period_year, $batch->period_month)->format('F Y') }}</td>
-                    <td>{{ ucfirst($batch->cutoff) }}</td>
-                    <td>{{ $batch->entries_count ?? $batch->entries->count() }}</td>
-                    <td><span class="badge">{{ str_replace('_', ' ', ucfirst($batch->status)) }}</span></td>
-                    <td>{{ $batch->prepared_at?->format('M d, Y') ?? '—' }}</td>
+                    <td>{{ \Carbon\Carbon::create($assignment->period_year, $assignment->period_month)->format('F Y') }}</td>
+                    <td>{{ ucfirst($assignment->cutoff) }}</td>
+                    <td>{{ $assignment->entries_count ?? $assignment->entries->count() }}</td>
+                    <td>{{ $assignment->created_at?->format('M d, Y') ?? '—' }}</td>
                     <td>
                         <div style="display:flex;gap:6px;justify-content:flex-end;">
-                            <a href="{{ route('payroll.allowances.batches.show', $batch) }}" class="btn btn-sm btn-outline">View</a>
-                            @if ($batch->status === 'draft')
+                            <a href="{{ route('payroll.allowances.assignments.show', $assignment) }}" class="btn btn-sm btn-outline">View</a>
+                            @if ($assignment->status === 'draft')
                                 <form method="POST"
-                                      action="{{ route('payroll.allowances.batches.destroy', $batch) }}"
-                                      onsubmit="return confirm('Delete this draft batch ({{ \Carbon\Carbon::create($batch->period_year, $batch->period_month)->format('F Y') }}, {{ ucfirst($batch->cutoff) }}) and its {{ $batch->entries_count ?? $batch->entries->count() }} entries? This cannot be undone.');"
+                                      action="{{ route('payroll.allowances.assignments.destroy', $assignment) }}"
+                                      onsubmit="return confirm('Delete this draft assignment ({{ \Carbon\Carbon::create($assignment->period_year, $assignment->period_month)->format('F Y') }}, {{ ucfirst($assignment->cutoff) }}) and its {{ $assignment->entries_count ?? $assignment->entries->count() }} entries? This cannot be undone.');"
                                       style="display:inline;">
                                     @csrf
                                     @method('DELETE')
@@ -79,12 +68,12 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-light);">No allowance batches yet.</td></tr>
+                <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-light);">No allowance assignments yet.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
 </div>
 
-{{ $batches->links() }}
+{{ $assignments->links() }}
 @endsection

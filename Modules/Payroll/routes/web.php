@@ -7,7 +7,7 @@ use Modules\Payroll\Http\Controllers\PayrollEntryController;
 use Modules\Payroll\Http\Controllers\SpecialPayrollController;
 use Modules\Payroll\Http\Controllers\DeductionTypeController;
 use Modules\Payroll\Http\Controllers\DeductionTypeCategoryController;
-use Modules\Payroll\Http\Controllers\Allowances\AllowanceBatchController;
+use Modules\Payroll\Http\Controllers\Allowances\AllowanceAssignmentController;
 use Modules\Payroll\Http\Controllers\Allowances\AllowanceTypeController;
 use Modules\Payroll\Http\Controllers\Allowances\EmployeeAllowanceController;
 
@@ -146,17 +146,17 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['role:' . implode('|', array_diff(\App\SharedKernel\Services\RoleService::getRoleGroup('payroll'), ['cashier']))])
         ->group(function () {
 
-            // ── Allowance batches (main Allowances section) ──────────────
+            // ── Allowance assignments (main Allowances section) ──────────────
             Route::prefix('allowances')->name('payroll.allowances.')->group(function () {
-                Route::get('/', [AllowanceBatchController::class, 'index'])->name('index');
+                Route::get('/', [AllowanceAssignmentController::class, 'index'])->name('index');
 
-                Route::get('/batches/create', [AllowanceBatchController::class, 'create'])->name('batches.create');
-                Route::post('/batches', [AllowanceBatchController::class, 'store'])->name('batches.store');
-                Route::get('/batches/{batch}', [AllowanceBatchController::class, 'show'])->name('batches.show');
-                Route::get('/batches/{batch}/edit', [AllowanceBatchController::class, 'edit'])->name('batches.edit');
-                Route::put('/batches/{batch}', [AllowanceBatchController::class, 'update'])->name('batches.update');
-                Route::delete('/batches/{batch}', [AllowanceBatchController::class, 'destroy'])->name('batches.destroy');
-                Route::post('/batches/{batch}/advance', [AllowanceBatchController::class, 'advance'])->name('batches.advance');
+                Route::get('/assignments/create', [AllowanceAssignmentController::class, 'create'])->name('assignments.create');
+                Route::post('/assignments', [AllowanceAssignmentController::class, 'store'])->name('assignments.store');
+                Route::get('/assignments/{assignment}', [AllowanceAssignmentController::class, 'show'])->name('assignments.show');
+                Route::get('/assignments/{assignment}/edit', [AllowanceAssignmentController::class, 'edit'])->name('assignments.edit');
+                Route::put('/assignments/{assignment}', [AllowanceAssignmentController::class, 'update'])->name('assignments.update');
+                Route::delete('/assignments/{assignment}', [AllowanceAssignmentController::class, 'destroy'])->name('assignments.destroy');
+                Route::post('/assignments/{assignment}/advance', [AllowanceAssignmentController::class, 'advance'])->name('assignments.advance');
 
                 // ── Allowance types CMS ──────────────────────────────────
                 Route::get('/types', [AllowanceTypeController::class, 'index'])->name('types.index');
