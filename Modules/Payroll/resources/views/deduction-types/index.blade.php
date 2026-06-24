@@ -26,6 +26,7 @@
     width: 140px; height: 140px;
     background: rgba(249,168,37,0.12);
     border-radius: 50%;
+    pointer-events: none;
 }
 
 .db-greeting-header {
@@ -34,6 +35,8 @@
     align-items: flex-start;
     margin-bottom: 12px;
     gap: 12px;
+    position: relative;
+    z-index: 1;
 }
 
 .db-greeting h1 {
