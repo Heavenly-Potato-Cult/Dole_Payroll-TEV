@@ -74,6 +74,14 @@
                             <a href="{{ route('payroll.allowances.assignments.show', $assignment) }}" class="btn btn-sm btn-outline">View</a>
                             @if ($assignment->status === 'draft')
                                 <form method="POST"
+                                      action="{{ route('payroll.allowances.assignments.advance', $assignment) }}"
+                                      onsubmit="return confirm('Once released, this assignment cannot be edited. Proceed?');"
+                                      style="display:inline;">
+                                    @csrf
+                                    <input type="hidden" name="action" value="release">
+                                    <button type="submit" class="btn btn-sm btn-primary">Release</button>
+                                </form>
+                                <form method="POST"
                                       action="{{ route('payroll.allowances.assignments.destroy', $assignment) }}"
                                       onsubmit="return confirm('Delete this draft assignment ({{ $periodLabel }}, {{ ucfirst($assignment->cutoff) }}) and its {{ $entriesCount }} entries? This cannot be undone.');"
                                       style="display:inline;">

@@ -7,17 +7,36 @@
 @php
     $months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
     $periodLabel = ($months[$assignment->period_month] ?? '') . ' ' . $assignment->period_year;
+
+    $statusColors = [
+        'draft'    => ['bg' => '#f1f5f9', 'color' => '#475569'],
+        'released' => ['bg' => '#dcfce7', 'color' => '#16a34a'],
+    ];
+    $sc = $statusColors[$assignment->status] ?? ['bg' => '#f1f5f9', 'color' => '#64748b'];
 @endphp
 
 <div class="page-header">
     <div class="page-header-left">
-        <h1>Allowance Assignment — {{ $periodLabel }}</h1>
+        <h1>
+            Allowance Assignment — {{ $periodLabel }}
+            <span style="display:inline-block;margin-left:10px;padding:2px 10px;border-radius:999px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:{{ $sc['bg'] }};color:{{ $sc['color'] }};vertical-align:middle;">
+                {{ ucfirst($assignment->status) }}
+            </span>
+        </h1>
         <p>{{ ucfirst($assignment->cutoff) }} cutoff · {{ $assignment->period_start->format('M d') }}{{ $assignment->period_end ? ' – ' . $assignment->period_end->format('M d, Y') : '' }}</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <a href="{{ route('payroll.allowances.index') }}" class="btn btn-outline">← Back</a>
         @if ($assignment->status === 'draft')
             <a href="{{ route('payroll.allowances.assignments.edit', $assignment) }}" class="btn btn-outline">Edit</a>
+            <form method="POST"
+                  action="{{ route('payroll.allowances.assignments.advance', $assignment) }}"
+                  onsubmit="return confirm('Once released, this assignment cannot be edited. Proceed?');"
+                  style="display:inline;">
+                @csrf
+                <input type="hidden" name="action" value="release">
+                <button type="submit" class="btn btn-primary">Release</button>
+            </form>
         @endif
     </div>
 </div>
