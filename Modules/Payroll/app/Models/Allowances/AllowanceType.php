@@ -37,6 +37,11 @@ class AllowanceType extends Model
         return $this->hasMany(EmployeeAllowance::class);
     }
 
+    public function assignmentEntries()
+    {
+        return $this->hasMany(AllowanceAssignmentEntry::class);
+    }
+
     public function getDisplayOrderAttribute($value): int
     {
         return (int) ($value ?? $this->attributes['sort_order'] ?? 0);

@@ -39,25 +39,43 @@
                 <tr>
                     <th>Period</th>
                     <th>Cutoff</th>
-                    <th>Entries</th>
+                    <th>Status</th>
+                    <th style="text-align:right;">Entries</th>
+                    <th style="text-align:right;">Total Amount</th>
                     <th>Created</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
                 @forelse ($assignments as $assignment)
+                @php
+                    $entriesCount = $assignment->entries_count ?? $assignment->entries->count();
+                    $totalAmount  = $assignment->entries_sum_amount ?? $assignment->entries->sum('amount');
+                    $periodLabel  = \Carbon\Carbon::create($assignment->period_year, $assignment->period_month)->format('F Y');
+                    $statusColors = [
+                        'draft'    => ['bg' => '#f1f5f9', 'color' => '#475569'],
+                        'released' => ['bg' => '#dcfce7', 'color' => '#16a34a'],
+                    ];
+                    $sc = $statusColors[$assignment->status] ?? ['bg' => '#f1f5f9', 'color' => '#64748b'];
+                @endphp
                 <tr>
-                    <td>{{ \Carbon\Carbon::create($assignment->period_year, $assignment->period_month)->format('F Y') }}</td>
+                    <td style="font-weight:600;">{{ $periodLabel }}</td>
                     <td>{{ ucfirst($assignment->cutoff) }}</td>
-                    <td>{{ $assignment->entries_count ?? $assignment->entries->count() }}</td>
-                    <td>{{ $assignment->created_at?->format('M d, Y') ?? '—' }}</td>
+                    <td>
+                        <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:{{ $sc['bg'] }};color:{{ $sc['color'] }};">
+                            {{ ucfirst($assignment->status) }}
+                        </span>
+                    </td>
+                    <td style="text-align:right;">{{ number_format($entriesCount) }}</td>
+                    <td style="text-align:right;font-weight:600;">₱{{ number_format($totalAmount, 2) }}</td>
+                    <td style="color:var(--text-light);font-size:0.85rem;">{{ $assignment->created_at?->format('M d, Y') ?? '—' }}</td>
                     <td>
                         <div style="display:flex;gap:6px;justify-content:flex-end;">
                             <a href="{{ route('payroll.allowances.assignments.show', $assignment) }}" class="btn btn-sm btn-outline">View</a>
                             @if ($assignment->status === 'draft')
                                 <form method="POST"
                                       action="{{ route('payroll.allowances.assignments.destroy', $assignment) }}"
-                                      onsubmit="return confirm('Delete this draft assignment ({{ \Carbon\Carbon::create($assignment->period_year, $assignment->period_month)->format('F Y') }}, {{ ucfirst($assignment->cutoff) }}) and its {{ $assignment->entries_count ?? $assignment->entries->count() }} entries? This cannot be undone.');"
+                                      onsubmit="return confirm('Delete this draft assignment ({{ $periodLabel }}, {{ ucfirst($assignment->cutoff) }}) and its {{ $entriesCount }} entries? This cannot be undone.');"
                                       style="display:inline;">
                                     @csrf
                                     @method('DELETE')
@@ -68,7 +86,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-light);">No allowance assignments yet.</td></tr>
+                <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-light);">No allowance assignments yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

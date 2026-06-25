@@ -16,8 +16,9 @@ class AllowanceAssignmentController extends Controller
 {
     public function index(Request $request)
     {
-        $query = AllowanceAssignment::with('creator')
-            ->withCount('entries')
+$query = AllowanceAssignment::with('creator')
+    ->withCount('entries')
+    ->withSum('entries', 'amount')
             ->orderByDesc('period_year')
             ->orderByDesc('period_month')
             ->orderByDesc('id');

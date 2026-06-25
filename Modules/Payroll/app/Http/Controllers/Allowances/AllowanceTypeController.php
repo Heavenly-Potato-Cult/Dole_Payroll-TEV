@@ -5,18 +5,47 @@ namespace Modules\Payroll\Http\Controllers\Allowances;
 use App\Http\Controllers\Controller;
 use Modules\Payroll\Models\Allowances\AllowanceType;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class AllowanceTypeController extends Controller
 {
     public function index()
     {
-        $types = AllowanceType::withCount([
-                'employeeAllowances as active_enrollments_count' => fn ($q) => $q->where('is_active', true),
-            ])
-            ->orderBy('display_order')
+        $types = AllowanceType::orderBy('display_order')
             ->orderBy('name')
             ->get();
+
+        // --- Build enrolled count per type in PHP to avoid MySQL's derived-table
+        //     scope barrier that breaks correlated UNION subqueries. ---
+        //
+        // Source 1: active standing enrollments (employee_allowances)
+        $standingCounts = DB::table('employee_allowances')
+            ->select('allowance_type_id', 'employee_id')
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->get()
+            ->groupBy('allowance_type_id')
+            ->map(fn ($rows) => $rows->pluck('employee_id')->unique());
+
+        // Source 2: entries in released assignments (allowance_assignment_entries)
+        $assignmentCounts = DB::table('allowance_assignment_entries as aae')
+            ->select('aae.allowance_type_id', 'aae.employee_id')
+            ->join('allowance_assignments as aa', 'aa.id', '=', 'aae.allowance_assignment_id')
+            ->whereIn('aa.status', ['draft', 'released'])
+            ->whereNull('aae.deleted_at')
+            ->whereNull('aa.deleted_at')
+            ->get()
+            ->groupBy('allowance_type_id')
+            ->map(fn ($rows) => $rows->pluck('employee_id')->unique());
+
+        // Merge both sources per type: union the employee_id sets, then count distinct.
+        $types->each(function ($type) use ($standingCounts, $assignmentCounts) {
+            $standing   = $standingCounts->get($type->id, collect());
+            $assignment = $assignmentCounts->get($type->id, collect());
+
+            $type->active_enrollments_count = $standing->merge($assignment)->unique()->count();
+        });
 
         return view('payroll::allowances.types.index', compact('types'));
     }
@@ -84,7 +113,7 @@ class AllowanceTypeController extends Controller
 
     public function destroy(AllowanceType $type)
     {
-        if ($type->employeeAllowances()->exists()) {
+        if ($type->employeeAllowances()->exists() || $type->assignmentEntries()->exists()) {
             return redirect()->route('payroll.allowances.types.index')
                 ->with('error', 'Cannot delete — employees are enrolled in this allowance type.');
         }
