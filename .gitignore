@@ -61,7 +61,5 @@ data-backups/
 tests/Feature/ExampleTest.php
 tests/Unit/ExampleTest.php
 
-docs
-
 storage/framework/views/*
 !storage/framework/views/.gitkeep
