@@ -31,6 +31,7 @@ class PayrollEntry extends Model
         'status',                   // 'computed' by default — needed for updateOrCreate
         'is_manually_overridden',   // used by force-edit workflow
         'override_notes',
+        'applied_components',       // cumulative union of components ever applied (submit gate)
     ];
 
     protected $casts = [
@@ -46,6 +47,7 @@ class PayrollEntry extends Model
         'total_deductions'       => 'decimal:2',
         'net_amount'             => 'decimal:2',
         'is_manually_overridden' => 'boolean',
+        'applied_components'     => 'array',
     ];
 
     // ── Relationships ────────────────────────────────────────────
@@ -68,5 +70,25 @@ class PayrollEntry extends Model
     public function allowances()
     {
         return $this->hasMany(\Modules\Payroll\Models\Allowances\PayrollEntryAllowance::class, 'payroll_entry_id');
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────
+
+    /**
+     * Required compute components per DOLE RO9 sign-off policy, before a
+     * batch can be submitted to the accountant. Checked against the
+     * cumulative applied_components history (not just the last compute pass).
+     */
+    public const REQUIRED_COMPONENTS = ['attendance', 'deductions', 'allowances', 'lwop'];
+
+    /** @return string[] Component keys never applied to this entry. */
+    public function missingRequiredComponents(): array
+    {
+        $applied = $this->applied_components ?? [];
+
+        return array_values(array_filter(
+            self::REQUIRED_COMPONENTS,
+            fn ($key) => empty($applied[$key])
+        ));
     }
 }

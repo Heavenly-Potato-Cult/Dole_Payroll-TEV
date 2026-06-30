@@ -396,22 +396,57 @@ class PayrollController extends Controller
                 ->with('error', $message);
         }
 
+        // Phase 8 — Compute options modal. All flags default false; if all
+        // are false, computeEntry() computes base salary only and carries
+        // over every other component from the last persisted values.
+        $options = [
+            'apply_attendance' => $request->boolean('apply_attendance'),
+            'apply_deductions' => $request->boolean('apply_deductions'),
+            'apply_allowances' => $request->boolean('apply_allowances'),
+            'apply_lwop'       => $request->boolean('apply_lwop'),
+            'force'            => $request->boolean('force'),
+        ];
+
         $attendanceMap = $attendanceService->getAttendanceForBatch($payroll);
-        $result        = app(PayrollComputationService::class)->computeBatch($payroll, $attendanceMap);
+        $result        = app(PayrollComputationService::class)->computeBatch($payroll, $attendanceMap, $options);
 
         if ($payroll->status === 'draft') {
             $payroll->update(['status' => 'computed']);
             $this->log($payroll, 'computed', 'draft', 'computed');
         }
 
-        $message = "Computation complete: {$result['computed']} employee(s) processed.";
+        $appliedLabels = collect([
+            'apply_attendance' => 'Attendance',
+            'apply_deductions' => 'Deductions',
+            'apply_allowances' => 'Allowances',
+            'apply_lwop'       => 'LWOP',
+        ])->filter(fn ($label, $key) => $options[$key])->values();
+
+        $appliedNote = $appliedLabels->isEmpty()
+            ? ' (no components re-applied this pass — basic salary recomputed, everything else carried over from the last compute)'
+            : ' (applied this pass: ' . $appliedLabels->implode(', ') . ' — unselected components carried over unchanged)';
+
+        $message = "Computation complete: {$result['computed']} employee(s) processed.{$appliedNote}";
+
+        $skippedCount = (int) ($result['skipped'] ?? 0);
+        if ($skippedCount > 0) {
+            $message .= " {$skippedCount} employee(s) skipped — manually overridden. Use Force Re-compute to override.";
+        }
+
+        $this->log(
+            $payroll,
+            'computed',
+            null,
+            "options:" . json_encode($options) . " computed:{$result['computed']} skipped:{$skippedCount}"
+        );
 
         if (! empty($result['errors'])) {
-            $fullMessage = "{$message} Errors: " . implode('; ', $result['errors']);
+            $fullMessage = "{$message} " . ($skippedCount > 0 ? 'Details: ' : 'Errors: ') . implode('; ', $result['errors']);
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => $fullMessage
+                    'message' => $fullMessage,
+                    'skipped' => $skippedCount,
                 ]);
             }
             return redirect()->route('payroll.show', $payroll)
@@ -421,7 +456,8 @@ class PayrollController extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => $message
+                'message' => $message,
+                'skipped' => $skippedCount,
             ]);
         }
 
@@ -455,7 +491,42 @@ class PayrollController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => $message
-                ], 400);
+                ]);
+            }
+            return back()->with('error', $message);
+        }
+
+        // Hard gate — every active entry must have all required compute
+        // components (attendance, deductions, allowances, lwop) applied at
+        // least once across its compute history, not just the last pass.
+        // A batch computed only with all checkboxes unchecked (basic salary
+        // only, nothing ever layered in) is blocked here.
+        $incomplete = $payroll->entries()
+            ->with('employee:id,last_name,first_name')
+            ->get()
+            ->map(fn ($entry) => [
+                'entry'   => $entry,
+                'missing' => $entry->missingRequiredComponents(),
+            ])
+            ->filter(fn ($row) => ! empty($row['missing']));
+
+        if ($incomplete->isNotEmpty()) {
+            $sample = $incomplete->take(5)->map(function ($row) {
+                $name = $row['entry']->employee->full_name ?? "Entry #{$row['entry']->id}";
+                return "{$name} (missing: " . implode(', ', $row['missing']) . ")";
+            })->implode('; ');
+
+            $remaining = $incomplete->count() - 5;
+            $message = "Cannot submit — {$incomplete->count()} employee(s) have never had all required components applied. {$sample}"
+                . ($remaining > 0 ? " and {$remaining} more." : '.')
+                . ' Run Compute with the missing components checked before submitting.';
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'incomplete_count' => $incomplete->count(),
+                ]);
             }
             return back()->with('error', $message);
         }

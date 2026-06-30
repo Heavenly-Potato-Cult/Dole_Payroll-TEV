@@ -35,7 +35,7 @@ class PayrollComputationService
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Compute a full MONTHLY payroll entry for one employee in a batch.
+     * Compute a full or PARTIAL MONTHLY payroll entry for one employee in a batch.
      * Persists PayrollEntry + PayrollDeduction rows (upsert-style).
      *
      * Phase 3 changes vs old semi-monthly approach:
@@ -45,10 +45,26 @@ class PayrollComputationService
      *    AttendanceSnapshot model so cutoff split helpers work without an
      *    extra query.
      *
+     * Phase 8 — Partial compute (compute options modal):
+     *  - $options selectively gates which components get RE-resolved this
+     *    pass: apply_attendance, apply_deductions, apply_allowances, apply_lwop.
+     *  - A component that is NOT selected is NOT zeroed — its last-computed
+     *    value (from the existing PayrollEntry / PayrollDeduction rows) is
+     *    carried over unchanged and folded into the recombined
+     *    total_deductions / net_amount. If no prior entry exists yet, the
+     *    carried-over value is simply 0 for that component.
+     *  - If ALL flags are false/omitted, the entry is computed as base
+     *    monthly salary only, with every other component carried over from
+     *    whatever was last persisted (or 0 on first compute).
+     *  - Entries flagged is_manually_overridden are protected: compute will
+     *    refuse to touch them unless $options['force'] === true.
+     *
      * Fix log:
      *  2026-06-10  daysWorked is now derived from the attendance array and
      *              passed to resolveDeductions() so GSIS is prorated correctly
      *              for employees with LWOP days in the period.
+     *  2026-06-30  Added partial-compute support with carry-over semantics
+     *              and a manual-override guard (Phase 8).
      *
      * @param  Employee               $employee
      * @param  PayrollBatch           $batch
@@ -61,112 +77,170 @@ class PayrollComputationService
      *     'days_present'    => float,   // (optional) days actually worked — for GSIS proration
      *   ]
      * @param  AttendanceSnapshot|null $snapshot   Optional — needed only for cutoff split
+     * @param  array                   $options    Shape:
+     *   [
+     *     'apply_attendance' => bool,  // tardiness + undertime (default false)
+     *     'apply_deductions' => bool,  // statutory deductions   (default false)
+     *     'apply_allowances' => bool,  // PERA/RATA/etc.         (default false)
+     *     'apply_lwop'       => bool,  // LWOP deduction         (default false)
+     *     'force'            => bool,  // bypass is_manually_overridden guard
+     *   ]
      * @return PayrollEntry  (loaded with deductions relation)
+     *
+     * @throws \RuntimeException  when the existing entry is manually
+     *         overridden and $options['force'] is not true.
      */
     public function computeEntry(
         Employee $employee,
         PayrollBatch $batch,
         array $attendance = [],
-        ?AttendanceSnapshot $snapshot = null
+        ?AttendanceSnapshot $snapshot = null,
+        array $options = []
     ): PayrollEntry {
-        // ── 1. Attendance defaults ────────────────────────────────────────
-        $lwopDays      = (float) ($attendance['lwop_days']      ?? 0);
-        $lateMinutes   = (int)   ($attendance['late_minutes']   ?? 0);
-        $undertimeMins = (int)   ($attendance['undertime_mins'] ?? $attendance['undertime_minutes'] ?? 0);
-        $ytdGross      = (float) ($attendance['ytd_gross']      ?? 0);
+        $applyAttendance = (bool) ($options['apply_attendance'] ?? false);
+        $applyDeductions = (bool) ($options['apply_deductions'] ?? false);
+        $applyAllowances = (bool) ($options['apply_allowances'] ?? false);
+        $applyLwop       = (bool) ($options['apply_lwop'] ?? false);
+        $force           = (bool) ($options['force'] ?? false);
 
-        // Days worked — used for GSIS proration ONLY when employee has LWOP.
-        // Only pass daysWorked to resolveDeductions() when lwopDays > 0;
-        // otherwise pass null to skip proration entirely (full month worked).
-        $totalDays  = self::DENOMINATOR_SEMI_MONTHLY; // 22 working days/month
-        $daysWorked = isset($attendance['days_present'])
-            ? (int) $attendance['days_present']
-            : (int) max(0, $totalDays - (int) $lwopDays);
+        // ── 0. Manual-override guard ───────────────────────────────────────
+        // Load any existing entry up front — needed both for the guard and
+        // for carry-over of skipped components below.
+        $existing = PayrollEntry::with('deductions', 'allowances')
+            ->where('payroll_batch_id', $batch->id)
+            ->where('employee_id', $employee->id)
+            ->first();
 
-        // Only prorate GSIS when there are actual LWOP days.
-        // Passing null tells resolveDeductions() to use the full monthly amount.
-        $gsisProrateDays = $lwopDays > 0 ? $daysWorked : null;
+        if ($existing && $existing->is_manually_overridden && ! $force) {
+            throw new \RuntimeException(
+                "Entry for {$employee->full_name} is manually overridden and was skipped. " .
+                "Use the force-recompute option to overwrite it."
+            );
+        }
 
-        // ── 2. Gross income components (full month) ───────────────────────
+        // ── 1. Basic salary (always computed — full month, never partial) ──
         $basicMonthly = (float) $employee->basic_monthly_salary;
-
-        $allowanceLines = $this->allowanceService->resolveForPayroll($employee, $batch);
-        $allowanceSum   = $this->allowanceService->summarize($allowanceLines);
-
-        // Full monthly salary — no longer divided by 2
         $salaryEarned = round($basicMonthly, 2);
-        $peraEarned   = $allowanceSum['pera'];
-        $rataEarned   = $allowanceSum['rata'];
-        $totalAllowances = $allowanceSum['total'];
-        $grossEarned  = $salaryEarned + $totalAllowances;
-
-        // ── 3. Attendance deductions (monthly denominator = 44) ───────────
-        //
-        //   Daily rate  = basic_monthly / 44
-        //   Hourly rate = daily_rate / 8
-        //
-        //   LWOP   = (lwop_days / 44) * basic_monthly
-        //   Late   = hours_late * hourly_rate + Table-IV(remaining_mins) * daily_rate
-        //   Undertime follows the same rule as late minutes
-        //
-        //   Per DOLE RO9: deductions hit LEAVE CREDITS first.
-        //   AttendanceService resolves leave credits before passing lwop_days
-        //   here — only credit-exhausted days reach this service.
 
         $denominator = self::DENOMINATOR_MONTHLY;
         $dailyRate   = round($basicMonthly / $denominator, 6);
         $hourlyRate  = round($dailyRate / 8, 6);
 
-        // LWOP
-        $lwopDeduction = round(($lwopDays / $denominator) * $basicMonthly, 2);
+        // ── 2. Allowances ────────────────────────────────────────────────
+        if ($applyAllowances) {
+            $allowanceLines = $this->allowanceService->resolveForPayroll($employee, $batch);
+            $allowanceSum   = $this->allowanceService->summarize($allowanceLines);
+            $peraEarned     = $allowanceSum['pera'];
+            $rataEarned     = $allowanceSum['rata'];
+            $totalAllowances = $allowanceSum['total'];
+            $allowancesWereTouched = true;
+        } else {
+            // Carry over from the existing entry rather than zeroing.
+            $peraEarned      = (float) ($existing->pera ?? 0);
+            $rataEarned      = (float) ($existing->rata ?? 0);
+            $totalAllowances = $existing
+                ? round(((float) $existing->gross_income) - ((float) $existing->basic_salary), 2)
+                : 0.0;
+            $allowanceLines  = null; // sentinel: don't touch PayrollEntryAllowance rows
+            $allowancesWereTouched = false;
+        }
 
-        // Tardiness (late)
-        $lateHours   = intdiv($lateMinutes, 60);
-        $lateRemMins = $lateMinutes % 60;
-        $tardiness   = round(
-            ($lateHours * $hourlyRate)
-            + ($this->minuteEquivalent($lateRemMins) * $dailyRate),
-            2
-        );
+        // ── 3. Attendance deductions (tardiness / undertime) ────────────────
+        if ($applyAttendance) {
+            $lateMinutes   = (int) ($attendance['late_minutes'] ?? 0);
+            $undertimeMins = (int) ($attendance['undertime_mins'] ?? $attendance['undertime_minutes'] ?? 0);
 
-        // Undertime
-        $utHours      = intdiv($undertimeMins, 60);
-        $utRemMins    = $undertimeMins % 60;
-        $undertimeDed = round(
-            ($utHours * $hourlyRate)
-            + ($this->minuteEquivalent($utRemMins) * $dailyRate),
-            2
-        );
+            $lateHours   = intdiv($lateMinutes, 60);
+            $lateRemMins = $lateMinutes % 60;
+            $tardiness   = round(
+                ($lateHours * $hourlyRate) + ($this->minuteEquivalent($lateRemMins) * $dailyRate),
+                2
+            );
+
+            $utHours      = intdiv($undertimeMins, 60);
+            $utRemMins    = $undertimeMins % 60;
+            $undertimeDed = round(
+                ($utHours * $hourlyRate) + ($this->minuteEquivalent($utRemMins) * $dailyRate),
+                2
+            );
+        } else {
+            // Carry over.
+            $tardiness    = (float) ($existing->tardiness ?? 0);
+            $undertimeDed = (float) ($existing->undertime ?? 0);
+        }
+
+        // ── 4. LWOP — independently gated from attendance ───────────────────
+        if ($applyLwop) {
+            $lwopDays      = (float) ($attendance['lwop_days'] ?? 0);
+            $lwopDeduction = round(($lwopDays / $denominator) * $basicMonthly, 2);
+        } else {
+            // Carry over both the deduction amount AND the day count, since
+            // the day count feeds GSIS proration below when deductions ARE
+            // being re-applied this pass.
+            $lwopDeduction = (float) ($existing->lwop_deduction ?? 0);
+            $lwopDays      = $existing
+                ? round(($lwopDeduction / max($basicMonthly, 0.01)) * $denominator, 3)
+                : 0.0;
+        }
 
         $totalAttendanceDed = round($lwopDeduction + $tardiness + $undertimeDed, 2);
 
-        // ── 4. Statutory / other deductions via DeductionService ──────────
-        // daysWorked is only passed (non-null) when employee has LWOP days,
-        // so GSIS proration only activates for incomplete months.
-        $deductionLines = $this->deductionService->resolveDeductions(
-            $employee,
-            $batch,
-            $ytdGross,
-            $gsisProrateDays,
-            $totalDays
+        // ── 5. Statutory / other deductions via DeductionService ────────────
+        if ($applyDeductions) {
+            $totalDays  = self::DENOMINATOR_SEMI_MONTHLY; // 22 working days/month
+            $daysWorked = isset($attendance['days_present'])
+                ? (int) $attendance['days_present']
+                : (int) max(0, $totalDays - (int) $lwopDays);
+
+            // Only prorate GSIS when there are actual LWOP days (whether
+            // freshly applied this pass or carried over from a prior pass).
+            $gsisProrateDays = $lwopDays > 0 ? $daysWorked : null;
+            $ytdGross        = (float) ($attendance['ytd_gross'] ?? 0);
+
+            $deductionLines = $this->deductionService->resolveDeductions(
+                $employee,
+                $batch,
+                $ytdGross,
+                $gsisProrateDays,
+                $totalDays
+            );
+            $statutoryTotal = round(collect($deductionLines)->sum('amount'), 2);
+        } else {
+            // Carry over — don't touch PayrollDeduction rows, just reuse
+            // their persisted sum for the recombined total below.
+            $deductionLines = null; // sentinel: don't touch PayrollDeduction rows
+            $statutoryTotal = $existing
+                ? round($existing->deductions->sum('amount'), 2)
+                : 0.0;
+        }
+
+        // ── 6. Recombine totals from fresh + carried-over components ───────
+        $grossEarned      = round($salaryEarned + $totalAllowances, 2);
+        $totalDeductions  = round($statutoryTotal + $totalAttendanceDed, 2);
+        $netAmount        = round($grossEarned - $totalDeductions, 2);
+
+        // Cumulative union — once a component has been genuinely applied at
+        // least one pass, it stays marked applied even on later passes that
+        // skip it and carry the value forward instead. This is what the
+        // submit() hard gate checks, NOT the flags from this single pass.
+        $appliedComponents = array_merge(
+            $existing?->applied_components ?? [],
+            [
+                'attendance' => $applyAttendance || (bool) (($existing?->applied_components ?? [])['attendance'] ?? false),
+                'deductions' => $applyDeductions || (bool) (($existing?->applied_components ?? [])['deductions'] ?? false),
+                'allowances' => $applyAllowances || (bool) (($existing?->applied_components ?? [])['allowances'] ?? false),
+                'lwop'       => $applyLwop       || (bool) (($existing?->applied_components ?? [])['lwop'] ?? false),
+            ]
         );
 
-        $totalDeductions = round(
-            collect($deductionLines)->sum('amount') + $totalAttendanceDed,
-            2
-        );
-
-        // ── 5. Net pay ────────────────────────────────────────────────────
-        $netAmount = round($grossEarned - $totalDeductions, 2);
-
-        // ── 6. Persist ────────────────────────────────────────────────────
+        // ── 7. Persist ───────────────────────────────────────────────────
         return DB::transaction(function () use (
             $employee, $batch,
-            $salaryEarned, $peraEarned, $rataEarned, $totalAllowances,
-            $allowanceLines,
+            $salaryEarned, $peraEarned, $rataEarned, $grossEarned,
+            $allowanceLines, $allowancesWereTouched,
             $lwopDeduction, $tardiness, $undertimeDed,
             $totalDeductions, $netAmount,
-            $deductionLines
+            $deductionLines, $appliedComponents
         ) {
             /** @var PayrollEntry $entry */
             $entry = PayrollEntry::updateOrCreate(
@@ -175,32 +249,37 @@ class PayrollComputationService
                     'employee_id'      => $employee->id,
                 ],
                 [
-                    'basic_salary'     => $salaryEarned,
-                    'pera'             => $peraEarned,
-                    'rata'             => $rataEarned,
-                    'gross_income'     => round($salaryEarned + $totalAllowances, 2),
-                    'lwop_deduction'   => $lwopDeduction,
-                    'tardiness'        => $tardiness,
-                    'undertime'        => $undertimeDed,
-                    'total_deductions' => $totalDeductions,
-                    'net_amount'       => $netAmount,
+                    'basic_salary'        => $salaryEarned,
+                    'pera'                => $peraEarned,
+                    'rata'                => $rataEarned,
+                    'gross_income'        => $grossEarned,
+                    'lwop_deduction'      => $lwopDeduction,
+                    'tardiness'           => $tardiness,
+                    'undertime'           => $undertimeDed,
+                    'total_deductions'    => $totalDeductions,
+                    'net_amount'          => $netAmount,
+                    'applied_components'  => $appliedComponents,
                 ]
             );
 
-            // Replace deduction lines fresh on every compute
-            $entry->deductions()->delete();
-
-            foreach ($deductionLines as $line) {
-                PayrollDeduction::create([
-                    'payroll_entry_id'  => $entry->id,
-                    'deduction_type_id' => $line['deduction_type_id'],
-                    'code'              => $line['code'],
-                    'name'              => $line['name'],
-                    'amount'            => $line['amount'],
-                ]);
+            // Only replace line items for categories actually requested this
+            // pass — skipped categories (sentinel null) keep what's in the DB.
+            if ($deductionLines !== null) {
+                $entry->deductions()->delete();
+                foreach ($deductionLines as $line) {
+                    PayrollDeduction::create([
+                        'payroll_entry_id'  => $entry->id,
+                        'deduction_type_id' => $line['deduction_type_id'],
+                        'code'              => $line['code'],
+                        'name'              => $line['name'],
+                        'amount'            => $line['amount'],
+                    ]);
+                }
             }
 
-            $this->allowanceService->syncPayrollEntryAllowances($entry, $allowanceLines);
+            if ($allowancesWereTouched && $allowanceLines !== null) {
+                $this->allowanceService->syncPayrollEntryAllowances($entry, $allowanceLines);
+            }
 
             return $entry->load(['deductions', 'allowances']);
         });
@@ -226,12 +305,19 @@ class PayrollComputationService
      *              correctly. Previously ytdGross was always 0.0, causing WHT
      *              to always land in the 0% bracket and return 0.00 for every
      *              employee.
+     *  2026-06-30  $options is now threaded through to computeEntry() for
+     *              partial-compute support. Entries that are manually
+     *              overridden and protected (no 'force') raise a
+     *              \RuntimeException per-employee, caught here and reported
+     *              as a normal per-employee error — they do NOT abort the
+     *              rest of the batch.
      *
      * @param  PayrollBatch $batch
      * @param  array        $attendanceMap  [ employee_id (int) => attendance array ]
-     * @return array  ['computed' => int, 'errors' => string[]]
+     * @param  array        $options        See computeEntry() docblock.
+     * @return array  ['computed' => int, 'errors' => string[], 'skipped' => int]
      */
-    public function computeBatch(PayrollBatch $batch, array $attendanceMap = []): array
+    public function computeBatch(PayrollBatch $batch, array $attendanceMap = [], array $options = []): array
     {
         $employees = Employee::where('status', 'active')
             ->where('is_excluded', false)
@@ -255,6 +341,7 @@ class PayrollComputationService
             ->pluck('ytd_gross', 'employee_id');
 
         $computed = 0;
+        $skipped  = 0;
         $errors   = [];
 
         foreach ($employees as $employee) {
@@ -267,8 +354,13 @@ class PayrollComputationService
                 // (correct for the first payroll run of the year).
                 $attendance['ytd_gross'] = (float) ($ytdGrossMap->get($employee->id) ?? 0.0);
 
-                $this->computeEntry($employee, $batch, $attendance, $snapshot);
+                $this->computeEntry($employee, $batch, $attendance, $snapshot, $options);
                 $computed++;
+            } catch (\RuntimeException $e) {
+                // Manually-overridden entry, protected — count separately
+                // from hard errors so the controller can message it clearly.
+                $skipped++;
+                $errors[] = "#{$employee->id} {$employee->full_name}: " . $e->getMessage();
             } catch (\Throwable $e) {
                 Log::error("Payroll compute error — Employee #{$employee->id}: " . $e->getMessage());
                 $errors[] = "#{$employee->id} {$employee->full_name}: " . $e->getMessage();
@@ -277,10 +369,12 @@ class PayrollComputationService
 
         Log::info("Batch compute complete for batch #{$batch->id}", [
             'computed' => $computed,
+            'skipped'  => $skipped,
             'errors'   => count($errors),
+            'options'  => $options,
         ]);
 
-        return compact('computed', 'errors');
+        return compact('computed', 'skipped', 'errors');
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -1025,7 +1025,7 @@
                 </div>
                 <div style="font-size:0.78rem; color:var(--text-mid); margin-top:3px;">
                     Single payslip showing both 1–15 and 16–30/31 cut-offs side by side.
-                    
+
                 </div>
             </div>
         </label>
@@ -1074,10 +1074,10 @@
 const snapshotCount = {{ $snapshotCount ?? 0 }};
 
 function confirmPullAttendance() {
-    const message = snapshotCount > 0 
-        ? 'Re-pulling will reset any manual HR corrections. Continue?' 
+    const message = snapshotCount > 0
+        ? 'Re-pulling will reset any manual HR corrections. Continue?'
         : 'Pull attendance from HRIS for all active employees?';
-    
+
     Swal.fire({
         title: 'Pull Attendance?',
         text: message,
@@ -1102,11 +1102,11 @@ function confirmPullAttendance() {
                     Swal.showLoading();
                 }
             });
-            
+
             // Submit form via AJAX
             const form = document.getElementById('pullAttendanceForm');
             const formData = new FormData(form);
-            
+
             fetch(form.action, {
                 method: 'POST',
                 body: formData,
@@ -1147,87 +1147,175 @@ function confirmPullAttendance() {
 }
 
 function confirmCompute() {
+    const isRecompute = '{{ $payroll->status }}' !== 'draft';
+
     Swal.fire({
-        title: 'Compute Payroll?',
-        text: 'Run payroll computation for all active employees? Existing entries will be overwritten.',
-        icon: 'question',
+        title: isRecompute ? 'Re-compute Payroll' : 'Compute Payroll',
+        html: `
+            <div style="text-align:left; font-size:0.92rem;">
+                <p style="color:#6b7280; margin-bottom:12px;">
+                    Choose which components to apply this pass. Unchecked components
+                    keep their last computed values.
+                </p>
+                <label style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                    <input type="checkbox" id="opt_attendance" checked> Apply Attendance (tardiness/undertime)
+                </label>
+                <label style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                    <input type="checkbox" id="opt_deductions" checked> Apply Deductions (statutory)
+                </label>
+                <label style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                    <input type="checkbox" id="opt_allowances" checked> Apply Allowances (PERA/RATA/etc.)
+                </label>
+                <label style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                    <input type="checkbox" id="opt_lwop" checked> Apply LWOP
+                </label>
+                <label style="display:flex; gap:8px; align-items:center;">
+                    <input type="checkbox" id="opt_other"> Apply Other Adjustments
+                </label>
+                <p id="noneSelectedNote" style="display:none; color:#b45309; font-size:0.82rem; margin-top:10px;">
+                    No components selected — this will compute base salary only, carrying over
+                    everything else from the last compute pass.
+                </p>
+                <hr style="margin:14px 0; border-color:#eee;">
+                <label style="display:flex; gap:8px; align-items:center; color:#b91c1c;">
+                    <input type="checkbox" id="opt_force"> Force re-compute (overwrites manually overridden entries)
+                </label>
+            </div>
+        `,
         showCancelButton: true,
-        confirmButtonText: 'Compute',
+        confirmButtonText: isRecompute ? 'Re-compute' : 'Compute',
         cancelButtonText: 'Cancel',
         confirmButtonColor: '#0F1B4C',
         cancelButtonColor: '#6B7280',
         reverseButtons: true,
-        focusCancel: true
+        focusCancel: true,
+        didOpen: () => {
+            const boxes = Swal.getPopup().querySelectorAll('input[type="checkbox"]:not(#opt_force)');
+            const note = document.getElementById('noneSelectedNote');
+            boxes.forEach(b => b.addEventListener('change', () => {
+                const anyChecked = [...boxes].some(c => c.checked);
+                note.style.display = anyChecked ? 'none' : 'block';
+            }));
+        },
+        preConfirm: () => ({
+            apply_attendance: document.getElementById('opt_attendance').checked,
+            apply_deductions: document.getElementById('opt_deductions').checked,
+            apply_allowances: document.getElementById('opt_allowances').checked,
+            apply_lwop: document.getElementById('opt_lwop').checked,
+            apply_other_adjustments: document.getElementById('opt_other').checked,
+            force: document.getElementById('opt_force').checked,
+        })
     }).then((result) => {
-        if (result.isConfirmed) {
-            // Show loading with progress bar
+        if (!result.isConfirmed) return;
+
+        if (result.value.force) {
             Swal.fire({
-                title: 'Computing Payroll...',
-                html: '<div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div></div>',
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                showConfirmButton: false,
-                didOpen: () => {
-                    Swal.showLoading();
+                title: 'Force re-compute?',
+                text: 'This will overwrite any manually overridden entries in this batch. This cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, force re-compute',
+                confirmButtonColor: '#b91c1c',
+                cancelButtonText: 'Cancel',
+                reverseButtons: true,
+                focusCancel: true
+            }).then((confirmResult) => {
+                if (confirmResult.isConfirmed) {
+                    submitComputeOptions(result.value);
                 }
             });
-            
-            // Submit form via AJAX
-            const form = document.getElementById('computeForm');
-            const formData = new FormData(form);
-            
-            fetch(form.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire({
-                        title: 'Success!',
-                        text: data.message || 'Payroll computed successfully.',
-                        icon: 'success',
-                        confirmButtonColor: '#0F1B4C'
-                    }).then(() => {
-                        location.reload();
-                    });
-                } else {
-                    Swal.fire({
-                        title: 'Error',
-                        text: data.message || 'Failed to compute payroll.',
-                        icon: 'error',
-                        confirmButtonColor: '#0F1B4C'
-                    });
-                }
-            })
-            .catch(error => {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'An error occurred while computing payroll.',
-                    icon: 'error',
-                    confirmButtonColor: '#0F1B4C'
-                });
-            });
+        } else {
+            submitComputeOptions(result.value);
         }
     });
 }
 
-function toggleDed(entryId) {
-    const row    = document.getElementById('ded-row-' + entryId);
-    const panel  = document.getElementById('ded-panel-' + entryId);
-    const toggle = document.getElementById('toggle-' + entryId);
-    if (!row || !panel || !toggle) return;
+function submitComputeOptions(options) {
+    Swal.fire({
+        title: 'Computing Payroll...',
+        html: '<div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div></div>',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
 
-    const isOpen = !row.hidden;
+    const form = document.getElementById('computeForm');
+    const formData = new FormData(form);
+    Object.entries(options).forEach(([k, v]) => formData.set(k, v ? '1' : '0'));
 
-    row.hidden   = isOpen;
-    panel.hidden = isOpen;
+    fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({
+                title: (data.skipped > 0) ? 'Completed with skipped entries' : 'Success!',
+                text: data.message || 'Payroll computed successfully.',
+                icon: (data.skipped > 0) ? 'warning' : 'success',
+                confirmButtonColor: '#0F1B4C'
+            }).then(() => {
+                location.reload();
+            });
+        } else {
+            Swal.fire({
+                title: 'Error',
+                text: data.message || 'Failed to compute payroll.',
+                icon: 'error',
+                confirmButtonColor: '#0F1B4C'
+            });
+        }
+    })
+    .catch(error => {
+        Swal.fire({
+            title: 'Error',
+            text: 'An error occurred while computing payroll.',
+            icon: 'error',
+            confirmButtonColor: '#0F1B4C'
+        });
+    });
+}
 
-    toggle.dataset.count = toggle.dataset.count || toggle.textContent.match(/\d+/)?.[0] || '?';
-    toggle.textContent = toggle.dataset.count + ' lines ' + (isOpen ? '▾' : '▴');
+function openDeductionModal(entryId) {
+    const row = (window.virtualRowData || []).find(r => String(r.id) === String(entryId));
+    if (!row) return;
+
+    const lines = (row.deductions || []).map(d => `
+        <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #eee;">
+            <span>${d.name}</span>
+            <span>${formatCurrency(d.amount)}</span>
+        </div>
+    `).join('');
+
+    const attendanceLine = row.attendance_deduction > 0 ? `
+        <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #eee; color:#b91c1c;">
+            <span>Attendance deduction (tardiness/undertime/LWOP)</span>
+            <span>${formatCurrency(row.attendance_deduction)}</span>
+        </div>` : '';
+
+    Swal.fire({
+        title: `Deduction Breakdown — ${row.employee_name}`,
+        html: `
+            <div style="text-align:left; font-size:0.88rem; max-height:320px; overflow-y:auto;">
+                ${lines || '<p style="color:#9ca3af;">No statutory deduction lines.</p>'}
+                ${attendanceLine}
+                <div style="display:flex; justify-content:space-between; padding-top:10px; margin-top:6px; border-top:2px solid #0F1B4C; font-weight:700;">
+                    <span>Total</span>
+                    <span>${formatCurrency(row.total_deductions)}</span>
+                </div>
+            </div>
+        `,
+        confirmButtonText: 'Close',
+        confirmButtonColor: '#0F1B4C',
+        width: 420
+    });
 }
 
 
@@ -1245,7 +1333,7 @@ function closePayslipModal() {
 // ── Combined Pull Attendance & Compute ───────────────────────
 function confirmPullAndCompute() {
     const periodLabel = '{{ $payroll->period_month_name }} {{ $payroll->cutoff }}, {{ $payroll->period_year }}';
-    
+
     Swal.fire({
         title: 'Pull Attendance & Compute Payroll?',
         html: `<div style="text-align:center;">
@@ -1289,7 +1377,7 @@ async function executePullAndCompute(periodLabel) {
     try {
         const formData = new FormData();
         formData.append('_token', '{{ csrf_token() }}');
-        
+
         const response = await fetch('{{ route("payroll.pullAndCompute", $payroll) }}', {
             method: 'POST',
             headers: {
@@ -1330,7 +1418,7 @@ async function executePullAndCompute(periodLabel) {
 
     } catch (error) {
         let errorMessage = 'An unexpected error occurred while processing payroll.';
-        
+
         if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
             errorMessage = 'Unable to complete the request. Please check your internet connection.';
         } else if (error.message.includes('500')) {
@@ -1492,7 +1580,7 @@ document.getElementById('payslipModal').addEventListener('click', function(e) {
 async function confirmNextAction() {
     const form = document.getElementById('nextActionForm');
     const confirmMessage = "{{ $nextAction['confirm'] ?? 'Are you sure?' }}";
-    
+
     const result = await Swal.fire({
         title: 'Confirm Action',
         text: confirmMessage,
@@ -1516,7 +1604,7 @@ async function confirmNextAction() {
         try {
             // Ensure csrfToken is a string, not a function
             const csrfToken = typeof window.csrfToken === 'function' ? window.csrfToken() : window.csrfToken;
-            
+
             console.log('Submitting action to:', form.action);
             const resp = await fetch(form.action, {
                 method: 'POST',
@@ -1529,7 +1617,7 @@ async function confirmNextAction() {
             });
 
             console.log('Response status:', resp.status, 'OK:', resp.ok);
-            
+
             if (!resp.ok) {
                 const errorText = await resp.text();
                 console.error('Response not OK:', errorText);
@@ -1585,6 +1673,9 @@ async function confirmNextAction() {
     function formatCurrency(amount) {
         return '₱' + Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
+    // Exposed globally — openDeductionModal() (defined outside this IIFE)
+    // also needs it, and it's harmless/idempotent to call from elsewhere.
+    window.formatCurrency = formatCurrency;
 
     function renderRow(row, index) {
         const netWarnClass = row.netWarn ? 'net-warn' : '';
@@ -1607,8 +1698,8 @@ async function confirmNextAction() {
                     <span class="text-muted" title="${row.deductionSummary}" style="font-size:0.74rem; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                         ${row.deductionSummary}
                     </span>
-                    <button class="ded-toggle" data-entry-id="${row.id}" data-count="${row.dedCount}" title="View deduction breakdown">
-                        ▾
+                    <button class="ded-toggle" data-entry-id="${row.id}" title="View deduction breakdown">
+                        ${row.dedCount} lines ▾
                     </button>
                </div>`
             : '<span class="text-muted" style="font-size:0.78rem;">—</span>';
@@ -1652,42 +1743,8 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
         return mainRow;
     }
 
-    function renderDeductionRow(row) {
-        if (row.dedCount === 0) return null;
-
-        const netWarnClass = row.netWarn ? 'net-warn' : '';
-
-        const dedGrid = row.deductions.map(ded => `
-            <div class="ded-row">
-                <span>${ded.name}</span>
-                <span>${formatCurrency(ded.amount)}</span>
-            </div>
-        `).join('');
-
-        const attendanceNote = row.attendance_deduction > 0
-            ? `· Attendance deduction: <strong class="text-red">${formatCurrency(row.attendance_deduction)}</strong>`
-            : '';
-
-        const registerColspan = 12 + (window.allowanceColumnCodes || []).length;
-
-        const dedRow = document.createElement('tr');
-        dedRow.className = `${netWarnClass} deduction-detail-row`;
-        dedRow.id = `ded-row-${row.id}`;
-        dedRow.hidden = true;
-        dedRow.innerHTML = `
-            <td colspan="${registerColspan}" style="padding:0;">
-                <div class="ded-panel" id="ded-panel-${row.id}" hidden>
-                    <div class="ded-grid">${dedGrid}</div>
-                    <div style="text-align:right; margin-top:6px; font-size:0.78rem; color:var(--text-mid);">
-                        Sub-total: <strong>${formatCurrency(row.total_deductions - row.attendance_deduction)}</strong>
-                        ${attendanceNote}
-                    </div>
-                </div>
-            </td>
-        `;
-
-        return dedRow;
-    }
+    // renderDeductionRow() removed — DED. Lines now opens a modal
+    // (openDeductionModal) instead of an inline expand row.
 
     function updateVisibleRows() {
         const scrollTop = container.scrollTop;
@@ -1709,11 +1766,6 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
             if (!row) continue;
 
             tbody.appendChild(renderRow(row, i));
-
-            const dedRow = renderDeductionRow(row);
-            if (dedRow) {
-                tbody.appendChild(dedRow);
-            }
         }
 
         // Bottom spacer
@@ -1730,7 +1782,7 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
         tbody.querySelectorAll('.ded-toggle').forEach(btn => {
             btn.addEventListener('click', function() {
                 const entryId = this.dataset.entryId;
-                toggleDed(entryId);
+                openDeductionModal(entryId);
             });
         });
 
@@ -1779,7 +1831,7 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
         });
 
         const url = `/payroll/${window.payrollId}/entries/${entryId}`;
-        
+
         if (!window.payrollId || !entryId) {
             console.error('Invalid parameters:', { payrollId: window.payrollId, entryId });
             Swal.close();
@@ -1791,10 +1843,10 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
             });
             return;
         }
-        
+
         // Ensure csrfToken is a string, not a function
         const csrfToken = typeof window.csrfToken === 'function' ? window.csrfToken() : window.csrfToken;
-        
+
         try {
             console.log('Removing entry:', entryId, 'URL:', url);
             const headers = {
@@ -1803,14 +1855,14 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
                 'Accept': 'application/json',
             };
             console.log('Headers:', headers);
-            
+
             const resp = await fetch(url, {
                 method: 'DELETE',
                 headers: headers,
             });
 
             console.log('Response status:', resp.status, 'OK:', resp.ok);
-            
+
             if (!resp.ok) {
                 const errorText = await resp.text();
                 console.error('Response not OK:', errorText);
@@ -1847,21 +1899,9 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
         }
     }
 
-    // Override toggleDed to work with virtual scrolling
-    window.toggleDed = function(entryId) {
-        const row = document.getElementById('ded-row-' + entryId);
-        const panel = document.getElementById('ded-panel-' + entryId);
-        const toggle = document.querySelector(`[data-entry-id="${entryId}"].ded-toggle`);
-
-        if (!row || !panel || !toggle) return;
-
-        const isOpen = !row.hidden;
-        row.hidden = isOpen;
-        panel.hidden = isOpen;
-
-        const count = toggle.dataset.count || '?';
-        toggle.textContent = count + ' lines ' + (isOpen ? '▾' : '▴');
-    };
+    // Note: a duplicate toggleDed() override used to live here, targeting
+    // the old ded-row-/ded-panel- inline-expand elements. Removed — DED.
+    // Lines now opens openDeductionModal() instead (see attachDeductionListeners).
 
     // Throttled scroll handler
     let ticking = false;
