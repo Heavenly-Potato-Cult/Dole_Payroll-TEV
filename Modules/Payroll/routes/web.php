@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Payroll\Http\Controllers\DashboardController;
 use Modules\Payroll\Http\Controllers\PayrollController;
+use Modules\Payroll\Http\Controllers\PayrollReportController;
 use Modules\Payroll\Http\Controllers\PayrollEntryController;
 use Modules\Payroll\Http\Controllers\SpecialPayrollController;
 use Modules\Payroll\Http\Controllers\DeductionTypeController;
@@ -173,5 +174,20 @@ Route::middleware(['auth'])->group(function () {
                 ->name('payroll.employees.allowances');
             Route::post('/employees/{employee}/allowances', [EmployeeAllowanceController::class, 'update'])
                 ->name('payroll.employees.allowances.update');
+        });
+
+    // ── Reports: General Payroll Register ───────────────────────────
+    // NOTE: reports.gsis / reports.hdmf / reports.caress-union etc. are not
+    // defined in this file, so they must live in a separate reports routes
+    // file elsewhere in the module. If so, move this pair there instead —
+    // it's placed here only because this is the routes file provided.
+    Route::middleware(['role:' . implode('|', \App\SharedKernel\Services\RoleService::getRoleGroup('payroll'))])
+        ->prefix('reports')
+        ->name('reports.')
+        ->group(function () {
+            Route::get('/general-payroll', [PayrollReportController::class, 'generalPayrollIndex'])
+                ->name('general-payroll');
+            Route::get('/general-payroll-download', [PayrollReportController::class, 'generalPayrollDownload'])
+                ->name('general-payroll-download');
         });
 });

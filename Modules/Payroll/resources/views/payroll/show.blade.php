@@ -501,15 +501,16 @@
                 </form>
             @endif
 
-          {{-- NEW: --}}
-    <!-- {{-- GAP-01: Payroll Register PDF view missing — commented out until implemented
-    @if ($isComputed)
-        <a href="{{ route('reports.payroll-register', ['batch_id' => $payroll->id]) }}"
+    @if (in_array($payroll->status, ['released', 'locked']))
+        <a href="{{ route('reports.general-payroll', [
+                    'year'   => $payroll->period_year,
+                    'month'  => $payroll->period_month,
+                    'cutoff' => $payroll->cutoff,
+                 ]) }}"
            class="btn btn-outline btn-sm" target="_blank">
-            📄 Payroll Register PDF
+            📄 View General Payroll Report →
         </a>
     @endif
-    --}} -->
 
     {{-- Payslip generation — only after release --}}
     @if (in_array($payroll->status, ['released', 'locked']))

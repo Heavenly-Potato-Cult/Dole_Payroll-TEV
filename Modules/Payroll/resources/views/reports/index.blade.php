@@ -294,12 +294,12 @@
         flex-wrap: nowrap;
         -webkit-overflow-scrolling: touch;
     }
-    
+
     .filter-form {
         flex-direction: column;
         align-items: stretch;
     }
-    
+
     .filter-form select,
     .btn-filter {
         width: 100%;
@@ -319,7 +319,7 @@
 {{-- ── Filter Form (Shared) ─────────────────────────────────────── --}}
 <form method="GET" action="{{ route('reports.index') }}" class="filter-form">
     <input type="hidden" name="tab" id="tab-input" value="{{ $activeTab }}">
-    
+
     <div class="form-group">
         <label for="year">Year</label>
         <select name="year" id="year">
@@ -328,7 +328,7 @@
             @endfor
         </select>
     </div>
-    
+
     <div class="form-group">
         <label for="month">Month</label>
         <select name="month" id="month">
@@ -337,7 +337,7 @@
             @endforeach
         </select>
     </div>
-    
+
     <div class="form-group">
         <label for="cutoff">Cut-off</label>
         <select name="cutoff" id="cutoff">
@@ -357,6 +357,7 @@
 <div class="reports-tabs">
     <button class="tab-btn {{ $activeTab === 'gsis' ? 'active' : '' }}" onclick="switchTab('gsis')">GSIS</button>
     <button class="tab-btn {{ $activeTab === 'hdmf' ? 'active' : '' }}" onclick="switchTab('hdmf')">HDMF / Pag-IBIG</button>
+    <button class="tab-btn {{ $activeTab === 'general_payroll' ? 'active' : '' }}" onclick="switchTab('general_payroll')">General Payroll</button>
     <button class="tab-btn {{ $activeTab === 'phic' ? 'active' : '' }}" onclick="switchTab('phic')">PhilHealth</button>
     <button class="tab-btn {{ $activeTab === 'caress_union' ? 'active' : '' }}" onclick="switchTab('caress_union')">CARESS IX (Union)</button>
     <button class="tab-btn {{ $activeTab === 'caress_mortuary' ? 'active' : '' }}" onclick="switchTab('caress_mortuary')">CARESS IX (Mortuary)</button>
@@ -554,6 +555,54 @@
     @else
     <div class="alert alert-warning">
         No HDMF payroll data found for <strong>{{ $months[$month] }} {{ $year }}</strong>
+        @if ($cutoff !== 'both')
+            ({{ $cutoff === '1st' ? '1st' : '2nd' }} cut-off)
+        @endif.
+        Generate and compute payroll batches for this period first.
+    </div>
+    @endif
+</div>
+
+{{-- ── General Payroll Tab Content ──────────────────────────────── --}}
+<div class="tab-content {{ $activeTab === 'general_payroll' ? 'active' : '' }}" id="tab-general_payroll">
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-label">Employees</div>
+            <div class="stat-value">{{ number_format($employeeCount ?? 0) }}</div>
+        </div>
+        <div class="stat-card gold">
+            <div class="stat-label">Grand Total (Net Amount)</div>
+            <div class="stat-value">₱{{ number_format($grandTotal ?? 0, 2) }}</div>
+        </div>
+    </div>
+
+    <div class="report-cards-grid">
+        <div class="report-card">
+            <div class="report-card-header">
+                <h4 class="report-card-title">General Payroll Register</h4>
+                <span class="format-badge">XLSX</span>
+            </div>
+            <p class="report-card-desc">
+                Official DOLE RO9 payroll register — one row per employee with Basic Salary, PERA, RATA,
+                Gross Income, every active deduction, Total Deductions, and Net Amount. Includes letterhead
+                and signature block.
+            </p>
+            <div class="report-card-actions">
+                <a href="{{ route('reports.general-payroll', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff]) }}"
+                   class="btn-dl">
+                    👁 Open Full Report
+                </a>
+                <a href="{{ route('reports.general-payroll-download', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff]) }}"
+                   class="btn-dl btn-dl-gold">
+                    ⬇ Download XLSX
+                </a>
+            </div>
+        </div>
+    </div>
+
+    @if (($employeeCount ?? 0) === 0)
+    <div class="alert alert-warning">
+        No payroll data found for <strong>{{ $months[$month] }} {{ $year }}</strong>
         @if ($cutoff !== 'both')
             ({{ $cutoff === '1st' ? '1st' : '2nd' }} cut-off)
         @endif.
@@ -1073,19 +1122,19 @@
 function switchTab(tabName) {
     // Update hidden input
     document.getElementById('tab-input').value = tabName;
-    
+
     // Update tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
     });
     event.target.classList.add('active');
-    
+
     // Update tab content
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.remove('active');
     });
     document.getElementById('tab-' + tabName).classList.add('active');
-    
+
     // Submit form to load data for the tab
     document.querySelector('.filter-form').submit();
 }

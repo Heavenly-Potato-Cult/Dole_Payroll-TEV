@@ -17,6 +17,7 @@ use Modules\Payroll\Exports\CaressMortuaryExport;
 use Modules\Payroll\Exports\MassExport;
 use Modules\Payroll\Exports\ProvidentFundExport;
 use Modules\Payroll\Exports\BtrRefundExport;
+use Modules\Payroll\Exports\GeneralPayrollExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
@@ -114,6 +115,14 @@ class PayrollReportController extends Controller
                 $grandTotal = array_sum(array_column($sheets, 'total'));
                 $employeeCount = $p1->getCount();
                 $data = array_merge($data, compact('sheets', 'grandTotal', 'employeeCount'));
+                break;
+
+            case 'general_payroll':
+                $generalPayroll = new GeneralPayrollExport($year, $month, $cutoff);
+                $data = array_merge($data, [
+                    'employeeCount' => $generalPayroll->getEmployeeCount(),
+                    'grandTotal'    => $generalPayroll->getGrandTotalNet(),
+                ]);
                 break;
 
             case 'phic':
@@ -783,6 +792,57 @@ class PayrollReportController extends Controller
             'grandTotal'    => $rows->sum('amount'),
             'employeeCount' => $rows->count(),
         ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  General Payroll Register — Filter / Preview page
+    //  GET /reports/general-payroll
+    // ─────────────────────────────────────────────────────────────────────────
+    public function generalPayrollIndex(Request $request)
+    {
+        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+
+        $year   = (int) $request->get('year',  now()->year);
+        $month  = (int) $request->get('month', now()->month);
+        $cutoff = $request->get('cutoff', 'both');
+
+        $export = new GeneralPayrollExport($year, $month, $cutoff);
+
+        return view('payroll::reports.general-payroll', [
+            'year'             => $year,
+            'month'            => $month,
+            'cutoff'           => $cutoff,
+            'currentYear'      => now()->year,
+            'months'           => $this->monthNames(),
+            'employeeCount'    => $export->getEmployeeCount(),
+            'grandTotalGross'  => $export->getGrandTotalGross(),
+            'grandTotalNet'    => $export->getGrandTotalNet(),
+            'deductionColumns' => $export->getDeductionColumns(),
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  General Payroll Register — Excel Download
+    //  GET /reports/general-payroll-download
+    // ─────────────────────────────────────────────────────────────────────────
+    public function generalPayrollDownload(Request $request)
+    {
+        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+
+        $request->validate([
+            'year'   => ['required', 'integer', 'min:2020', 'max:2099'],
+            'month'  => ['required', 'integer', 'min:1',    'max:12'],
+            'cutoff' => ['nullable', 'in:1st,2nd,both'],
+        ]);
+
+        $year   = (int) $request->year;
+        $month  = (int) $request->month;
+        $cutoff = $request->get('cutoff', 'both');
+
+        $monthName = date('F', mktime(0, 0, 0, $month, 1));
+        $filename  = "General-Payroll-Register-{$year}-{$monthName}-{$cutoff}.xlsx";
+
+        return Excel::download(new GeneralPayrollExport($year, $month, $cutoff), $filename);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
