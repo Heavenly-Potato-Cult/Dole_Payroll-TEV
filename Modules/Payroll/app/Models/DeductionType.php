@@ -5,7 +5,9 @@ namespace Modules\Payroll\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Builder;
+use App\SharedKernel\Models\Employee;
 
 /**
  * DeductionType
@@ -43,6 +45,14 @@ use Illuminate\Database\Eloquent\Builder;
  *   deduction_type_category_id (FK) — UI foreign key to deduction_type_categories.
  *                                     Used by the CMS to display managed labels.
  *                                     Kept in sync with `category` by the controller.
+ *
+ * ── Assignment scope ─────────────────────────────────────────────────────
+ * assignment_scope ('all' default | 'specific') gates which employees this
+ * type applies to, uniformly across all 3 tiers. When 'specific', only
+ * employees in the deduction_type_employee pivot (assignedEmployees())
+ * are eligible — see appliesToEmployee()/appliesToEmployeeId(). Consulted
+ * by DeductionService (Tier 1/2 resolution) and EmployeeDeductionController
+ * (Tier 3 form visibility).
  */
 class DeductionType extends Model
 {
@@ -53,6 +63,7 @@ class DeductionType extends Model
         'category',
         'deduction_type_category_id',    // ← new: FK to managed categories table
         'allow_multiple_accounts',       // ← new: gates the multi-account UI, independent of category
+        'assignment_scope',              // ← new: 'all' (default) or 'specific' — see deduction_type_employee pivot
         'is_computed',
         'is_active',
         'notes',
@@ -122,6 +133,16 @@ class DeductionType extends Model
     public function payrollDeductions(): HasMany
     {
         return $this->hasMany(PayrollDeduction::class);
+    }
+
+    /**
+     * Inclusion whitelist consulted only when assignment_scope = 'specific'.
+     * Left untouched (not deleted) when scope flips back to 'all' — see
+     * migration 2026_07_07_100001_create_deduction_type_employee_table.
+     */
+    public function assignedEmployees(): BelongsToMany
+    {
+        return $this->belongsToMany(Employee::class, 'deduction_type_employee');
     }
 
     // ── Scopes ────────────────────────────────────────────────────────────
@@ -227,5 +248,55 @@ class DeductionType extends Model
         }
 
         return (bool) $this->allow_multiple_accounts;
+    }
+
+    // ── Assignment scope helpers ──────────────────────────────────────────
+
+    /**
+     * True when assignment_scope is 'specific' — i.e. the type only applies
+     * to employees listed in the deduction_type_employee pivot.
+     */
+    public function hasSpecificAssignment(): bool
+    {
+        return $this->assignment_scope === 'specific';
+    }
+
+    /**
+     * Simple, single-employee check. Fine for one-off lookups (e.g. the
+     * employee's own Deductions page). For bulk payroll runs, prefer
+     * appliesToEmployeeId() with the assignedEmployees relation
+     * pre-loaded — see the note there.
+     */
+    public function appliesToEmployee(Employee|int $employee): bool
+    {
+        $employeeId = $employee instanceof Employee ? $employee->id : $employee;
+
+        return $this->appliesToEmployeeId($employeeId);
+    }
+
+    /**
+     * Bulk-friendly variant of appliesToEmployee().
+     *
+     * If the assignedEmployees relation is ALREADY eager-loaded (e.g. via
+     * ->with(['assignedEmployees' => fn ($q) => $q->whereIn('employees.id', $ids)])),
+     * this checks the loaded Collection in memory — no query.
+     *
+     * If the relation is not loaded, it falls back to a single scoped
+     * query. Callers looping over many employees for the same set of
+     * types (payroll runs) should eager-load first to avoid N+1 queries.
+     */
+    public function appliesToEmployeeId(int $employeeId): bool
+    {
+        if ($this->assignment_scope === 'all') {
+            return true;
+        }
+
+        if ($this->relationLoaded('assignedEmployees')) {
+            return $this->assignedEmployees->contains('id', $employeeId);
+        }
+
+        return $this->assignedEmployees()
+            ->where('employees.id', $employeeId)
+            ->exists();
     }
 }

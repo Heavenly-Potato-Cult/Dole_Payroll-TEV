@@ -520,6 +520,86 @@
 
                 <hr style="border:none;border-top:1px solid var(--border);margin:24px 0;">
 
+                {{-- Employee Assignment --}}
+                @php
+                    $currentScope = old('assignment_scope', $deductionType->assignment_scope ?? 'all');
+                    $currentAssignedIds = old('employee_ids', $assignedEmployeeIds ?? []);
+                @endphp
+                <div style="margin-bottom:24px;">
+                    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:8px;">
+                        Employee Assignment
+                    </div>
+
+                    <div style="display:flex;gap:16px;margin-bottom:14px;">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="radio" name="assignment_scope" value="all"
+                                   id="scopeAll"
+                                   {{ $currentScope === 'all' ? 'checked' : '' }}>
+                            All Employees
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="radio" name="assignment_scope" value="specific"
+                                   id="scopeSpecific"
+                                   {{ $currentScope === 'specific' ? 'checked' : '' }}>
+                            Specific Employees
+                        </label>
+                    </div>
+
+                    <div id="employeePickerWrapper"
+                         style="display:{{ $currentScope === 'specific' ? 'block' : 'none' }};
+                                border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg);">
+
+                        <div style="display:flex;gap:10px;margin-bottom:10px;">
+                            <input type="text" id="employeeSearchInput" placeholder="Search by name..."
+                                   style="flex:1;">
+                            <select id="employeeDivisionFilter" style="max-width:220px;">
+                                <option value="">All Divisions</option>
+                                @foreach (($employees ?? collect())->pluck('division.name', 'division.id')->filter()->unique() as $divId => $divName)
+                                    <option value="{{ $divId }}">{{ $divName }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div style="font-size:0.78rem;color:var(--text-light);margin-bottom:8px;">
+                            <span id="employeeSelectedCount">{{ count($currentAssignedIds) }}</span> employee(s) selected.
+                        </div>
+
+                        <div style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:#fff;">
+                            @foreach (($employees ?? collect()) as $emp)
+                                <label class="employee-picker-row"
+                                       data-name="{{ strtolower($emp->full_name ?? trim(($emp->first_name ?? '').' '.($emp->last_name ?? ''))) }}"
+                                       data-division="{{ $emp->division_id }}"
+                                       style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;">
+                                    <input type="checkbox" name="employee_ids[]" value="{{ $emp->id }}"
+                                           class="employee-picker-checkbox"
+                                           {{ in_array($emp->id, $currentAssignedIds) ? 'checked' : '' }}>
+                                    <span>{{ $emp->full_name ?? trim(($emp->first_name ?? '').' '.($emp->last_name ?? '')) }}</span>
+                                    @if ($emp->division)
+                                        <span style="margin-left:auto;font-size:0.72rem;color:var(--text-light);">{{ $emp->division->name }}</span>
+                                    @endif
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    @if (($assignedEmployeeIds ?? []) && $currentScope === 'all')
+                    <div style="font-size:0.72rem;color:#854d0e;background:#fef9c3;border:1px solid #fbbf24;border-radius:6px;padding:8px 10px;margin-top:8px;">
+                        ⚠ This type has {{ count($assignedEmployeeIds) }} previously-assigned employee(s) on file.
+                        They're kept (not deleted) while scope is "All Employees" — switch back to
+                        "Specific Employees" to see or edit that list.
+                    </div>
+                    @endif
+
+                    <div style="font-size:0.72rem;color:var(--text-light);margin-top:6px;">
+                        <strong>All Employees</strong> applies this deduction type to every active employee.
+                        <strong>Specific Employees</strong> restricts it to only the employees checked above —
+                        useful for splitting duplicate types (e.g. one "Pag-IBIG 1" record per share) so the
+                        same employee is never double-deducted.
+                    </div>
+                </div>
+
+                <hr style="border:none;border-top:1px solid var(--border);margin:24px 0;">
+
                 {{-- Notes --}}
                 <div style="margin-bottom:24px;">
                     <label for="notes" style="display:block;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-mid);margin-bottom:5px;">
@@ -729,6 +809,49 @@ const ordEl = document.getElementById('display_order');
 if (catEl) catEl.addEventListener('change', checkOrderConflict);
 if (ordEl) ordEl.addEventListener('input', checkOrderConflict);
 checkOrderConflict();
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Employee Assignment picker
+// ══════════════════════════════════════════════════════════════════════════
+(function () {
+    const scopeAllEl      = document.getElementById('scopeAll');
+    const scopeSpecificEl = document.getElementById('scopeSpecific');
+    const pickerWrapper    = document.getElementById('employeePickerWrapper');
+    const searchInput      = document.getElementById('employeeSearchInput');
+    const divisionFilter   = document.getElementById('employeeDivisionFilter');
+    const rows             = Array.from(document.querySelectorAll('.employee-picker-row'));
+    const checkboxes       = Array.from(document.querySelectorAll('.employee-picker-checkbox'));
+    const countEl          = document.getElementById('employeeSelectedCount');
+
+    function togglePicker() {
+        if (!pickerWrapper) return;
+        pickerWrapper.style.display = (scopeSpecificEl && scopeSpecificEl.checked) ? 'block' : 'none';
+    }
+
+    function updateCount() {
+        if (!countEl) return;
+        countEl.textContent = checkboxes.filter(cb => cb.checked).length;
+    }
+
+    function applyFilter() {
+        const term = (searchInput?.value || '').toLowerCase().trim();
+        const div  = divisionFilter?.value || '';
+        rows.forEach(row => {
+            const matchesName = !term || row.dataset.name.includes(term);
+            const matchesDiv  = !div || row.dataset.division === div;
+            row.style.display = (matchesName && matchesDiv) ? 'flex' : 'none';
+        });
+    }
+
+    if (scopeAllEl) scopeAllEl.addEventListener('change', togglePicker);
+    if (scopeSpecificEl) scopeSpecificEl.addEventListener('change', togglePicker);
+    if (searchInput) searchInput.addEventListener('input', applyFilter);
+    if (divisionFilter) divisionFilter.addEventListener('change', applyFilter);
+    checkboxes.forEach(cb => cb.addEventListener('change', updateCount));
+
+    togglePicker();
+    updateCount();
+})();
 
 // ══════════════════════════════════════════════════════════════════════════
 //  Save confirm

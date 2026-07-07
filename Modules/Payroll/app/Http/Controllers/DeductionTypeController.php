@@ -5,6 +5,7 @@ namespace Modules\Payroll\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Modules\Payroll\Models\DeductionType;
 use Modules\Payroll\Models\DeductionTypeCategory;
+use App\SharedKernel\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
@@ -53,6 +54,7 @@ class DeductionTypeController extends Controller
     public function index()
     {
         $types = DeductionType::with('deductionTypeCategory')
+            ->withCount('assignedEmployees')
             ->orderBy('display_order')
             ->orderBy('name')
             ->get();
@@ -78,9 +80,10 @@ class DeductionTypeController extends Controller
             ->toArray();
 
         $loanCategories = DeductionType::LOAN_CATEGORIES;
+        $employees      = self::loadAssignableEmployees();
 
         return view('payroll::deduction-types.create',
-            compact('categories', 'categoryLabels', 'nextOrder', 'existingOrders', 'loanCategories'));
+            compact('categories', 'categoryLabels', 'nextOrder', 'existingOrders', 'loanCategories', 'employees'));
     }
 
     /**
@@ -123,17 +126,32 @@ class DeductionTypeController extends Controller
             'default_amount' => ['nullable', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
             'is_locked'      => 'nullable|boolean',
             'percentage'     => ['nullable', 'numeric', 'min:0', 'max:100', 'regex:/^\d+(\.\d{1,2})?$/'],
+            // Employee assignment scope
+            'assignment_scope' => ['nullable', Rule::in(['all', 'specific'])],
+            'employee_ids'      => ['nullable', 'array'],
+            'employee_ids.*'    => ['integer', 'exists:employees,id'],
         ]);
 
         // Resolve the category string from the FK
         $data['category'] = $this->categoryCodeFromId($data['deduction_type_category_id']);
 
-        $data['is_computed']    = false;
-        $data['is_active']      = true;
-        $data['is_locked']      = (bool) ($data['is_locked'] ?? false);
-        $data['default_amount'] = $data['default_amount'] ?? null;
+        $data['is_computed']      = false;
+        $data['is_active']        = true;
+        $data['is_locked']        = (bool) ($data['is_locked'] ?? false);
+        $data['default_amount']   = $data['default_amount'] ?? null;
+        $data['assignment_scope'] = $data['assignment_scope'] ?? 'all';
 
-        DeductionType::create($data);
+        $employeeIds = $data['employee_ids'] ?? [];
+        unset($data['employee_ids']);
+
+        $deductionType = DeductionType::create($data);
+
+        // Only sync the pivot when scope is 'specific' — see
+        // DeductionType docblock: pivot rows are an inclusion whitelist
+        // that's simply ignored (not deleted) when scope = 'all'.
+        if ($deductionType->assignment_scope === 'specific') {
+            $deductionType->assignedEmployees()->sync($employeeIds);
+        }
 
         return redirect()->route('deduction-types.index')
             ->with('success', "Deduction type \"{$data['name']}\" created successfully.");
@@ -154,10 +172,13 @@ class DeductionTypeController extends Controller
 
         $formulaDescription = self::formulaDescription($deductionType->code);
         $loanCategories     = DeductionType::LOAN_CATEGORIES;
+        $employees          = self::loadAssignableEmployees();
+        $assignedEmployeeIds = $deductionType->assignedEmployees()->pluck('employees.id')->all();
 
         return view('payroll::deduction-types.edit',
             compact('deductionType', 'categories', 'categoryLabels',
-                    'existingOrders', 'formulaDescription', 'loanCategories'));
+                    'existingOrders', 'formulaDescription', 'loanCategories',
+                    'employees', 'assignedEmployeeIds'));
     }
 
     /**
@@ -217,6 +238,10 @@ class DeductionTypeController extends Controller
             // WHT min/max override
             'min_override_amount' => ['nullable', 'numeric', 'min:0'],
             'max_override_amount' => ['nullable', 'numeric', 'min:0'],
+            // Employee assignment scope
+            'assignment_scope' => ['nullable', Rule::in(['all', 'specific'])],
+            'employee_ids'      => ['nullable', 'array'],
+            'employee_ids.*'    => ['integer', 'exists:employees,id'],
         ]);
 
         // Resolve category string from FK and keep in sync
@@ -232,6 +257,7 @@ class DeductionTypeController extends Controller
             'default_amount'             => $data['default_amount'] ?? null,
             'is_locked'                  => (bool) ($data['is_locked'] ?? false),
             'percentage'                 => $data['percentage'] ?? null,
+            'assignment_scope'           => $data['assignment_scope'] ?? 'all',
         ];
 
         // WHT min/max overrides (available for all non-computed types)
@@ -295,11 +321,63 @@ class DeductionTypeController extends Controller
 
         $deductionType->update($updateData);
 
+        // Only sync the pivot when scope is 'specific'. If scope = 'all',
+        // the submitted employee list is deliberately ignored and existing
+        // pivot rows are left untouched (see DeductionType docblock) — so
+        // toggling back to 'all' and later back to 'specific' doesn't lose
+        // a previously curated list.
+        $overlapWarning = null;
+        if ($updateData['assignment_scope'] === 'specific') {
+            $employeeIds = $data['employee_ids'] ?? [];
+            $deductionType->assignedEmployees()->sync($employeeIds);
+            $overlapWarning = $this->checkAssignmentOverlap($deductionType, $employeeIds);
+        }
+
         $lockLabel = $newIsLocked ? 'Locked (global amount)' : 'Unlocked (per-employee)';
         $modeLabel = $newIsComputed ? 'Auto-computed' : $lockLabel;
 
-        return redirect()->route('deduction-types.index')
-            ->with('success', "Deduction type \"{$deductionType->name}\" updated. Mode: {$modeLabel}.");
+        $message = "Deduction type \"{$deductionType->name}\" updated. Mode: {$modeLabel}.";
+
+        $redirect = redirect()->route('deduction-types.index')->with('success', $message);
+
+        if ($overlapWarning) {
+            $redirect->with('warning', $overlapWarning);
+        }
+
+        return $redirect;
+    }
+
+    /**
+     * Non-blocking safeguard for the GSIS/Pag-IBIG duplicate-type scenario:
+     * if another ACTIVE type sharing the same category has an overlapping
+     * assigned-employee set, surface a warning (doesn't block the save).
+     * Only checked against other 'specific'-scope types, since 'all'-scope
+     * types by definition include everyone and would always "overlap".
+     */
+    protected function checkAssignmentOverlap(DeductionType $deductionType, array $employeeIds): ?string
+    {
+        if (empty($employeeIds)) {
+            return null;
+        }
+
+        $siblings = DeductionType::where('category', $deductionType->category)
+            ->where('id', '!=', $deductionType->id)
+            ->where('is_active', true)
+            ->where('assignment_scope', 'specific')
+            ->with(['assignedEmployees' => function ($q) use ($employeeIds) {
+                $q->whereIn('employees.id', $employeeIds);
+            }])
+            ->get();
+
+        foreach ($siblings as $sibling) {
+            $overlapCount = $sibling->assignedEmployees->count();
+            if ($overlapCount > 0) {
+                return "{$overlapCount} employee(s) are assigned to both \"{$deductionType->name}\" "
+                     . "and \"{$sibling->name}\" — confirm this is intentional.";
+            }
+        }
+
+        return null;
     }
 
     /** Toggle is_active on/off. */
@@ -367,6 +445,30 @@ $enrollmentUsage = DB::table('employee_deduction_enrollments')
     }
 
     // ── Shared helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Returns active employees for the assignment picker, with division
+     * eager-loaded so the picker can offer a division filter.
+     *
+     * Employees are considered assignable when status = 'active' and
+     * is_excluded = false — there is no is_active column on employees
+     * (that column exists on divisions, not employees).
+     *
+     * Returns an empty collection if the table/relation is unavailable.
+     */
+    public static function loadAssignableEmployees()
+    {
+        try {
+            return Employee::with('division')
+                ->where('status', 'active')
+                ->where('is_excluded', false)
+                ->orderBy('last_name')
+                ->orderBy('first_name')
+                ->get();
+        } catch (\Throwable) {
+            return collect();
+        }
+    }
 
     /**
      * Returns an active-ordered collection of DeductionTypeCategory models.

@@ -27,7 +27,17 @@ class EmployeeDeductionController extends Controller
     {
         $employee->load(['division']);
 
-        $deductionTypes = DeductionType::active()->ordered()->get();
+        // Assignment scope: hide types this employee is not assigned to
+        // entirely from the form (not just disabled — see DeductionType
+        // docblock on assignment_scope). Eager-load the pivot scoped to
+        // this employee so appliesToEmployeeId() reads it in-memory.
+        $deductionTypes = DeductionType::active()->ordered()
+            ->with(['assignedEmployees' => function ($q) use ($employee) {
+                $q->where('employees.id', $employee->id);
+            }])
+            ->get()
+            ->filter(fn ($type) => $type->appliesToEmployeeId($employee->id))
+            ->values();
 
         $loanTypeIds = $deductionTypes
             ->filter(fn ($type) => $type->supportsMultipleAccounts())
@@ -100,6 +110,10 @@ class EmployeeDeductionController extends Controller
 
             // Skip effectively-locked types — owned by the global default_amount
             if ($type->isEffectivelyLocked()) continue;
+
+            // Defense in depth: skip types this employee isn't assigned to,
+            // in case a stale/tampered form submits one anyway.
+            if (! $type->appliesToEmployee($employee)) continue;
 
             $enrolled = ! empty($data['enrolled']);
 

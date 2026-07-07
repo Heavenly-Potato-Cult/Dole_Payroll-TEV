@@ -706,6 +706,7 @@
                             <th style="width:160px;">Code</th>
                             <th>Name / Formula</th>
                             <th style="width:130px;">Type</th>
+                            <th style="width:130px;">Assignment</th>
                             <th style="width:80px;">Status</th>
                             <th class="dt-col-notes">Notes</th>
                             <th style="width:100px;text-align:right;">Actions</th>
@@ -840,6 +841,19 @@
                                 @endif
                             </td>
 
+                            {{-- Assignment scope badge --}}
+                            <td>
+                                @if (($type->assignment_scope ?? 'all') === 'specific')
+                                    <a href="{{ route('deduction-types.edit', $type) }}"
+                                       title="Manage assigned employees"
+                                       style="text-decoration:none;">
+                                        <span class="badge-locked">Specific ({{ $type->assigned_employees_count ?? 0 }})</span>
+                                    </a>
+                                @else
+                                    <span class="badge-manual">All Employees</span>
+                                @endif
+                            </td>
+
                             {{-- Status --}}
                             <td>
                                 @if ($type->is_active)
@@ -926,6 +940,10 @@
                 <div class="dt-legend-item">
                     <span class="badge-manual" style="flex-shrink:0;">Manual</span>
                     <span>Amount is set individually per employee via the Deductions enrollment form.</span>
+                </div>
+                <div class="dt-legend-item">
+                    <span class="badge-locked" style="flex-shrink:0;">Specific (N)</span>
+                    <span>Restricted to N specifically-assigned employees — click to manage the list.</span>
                 </div>
                 <div class="dt-legend-item">
                     <span class="badge-modified" style="flex-shrink:0;">★ Modified</span>

@@ -72,6 +72,13 @@ use Carbon\Carbon;
  *  2026-06-10  Fix 3: WHT always returning 0.00 — fixed in
  *              PayrollComputationService::computeBatch(). ytdGross is now
  *              queried from prior payroll_entries before each computeEntry() call.
+ *
+ *  2026-07-07  Added assignment_scope guard. Tier 1/2 types with
+ *              assignment_scope = 'specific' are now skipped for employees
+ *              not present in the deduction_type_employee pivot (see
+ *              DeductionType::appliesToEmployeeId()). This is the structural
+ *              fix for duplicate type pairs (e.g. two "Pag-IBIG 1" rows,
+ *              one per share) that must never both apply to the same employee.
  * ─────────────────────────────────────────────────────────────────────────
  */
 class DeductionService
@@ -157,7 +164,16 @@ class DeductionService
         $peraMonthly  = (float) $employee->pera_amount;
         $payrollDate  = Carbon::create($batch->period_year, $batch->period_month, 1)->toDateString();
 
-        $allTypes = DeductionType::active()->ordered()->get();
+        // Eager-load the assignment pivot scoped to THIS employee only, so
+        // DeductionType::appliesToEmployeeId() below reads the loaded
+        // relation in-memory instead of firing a fresh query per type.
+        // This keeps the cost at one extra query per employee (not per
+        // employee × type) — see DeductionType::appliesToEmployeeId().
+        $allTypes = DeductionType::active()->ordered()
+            ->with(['assignedEmployees' => function ($q) use ($employee) {
+                $q->where('employees.id', $employee->id);
+            }])
+            ->get();
 
         // Pre-load per-employee enrollments (Tier 3 only)
         $enrollments = $employee->deductionEnrollments()
@@ -211,6 +227,15 @@ class DeductionService
 
             // ── Fix 1: Skip employer-only codes entirely ──────────────────
             if (in_array($type->code, self::EMPLOYER_ONLY_CODES)) {
+                continue;
+            }
+
+            // ── Assignment scope: skip types this employee is not assigned to ──
+            // Applies uniformly to Tier 1 (formula) and Tier 2 (locked global)
+            // types, which otherwise have no way to exclude an employee.
+            // Tier 3 already gates via enrollment, but this is still checked
+            // as a hard boundary (e.g. an employee transferred out of scope).
+            if (! $type->appliesToEmployeeId($employee->id)) {
                 continue;
             }
 
