@@ -279,21 +279,21 @@
 
 /* ── Mobile overrides ── */
 @media (max-width: 768px) {
-    .approval-stepper { 
-        padding: 15px 5%; 
+    .approval-stepper {
+        padding: 15px 5%;
         height: auto;
         flex-direction: column;
         gap: 15px;
     }
-    
+
     .approval-stepper::before {
         display: none;
     }
-    
+
     .approval-stepper .progress-fill {
         display: none;
     }
-    
+
     .approval-step {
         flex-direction: row;
         justify-content: flex-start;
@@ -302,17 +302,17 @@
         border-radius: 6px;
         background: white;
     }
-    
+
     .approval-step-dot {
         margin-bottom: 0;
         margin-right: 12px;
     }
-    
+
     .approval-step-label {
         text-align: left;
         margin-bottom: 0;
     }
-    
+
     .approval-step-sub {
         margin-top: 2px;
     }
@@ -337,7 +337,7 @@
     $typeCode  = $batch->type;
     $typeUpper = strtoupper($typeCode);
     $typeTitle = $typeCode === 'nosi'
-        ? 'NOTICE OF SALARY INCREASE'
+        ? 'NOTICE OF STEP INCREMENT'
         : 'NOTICE OF SALARY ADJUSTMENT';
 
     $statusClass = match ($batch->status) {
@@ -438,6 +438,13 @@
                 <a href="{{ route('special-payroll.nosi-nosa.index') }}"
                    class="btn btn-outline btn-sm no-print">← All Records</a>
                 <button onclick="window.print()" class="btn btn-outline btn-sm no-print">🖨 Print</button>
+
+                @if ($batch->status === 'released')
+                    <a href="{{ route('special-payroll.nosi-nosa.payslip', $batch->id) }}"
+                       class="btn btn-gold btn-sm no-print" target="_blank">
+                        ⬇ Download Payslip
+                    </a>
+                @endif
             </div>
         </div>
 
@@ -445,7 +452,7 @@
         <div class="approval-stepper no-print">
             <!-- Progress fill line -->
             <div class="progress-fill" style="width: {{ ($activeStep / (count($steps) - 1)) * 100 }}%;"></div>
-            
+
             @foreach ($steps as $i => $step)
                 @php
                     if ($i < $activeStep) {
@@ -629,12 +636,11 @@
                         <th rowspan="2" style="text-align:center; vertical-align:middle;">No.</th>
                         <th rowspan="2" style="text-align:left; vertical-align:middle;">Name</th>
                         <th rowspan="2" style="text-align:left; vertical-align:middle;">Position</th>
-                        <th rowspan="2" style="text-align:center; vertical-align:middle;">Effectivity Date</th>
                         <th colspan="{{ 3 + count($result['per_month']) }}"
                             style="text-align:center; background:#1e3a8a;">
                             EARNED FOR THE PERIOD
                         </th>
-                        <th colspan="5" style="text-align:center; background:#7c1a1a;">DEDUCTIONS</th>
+                        <th colspan="6" style="text-align:center; background:#7c1a1a;">DEDUCTIONS</th>
                         <th rowspan="2" style="text-align:right; vertical-align:middle;">NET AMOUNT</th>
                         <th rowspan="2" style="text-align:center; vertical-align:middle; min-width:80px;">SIGNATURE</th>
                     </tr>
@@ -669,11 +675,6 @@
                         <td style="min-width:140px; font-size:0.76rem;">
                             {{ optional($employee)->position_title ?? '—' }}
                         </td>
-                        <td class="text-center" style="font-size:0.76rem;">
-                            {{ $batch->period_start->format('m/d/Y') }}
-                            to<br>
-                            {{ $batch->period_end->format('m/d/Y') }}
-                        </td>
                         <td class="text-right">{{ number_format($batch->new_basic_salary, 2) }}</td>
                         <td class="text-right">{{ number_format($batch->old_basic_salary, 2) }}</td>
                         <td class="text-right fw-bold">{{ number_format($result['differential'], 2) }}</td>
@@ -692,7 +693,7 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colspan="4" class="text-right" style="letter-spacing:0.04em;">TOTAL</td>
+                        <td colspan="3" class="text-right" style="letter-spacing:0.04em;">TOTAL</td>
                         <td class="text-right">{{ number_format($batch->new_basic_salary, 2) }}</td>
                         <td class="text-right">{{ number_format($batch->old_basic_salary, 2) }}</td>
                         <td class="text-right gold-text">{{ number_format($result['differential'], 2) }}</td>

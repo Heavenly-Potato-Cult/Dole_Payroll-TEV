@@ -139,6 +139,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/differential/create',       [SpecialPayrollController::class, 'differentialCreate']) ->name('differential.create');
             Route::post('/differential',             [SpecialPayrollController::class, 'differentialStore'])  ->name('differential.store');
             Route::get('/differential/{id}',         [SpecialPayrollController::class, 'differentialShow'])   ->name('differential.show');
+            Route::get('/differential/{id}/payslip', [SpecialPayrollController::class, 'differentialPayslip'])->name('differential.payslip');
             Route::post('/differential/{id}/approve',[SpecialPayrollController::class, 'differentialApprove'])->name('differential.approve');
             Route::delete('/differential/{id}',      [SpecialPayrollController::class, 'differentialDestroy'])->name('differential.destroy');
 
@@ -146,6 +147,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/nosi-nosa/create',       [SpecialPayrollController::class, 'nosiNosaCreate']) ->name('nosi-nosa.create');
             Route::post('/nosi-nosa',             [SpecialPayrollController::class, 'nosiNosaStore'])  ->name('nosi-nosa.store');
             Route::get('/nosi-nosa/{id}',         [SpecialPayrollController::class, 'nosiNosaShow'])   ->name('nosi-nosa.show');
+            Route::get('/nosi-nosa/{id}/payslip', [SpecialPayrollController::class, 'nosiNosaPayslip'])->name('nosi-nosa.payslip');
             Route::post('/nosi-nosa/{id}/approve',[SpecialPayrollController::class, 'nosiNosaApprove'])->name('nosi-nosa.approve');
             Route::delete('/nosi-nosa/{id}',      [SpecialPayrollController::class, 'nosiNosaDestroy'])->name('nosi-nosa.destroy');
         });

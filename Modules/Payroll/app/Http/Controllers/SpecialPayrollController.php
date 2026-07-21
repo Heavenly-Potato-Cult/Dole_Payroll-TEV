@@ -743,6 +743,68 @@ class SpecialPayrollController extends Controller
             ->with('success', 'Record deleted.');
     }
 
+    /**
+     * Generate and download a payslip PDF for a released salary
+     * differential batch.
+     *
+     * Same "dedicated DomPDF template" approach as newHirePayslip() —
+     * differential-show.blade.php's stepper/print-CSS chrome isn't
+     * DomPDF-renderable as-is. Re-invokes SalaryDifferentialService from
+     * the batch's stored inputs (same as differentialShow()) so the slip's
+     * numbers always match what's on the batch page, including the full
+     * per-month breakdown.
+     *
+     * Gated on status === 'released' only, same as newly-hired — there is
+     * no 'locked' state on SpecialPayrollBatch and nothing here supports
+     * amending a released record.
+     */
+    public function differentialPayslip(int $id)
+    {
+        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+
+        $batch = SpecialPayrollBatch::with('employee', 'approver')
+            ->where('type', 'salary_differential')
+            ->findOrFail($id);
+
+        if ($batch->status !== 'released') {
+            return back()->with('error', 'Payslips are only available once the batch is released.');
+        }
+
+        $employee = $batch->employee;
+
+        /** @var SalaryDifferentialService $service */
+        $service = app(SalaryDifferentialService::class);
+
+        $result = $service->compute(
+            employee:              $employee,
+            effectivity_date_from: $batch->period_start->toDateString(),
+            effectivity_date_to:   $batch->period_end->toDateString(),
+            old_salary:            (float) $batch->old_basic_salary,
+            new_salary:            (float) $batch->new_basic_salary,
+        );
+
+        $signatory = Signatory::where('role_type', 'hrmo_designate')
+            ->where('is_active', true)
+            ->first();
+
+        $pdf = Pdf::loadView('payroll::special-payroll.differential-payslip', compact(
+            'batch', 'employee', 'result', 'signatory'
+        ))
+        ->setPaper('a4', 'portrait')
+        ->setOptions([
+            'defaultFont'          => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled'      => true,
+            'dpi'                  => 96,
+        ]);
+
+        $filename = 'payslip_differential_'
+            . str_replace([' ', ',', '.'], '_', $employee->full_name)
+            . "_{$batch->year}_{$batch->month}.pdf";
+
+        return $pdf->download($filename);
+    }
+
     // =====================================================================
     //  NOSI / NOSA
     // =====================================================================
@@ -994,6 +1056,74 @@ class SpecialPayrollController extends Controller
 
         return redirect()->route('special-payroll.nosi-nosa.index')
             ->with('success', 'Record deleted.');
+    }
+
+    /**
+     * Generate and download a payslip PDF for a released NOSI or NOSA batch.
+     *
+     * Same dedicated-DomPDF-template approach as newHirePayslip() and
+     * differentialPayslip() — nosiNosaShow()'s stepper/print-CSS chrome
+     * isn't DomPDF-renderable as-is. Re-invokes SalaryDifferentialService
+     * from the batch's stored inputs (same as nosiNosaShow()), since NOSI
+     * and NOSA both delegate to that service rather than computing inline.
+     *
+     * Type label uses the official DBM terminology (Notice of Step
+     * Increment / Notice of Salary Adjustment) confirmed via Circular
+     * Letter No. 2024-7 and National Budget Circular No. 597 — not the
+     * "Notice of Salary Increase" wording nosi-nosa-show.blade.php had
+     * been using for NOSI.
+     *
+     * Gated on status === 'released' only, same as the other two types.
+     */
+    public function nosiNosaPayslip(int $id)
+    {
+        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+
+        $batch = SpecialPayrollBatch::with('employee', 'approver')
+            ->whereIn('type', ['nosi', 'nosa'])
+            ->findOrFail($id);
+
+        if ($batch->status !== 'released') {
+            return back()->with('error', 'Payslips are only available once the batch is released.');
+        }
+
+        $employee = $batch->employee;
+
+        /** @var SalaryDifferentialService $service */
+        $service = app(SalaryDifferentialService::class);
+
+        $result = $service->compute(
+            employee:              $employee,
+            effectivity_date_from: $batch->period_start->toDateString(),
+            effectivity_date_to:   $batch->period_end->toDateString(),
+            old_salary:            (float) $batch->old_basic_salary,
+            new_salary:            (float) $batch->new_basic_salary,
+        );
+
+        $typeLabel = $batch->type === 'nosi'
+            ? 'Notice of Step Increment (NOSI)'
+            : 'Notice of Salary Adjustment (NOSA)';
+
+        $signatory = Signatory::where('role_type', 'hrmo_designate')
+            ->where('is_active', true)
+            ->first();
+
+        $pdf = Pdf::loadView('payroll::special-payroll.nosi-nosa-payslip', compact(
+            'batch', 'employee', 'result', 'typeLabel', 'signatory'
+        ))
+        ->setPaper('a4', 'portrait')
+        ->setOptions([
+            'defaultFont'          => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled'      => true,
+            'dpi'                  => 96,
+        ]);
+
+        $filename = 'payslip_' . $batch->type . '_'
+            . str_replace([' ', ',', '.'], '_', $employee->full_name)
+            . "_{$batch->year}_{$batch->month}.pdf";
+
+        return $pdf->download($filename);
     }
 
     // =====================================================================
