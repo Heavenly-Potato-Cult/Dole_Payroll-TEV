@@ -39,6 +39,35 @@ class NewlyHiredPayrollService
     const GSIS_GOVERNMENT_RATE = 0.12;
 
     /**
+     * Weekday count from effectivity_date to cutoff_end (inclusive).
+     * Returns 0 if effectivity falls after cutoff_end.
+     *
+     * Extracted so callers (e.g. the controller, to pro-rate optional
+     * allowance lines before calling compute()) can get the same
+     * working-day figure compute() uses internally, without duplicating
+     * the calendar logic.
+     */
+    public function workingDays(string $effectivity_date, string $cutoff_end): int
+    {
+        $startDate     = Carbon::parse($effectivity_date);
+        $cutoffEndDate = Carbon::parse($cutoff_end);
+
+        if ($startDate->gt($cutoffEndDate)) {
+            return 0;
+        }
+
+        $count  = 0;
+        $period = CarbonPeriod::create($startDate, $cutoffEndDate);
+        foreach ($period as $day) {
+            if ($day->isWeekday()) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
      * Compute pro-rated payroll for a newly hired employee.
      *
      * @param  Employee  $employee
@@ -48,6 +77,12 @@ class NewlyHiredPayrollService
      * @param  int       $lwop_days         Leave Without Pay days (whole days only)
      * @param  int       $tardiness_minutes Total tardiness/undertime in minutes (currently unused in net calc)
      * @param  float|null $gsisRate         Optional custom GSIS rate (default 9%)
+     * @param  array<int, array{allowance_type_id:int, code:string, name:string, full_amount:float, amount:float}>  $allowanceLines
+     *         Pre-prorated allowance lines (see AllowanceService::proRateLines()).
+     *         PERA must not appear here — it stays a first-class column below.
+     *         GSIS PS is computed on salary_earned only; allowances here are
+     *         never part of the GSIS base (confirmed — matches PERA's existing
+     *         treatment).
      * @return array
      */
     public function compute(
@@ -57,25 +92,13 @@ class NewlyHiredPayrollService
         string   $cutoff_end,
         int      $lwop_days         = 0,
         int      $tardiness_minutes = 0,
-        ?float   $gsisRate         = null
+        ?float   $gsisRate         = null,
+        array    $allowanceLines   = []
     ): array {
-        $startDate     = Carbon::parse($effectivity_date);
-        $cutoffEndDate = Carbon::parse($cutoff_end);
-
         // Use custom GSIS rate if provided, otherwise use default
         $gsisRate = $gsisRate ?? self::GSIS_EMPLOYEE_RATE;
 
-        // ── Working days: weekdays from effectivity_date to cutoff_end ────
-        // If effectivity falls after cut-off end, working_days = 0
-        $working_days = 0;
-        if ($startDate->lte($cutoffEndDate)) {
-            $period = CarbonPeriod::create($startDate, $cutoffEndDate);
-            foreach ($period as $day) {
-                if ($day->isWeekday()) {
-                    $working_days++;
-                }
-            }
-        }
+        $working_days = $this->workingDays($effectivity_date, $cutoff_end);
 
         $basic = (float) $employee->basic_salary;
         $pera  = (float) $employee->pera;
@@ -91,14 +114,24 @@ class NewlyHiredPayrollService
         $lwop_pera      = $daily_pera  * $lwop_days;
         $lwop_deduction = round($lwop_salary + $lwop_pera, 2);
 
+        // ── Allowances (RATA/etc — optional, already pro-rated by caller) ──
+        // PERA is intentionally excluded from $allowanceLines (see docblock)
+        // so it is never double-counted against pera_earned above.
+        $allowances_earned = round(
+            array_sum(array_map(fn ($l) => (float) $l['amount'], $allowanceLines)),
+            2
+        );
+
         // ── Net earned (after LWOP) ───────────────────────────────────────
-        $net_earned = ($salary_earned - $lwop_salary) + ($pera_earned - $lwop_pera);
+        $net_earned = ($salary_earned - $lwop_salary) + ($pera_earned - $lwop_pera) + $allowances_earned;
         $net_earned = round($net_earned, 2);
 
         // ── Mandatory deductions ──────────────────────────────────────────
         // GSIS for incomplete periods:
         //   (basic / 22) * working_days  => salary_earned
         //   salary_earned * rate         => GSIS amount
+        // NOTE: GSIS base is salary_earned only — allowances (and PERA) are
+        // never GSIS-able, matching the existing PERA treatment.
         $gsis_ps = round($salary_earned * $gsisRate, 2);
         $phic    = 0.00;                                 // Not deducted for newly hired
         $pagibig = 0.00;                                 // ₱200 is govt share only
@@ -122,7 +155,9 @@ class NewlyHiredPayrollService
             // Earnings
             'salary_earned'    => $salary_earned,
             'pera_earned'      => $pera_earned,
-            'net_earned'       => $net_earned,   // gross before mandatory deductions
+            'allowance_lines'  => $allowanceLines,      // as passed in, for display
+            'allowances_earned'=> $allowances_earned,
+            'net_earned'       => $net_earned,   // gross before mandatory deductions (now includes allowances)
 
             // LWOP
             'lwop_days'        => $lwop_days,

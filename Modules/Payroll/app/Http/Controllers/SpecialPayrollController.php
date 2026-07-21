@@ -5,13 +5,19 @@ namespace Modules\Payroll\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Modules\Payroll\Http\Requests\StoreSpecialPayrollRequest;
 use App\SharedKernel\Models\Employee;
+use App\SharedKernel\Models\Signatory;
+use Modules\Payroll\Models\Allowances\AllowanceType;
+use Modules\Payroll\Models\Allowances\SpecialPayrollBatchAllowance;
 use Modules\Payroll\Models\PayrollAuditLog;
 use Modules\Payroll\Models\SpecialPayrollBatch;
+use Modules\Payroll\Services\AllowanceService;
 use Modules\Payroll\Services\NewlyHiredPayrollService;
 use Modules\Payroll\Services\SalaryDifferentialService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * SpecialPayrollController
@@ -57,8 +63,8 @@ class SpecialPayrollController extends Controller
     /**
      * Show the form for creating a new pro-rated payroll entry.
      *
-     * Only active employees with less than 6 months tenure are listed — 
-     * inactive or separated employees are not eligible for newly hired 
+     * Only active employees with less than 6 months tenure are listed —
+     * inactive or separated employees are not eligible for newly hired
      * payroll processing.
      */
     public function newHireCreate()
@@ -71,7 +77,57 @@ class SpecialPayrollController extends Controller
             ->get(['id', 'last_name', 'first_name', 'middle_name',
                    'position_title', 'basic_salary', 'pera']);
 
-        return view('payroll::special-payroll.newly-hired-create', compact('employees'));
+        // PERA excluded — it's already a first-class field elsewhere in this
+        // form/service; offering it again as a generic allowance checkbox
+        // would double-count it (see NewlyHiredPayrollService::compute()).
+        $allowanceTypes = AllowanceType::where('is_active', true)
+            ->where('code', '!=', 'PERA')
+            ->orderBy('display_order')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name']);
+
+        return view('payroll::special-payroll.newly-hired-create', compact('employees', 'allowanceTypes'));
+    }
+
+    /**
+     * AJAX endpoint: resolve applicable allowance lines for an employee over
+     * an arbitrary effectivity/cut-off window, for the live checklist on the
+     * newHireCreate form. Delegates entirely to
+     * AllowanceService::resolveForPeriod() — same precedence logic the
+     * regular payroll module uses (standing → released assignment override),
+     * no special-casing for newly hired employees.
+     */
+    public function newHireAllowancesPreview(Request $request)
+    {
+        $this->authorizeRole(['payroll_officer', 'hrmo']);
+
+        $validated = $request->validate([
+            'employee_id'      => ['required', 'exists:employees,id'],
+            'effectivity_date' => ['required', 'date'],
+            'cutoff_start'     => ['required', 'date'],
+            'cutoff_end'       => ['required', 'date', 'after_or_equal:cutoff_start'],
+        ]);
+
+        $employee = Employee::findOrFail($validated['employee_id']);
+
+        $periodStart = Carbon::parse($validated['cutoff_start']);
+        $periodEnd   = Carbon::parse($validated['cutoff_end']);
+
+        /** @var AllowanceService $service */
+        $service = app(AllowanceService::class);
+
+        $lines = $service->resolveForPeriod(
+            $employee,
+            $periodStart->year,
+            $periodStart->month,
+            $periodStart,
+            $periodEnd
+        );
+
+        // PERA is always excluded from this checklist — see newHireCreate().
+        $lines = array_values(array_filter($lines, fn ($l) => $l['code'] !== 'PERA'));
+
+        return response()->json(['allowances' => $lines]);
     }
 
     /**
@@ -86,8 +142,85 @@ class SpecialPayrollController extends Controller
     {
         $employee = Employee::findOrFail($request->employee_id);
 
+        // ── Optional allowances (Goal 1) ──────────────────────────────────
+        // 'allowances' is an array of checked allowance_type_id values.
+        // 'allowance_override' / 'allowance_override_reason' are keyed by
+        // allowance_type_id, for the rare case a preparer needs to correct
+        // the pro-rated figure (e.g. RATA permanency-gating that the
+        // resolver can't know about) — mirrors PayrollEntryAllowance's
+        // is_overridden/override_reason pattern.
+        $allowanceValidated = $request->validate([
+            'allowances'                          => ['nullable', 'array'],
+            'allowances.*'                         => ['integer', 'exists:allowance_types,id'],
+            'allowance_override'                  => ['nullable', 'array'],
+            'allowance_override.*'                => ['nullable', 'numeric', 'min:0'],
+            'allowance_override_reason'           => ['nullable', 'array'],
+            'allowance_override_reason.*'         => ['nullable', 'string', 'max:500'],
+            'apply_gsis'                           => ['nullable', 'boolean'],
+        ]);
+
+        $selectedTypeIds = array_map('intval', $allowanceValidated['allowances'] ?? []);
+
         /** @var NewlyHiredPayrollService $service */
         $service = app(NewlyHiredPayrollService::class);
+
+        $proratedLines = [];
+        if (! empty($selectedTypeIds)) {
+            /** @var AllowanceService $allowanceService */
+            $allowanceService = app(AllowanceService::class);
+
+            $periodStart = Carbon::parse($request->cutoff_start);
+            $periodEnd   = Carbon::parse($request->cutoff_end);
+
+            $resolvedLines = $allowanceService->resolveForPeriod(
+                $employee, $periodStart->year, $periodStart->month, $periodStart, $periodEnd
+            );
+
+            $workingDays   = $service->workingDays($request->effectivity_date, $request->cutoff_end);
+            $proratedLines = $allowanceService->proRateLines($resolvedLines, $selectedTypeIds, $workingDays);
+
+            // Apply manual overrides, per line, if the preparer supplied one.
+            // A reason is mandatory for any override — same rule as every
+            // other manual-override path in this module.
+            foreach ($proratedLines as $i => $line) {
+                $typeId = $line['allowance_type_id'];
+                $override = $allowanceValidated['allowance_override'][$typeId] ?? null;
+
+                if ($override !== null && $override !== '') {
+                    $reason = $allowanceValidated['allowance_override_reason'][$typeId] ?? null;
+                    if (! $reason) {
+                        return back()->withErrors([
+                            "allowance_override_reason.{$typeId}" =>
+                                "A reason is required to override the {$line['name']} amount.",
+                        ])->withInput();
+                    }
+
+                    $proratedLines[$i]['amount']           = round((float) $override, 2);
+                    $proratedLines[$i]['is_overridden']     = true;
+                    $proratedLines[$i]['override_reason']   = $reason;
+                } else {
+                    $proratedLines[$i]['is_overridden']   = false;
+                    $proratedLines[$i]['override_reason'] = null;
+                }
+            }
+        }
+
+        // ── Optional GSIS deduction (Goal 3, added on request) ────────────
+        // GSIS PS is only legally deducted for GSIS-covered appointees
+        // (permanent/regular); COS/Job Order hires aren't covered at all.
+        // Default is OFF (opt-in) per your instruction — full gross with no
+        // deductions unless explicitly turned on. The resolved rate is
+        // persisted on the batch (gsis_rate_applied) so re-renders of this
+        // record (newHireShow/newHirePayslip) always reflect what was
+        // actually applied at creation, not a re-derived default.
+        $applyGsis = $request->boolean('apply_gsis', false);
+
+        $gsisRateUsed = 0.0;
+        if ($applyGsis) {
+            $gsisRateUsed = isset($request->deduction_gsis_percent) && $request->deduction_gsis_percent !== null
+                ? (float) $request->deduction_gsis_percent / 100
+                : NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE;
+        }
 
         $result = $service->compute(
             employee:          $employee,
@@ -96,9 +229,8 @@ class SpecialPayrollController extends Controller
             cutoff_end:        $request->cutoff_end,
             lwop_days:         (int) ($request->lwop_days ?? 0),
             tardiness_minutes: 0,
-            gsisRate:          isset($request->deduction_gsis_percent) && $request->deduction_gsis_percent !== null
-                ? (float) $request->deduction_gsis_percent / 100
-                : null
+            gsisRate:          $gsisRateUsed,
+            allowanceLines:    $proratedLines
         );
 
         $cutoffStart = Carbon::parse($request->cutoff_start);
@@ -114,28 +246,46 @@ class SpecialPayrollController extends Controller
             . $employee->last_name . ', ' . $employee->first_name
             . ' (' . $effectivity->format('M d, Y') . ')';
 
-        $batch = SpecialPayrollBatch::create([
-            'type'              => $payrollType,
-            'title'             => $title,
-            'year'              => $cutoffStart->year,
-            'month'             => $cutoffStart->month,
-            'effectivity_date'  => $request->effectivity_date,
-            'period_start'      => $request->cutoff_start,
-            'period_end'        => $request->cutoff_end,
-            'employee_id'       => $employee->id,
-            'pro_rated_days'    => $result['working_days'],
-            'gross_amount'      => $result['net_earned'],
-            'deductions_amount' => $result['total_deductions'],
-            'net_amount'        => $result['net_amount'],
-            'status'            => 'draft',
-            'remarks'           => $request->remarks,
-        ]);
+        $batch = DB::transaction(function () use ($request, $employee, $cutoffStart, $payrollType, $title, $result, $proratedLines, $gsisRateUsed) {
+            $batch = SpecialPayrollBatch::create([
+                'type'              => $payrollType,
+                'title'             => $title,
+                'year'              => $cutoffStart->year,
+                'month'             => $cutoffStart->month,
+                'effectivity_date'  => $request->effectivity_date,
+                'period_start'      => $request->cutoff_start,
+                'period_end'        => $request->cutoff_end,
+                'employee_id'       => $employee->id,
+                'pro_rated_days'    => $result['working_days'],
+                'gross_amount'      => $result['net_earned'],
+                'deductions_amount' => $result['total_deductions'],
+                'gsis_rate_applied' => $gsisRateUsed,
+                'net_amount'        => $result['net_amount'],
+                'status'            => 'draft',
+                'remarks'           => $request->remarks,
+            ]);
+
+            foreach ($proratedLines as $line) {
+                SpecialPayrollBatchAllowance::create([
+                    'special_payroll_batch_id' => $batch->id,
+                    'allowance_type_id'        => $line['allowance_type_id'],
+                    'code'                     => $line['code'],
+                    'name'                     => $line['name'],
+                    'full_amount'              => $line['full_amount'],
+                    'amount'                   => $line['amount'],
+                    'is_overridden'            => $line['is_overridden'] ?? false,
+                    'override_reason'          => $line['override_reason'] ?? null,
+                ]);
+            }
+
+            return $batch;
+        });
 
         // Stash result in session to avoid re-computing on the redirect
         session(['newly_hired_result_' . $batch->id => $result]);
 
         $action = 'Created ' . $typeLabel . ' Pro-Rated Payroll: ' . $employee->last_name . ', ' . $employee->first_name;
-        
+
         PayrollAuditLog::create([
             'user_id'    => Auth::id(),
             'action'     => $action,
@@ -159,7 +309,7 @@ class SpecialPayrollController extends Controller
     {
         $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
 
-        $batch    = SpecialPayrollBatch::with('employee', 'approver')
+        $batch    = SpecialPayrollBatch::with('employee', 'approver', 'allowances')
             ->where('type', 'newly_hired')
             ->findOrFail($id);
 
@@ -168,13 +318,33 @@ class SpecialPayrollController extends Controller
         /** @var NewlyHiredPayrollService $service */
         $service = app(NewlyHiredPayrollService::class);
 
+        // Re-hydrate the persisted allowance lines (not a fresh resolve) so
+        // the displayed math matches what was actually applied at creation
+        // time, even if standing allowances/assignments change afterward.
+        $allowanceLines = $batch->allowances->map(fn ($a) => [
+            'allowance_type_id' => $a->allowance_type_id,
+            'code'              => $a->code,
+            'name'              => $a->name,
+            'full_amount'       => (float) $a->full_amount,
+            'amount'            => (float) $a->amount,
+            'is_overridden'     => (bool) $a->is_overridden,
+            'override_reason'   => $a->override_reason,
+        ])->all();
+
         $result = $service->compute(
             employee:          $employee,
             effectivity_date:  $batch->effectivity_date->toDateString(),
             cutoff_start:      $batch->period_start->toDateString(),
             cutoff_end:        $batch->period_end->toDateString(),
             lwop_days:         0,
-            tardiness_minutes: 0
+            tardiness_minutes: 0,
+            // Fallback to the pre-toggle default (9%) only for batches
+            // created before gsis_rate_applied existed (null on old rows).
+            // Batches created after this change always have an explicit
+            // value (including 0.0 for "off"), so ?? never masks a
+            // deliberate opt-out for anything created going forward.
+            gsisRate:          $batch->gsis_rate_applied ?? NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE,
+            allowanceLines:    $allowanceLines
         );
 
         return view('payroll::special-payroll.newly-hired-show', compact('batch', 'employee', 'result'));
@@ -249,6 +419,86 @@ class SpecialPayrollController extends Controller
 
         return redirect()->route('special-payroll.newly-hired.index')
             ->with('success', 'Payroll record deleted.');
+    }
+
+    /**
+     * Generate and download a payslip PDF for a released newly-hired /
+     * transferee pro-rated payroll batch.
+     *
+     * Goal 2(A) — the "cheap path": a dedicated, DomPDF-safe single-slip
+     * template (payroll::special-payroll.newly-hired-payslip), not a wrap
+     * of the screen-only register view (that view's CSS/JS — stepper,
+     * SweetAlert, app-layout chrome — isn't DomPDF-renderable as-is).
+     * Reuses the same computation path as newHireShow() so the numbers on
+     * the slip always match what's shown on the batch page.
+     *
+     * Gated on status === 'released' only — there is no 'locked' state on
+     * SpecialPayrollBatch, and nothing in this controller currently
+     * supports amending a released record, so 'released' alone is a
+     * sufficient and stable gate.
+     */
+    public function newHirePayslip(int $id)
+    {
+        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+
+        $batch = SpecialPayrollBatch::with('employee.division', 'allowances')
+            ->where('type', 'newly_hired')
+            ->findOrFail($id);
+
+        if ($batch->status !== 'released') {
+            return back()->with('error', 'Payslips are only available once the batch is released.');
+        }
+
+        $employee = $batch->employee;
+
+        /** @var NewlyHiredPayrollService $service */
+        $service = app(NewlyHiredPayrollService::class);
+
+        $allowanceLines = $batch->allowances->map(fn ($a) => [
+            'allowance_type_id' => $a->allowance_type_id,
+            'code'              => $a->code,
+            'name'              => $a->name,
+            'full_amount'       => (float) $a->full_amount,
+            'amount'            => (float) $a->amount,
+        ])->all();
+
+        $result = $service->compute(
+            employee:          $employee,
+            effectivity_date:  $batch->effectivity_date->toDateString(),
+            cutoff_start:      $batch->period_start->toDateString(),
+            cutoff_end:        $batch->period_end->toDateString(),
+            lwop_days:         0,
+            tardiness_minutes: 0,
+            gsisRate:          $batch->gsis_rate_applied ?? NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE,
+            allowanceLines:    $allowanceLines
+        );
+
+        $typeLabel = match ($batch->type) {
+            'transferee' => 'Transferee',
+            'others'     => 'Others',
+            default      => 'Newly Hired',
+        };
+
+        $signatory = Signatory::where('role_type', 'hrmo_designate')
+            ->where('is_active', true)
+            ->first();
+
+        $pdf = Pdf::loadView('payroll::special-payroll.newly-hired-payslip', compact(
+            'batch', 'employee', 'result', 'typeLabel', 'signatory'
+        ))
+        ->setPaper('a4', 'portrait')
+        ->setOptions([
+            'defaultFont'          => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled'      => true,
+            'dpi'                  => 96,
+        ]);
+
+        $filename = 'payslip_special_'
+            . str_replace([' ', ',', '.'], '_', $employee->full_name)
+            . "_{$batch->year}_{$batch->month}.pdf";
+
+        return $pdf->download($filename);
     }
 
     // =====================================================================

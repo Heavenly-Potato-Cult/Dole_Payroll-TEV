@@ -188,6 +188,59 @@
 
 /* ── Computation table (desktop) ── */
 .comp-wrap { overflow-x: auto; margin-bottom: 20px; }
+
+/* ── Allowances breakdown modal ── */
+.allowance-total-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+@media print {
+    .allowance-total-btn { text-decoration: none; cursor: default; }
+}
+.allowance-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(13, 28, 85, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+.allowance-modal {
+    background: #fff;
+    border-radius: 10px;
+    width: 320px;
+    max-width: 90vw;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+    overflow: hidden;
+}
+.allowance-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #1A2B6B;
+    color: #fff;
+}
+.allowance-modal-header strong { font-size: 0.9rem; }
+.allowance-modal-header button {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.allowance-modal-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.allowance-modal-table td { padding: 8px 16px; border-bottom: 1px solid #EEF1FA; }
+.allowance-modal-table tfoot td { border-top: 1.5px solid #1A2B6B; border-bottom: none; font-weight: 700; padding-top: 10px; }
 .comp-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; white-space: nowrap; }
 .comp-table thead th {
     background: var(--navy); color: white;
@@ -272,21 +325,21 @@
 
 /* ── Mobile overrides ── */
 @media (max-width: 768px) {
-    .approval-stepper { 
-        padding: 15px 5%; 
+    .approval-stepper {
+        padding: 15px 5%;
         height: auto;
         flex-direction: column;
         gap: 15px;
     }
-    
+
     .approval-stepper::before {
         display: none;
     }
-    
+
     .approval-stepper .progress-fill {
         display: none;
     }
-    
+
     .approval-step {
         flex-direction: row;
         justify-content: flex-start;
@@ -295,17 +348,17 @@
         border-radius: 6px;
         background: white;
     }
-    
+
     .approval-step-dot {
         margin-bottom: 0;
         margin-right: 12px;
     }
-    
+
     .approval-step-label {
         text-align: left;
         margin-bottom: 0;
     }
-    
+
     .approval-step-sub {
         margin-top: 2px;
     }
@@ -345,6 +398,23 @@
 
     $periodLabel      = $batch->period_start->format('M d') . '–' . $batch->period_end->format('d, Y');
     $effectivityFmt   = $batch->effectivity_date->format('M d, Y');
+
+    // PERA is folded in here even though it's a separate first-class field
+    // in NewlyHiredPayrollService::compute() — to the payroll officer
+    // reading this register, PERA is just another allowance type (it's
+    // literally an AllowanceType row in the CMS), so it belongs in the
+    // same breakdown as RATA/etc rather than getting its own columns.
+    $allowanceBreakdown = collect([
+        ['name' => 'PERA', 'code' => 'PERA', 'amount' => (float) $result['pera_earned']],
+    ])->concat(
+        collect($result['allowance_lines'] ?? [])->map(fn ($l) => [
+            'name'   => $l['name'],
+            'code'   => $l['code'],
+            'amount' => (float) $l['amount'],
+        ])
+    )->values();
+
+    $allowancesTotalForDisplay = round($allowanceBreakdown->sum('amount'), 2);
 
     $canApprove = auth()->user()->hasRole('accountant') && $batch->status === 'draft';
     $canRelease = auth()->user()->hasAnyRole(['ard', 'chief_admin_officer']) && $batch->status === 'approved';
@@ -454,6 +524,13 @@
                         </button>
                     </form>
                 @endif
+
+                @if ($batch->status === 'released')
+                    <a href="{{ route('special-payroll.newly-hired.payslip', $batch->id) }}"
+                       class="btn btn-gold btn-sm no-print" target="_blank">
+                        ⬇ Download Payslip
+                    </a>
+                @endif
             </div>
         </div>
 
@@ -461,7 +538,7 @@
         <div class="approval-stepper no-print">
             <!-- Progress fill line -->
             <div class="progress-fill" style="width: {{ ($activeStep / (count($steps) - 1)) * 100 }}%;"></div>
-            
+
             @foreach ($steps as $i => $step)
                 @php
                     if ($i < $activeStep) {
@@ -540,7 +617,10 @@
             </div>
             <div class="doc-meta-item">
                 <span class="label">Working Days</span>
-                <span class="value">{{ $result['working_days'] }} of 22</span>
+                <span class="value">{{ $result['working_days'] }} day(s)</span>
+                <div style="font-size:0.68rem; color:var(--text-light); font-weight:400; margin-top:2px;">
+                    Salary rate uses a fixed 22-day divisor
+                </div>
             </div>
         </div>
 
@@ -556,12 +636,12 @@
                 <span class="ms-value">₱{{ number_format($result['salary_earned'], 2) }}</span>
             </div>
             <div class="mobile-summary-row">
-                <span class="ms-label">PERA Allowance</span>
-                <span class="ms-value">₱{{ number_format($result['pera'], 2) }}</span>
-            </div>
-            <div class="mobile-summary-row">
-                <span class="ms-label">PERA Earned</span>
-                <span class="ms-value">₱{{ number_format($result['pera_earned'], 2) }}</span>
+                <span class="ms-label">Allowances</span>
+                <span class="ms-value">
+                    <button type="button" class="allowance-total-btn" onclick="openAllowanceBreakdown()">
+                        ₱{{ number_format($allowancesTotalForDisplay, 2) }}
+                    </button>
+                </span>
             </div>
             <div class="mobile-summary-row" style="background:var(--surface-alt, #f0f2fa);">
                 <span class="ms-label">Total Earned</span>
@@ -569,7 +649,12 @@
             </div>
             <div class="mobile-summary-section">Deductions</div>
             <div class="mobile-summary-row">
-                <span class="ms-label">GSIS Personal Share</span>
+                <span class="ms-label">
+                    GSIS Personal Share
+                    @if (! (($batch->gsis_rate_applied ?? 0) > 0))
+                        <span style="font-size:0.68rem; color:var(--text-light); font-weight:400;">(not applied)</span>
+                    @endif
+                </span>
                 <span class="ms-value" style="color:#B71C1C;">₱{{ number_format($result['gsis_ps'], 2) }}</span>
             </div>
             <div class="mobile-summary-row">
@@ -602,11 +687,9 @@
                         <th style="width:32px;">#</th>
                         <th>Name</th>
                         <th>Position</th>
-                        <th>Assumption to Duty</th>
                         <th class="text-right">Basic Salary</th>
                         <th class="text-right">Salary Earned</th>
-                        <th class="text-right">PERA Allowance</th>
-                        <th class="text-right">PERA Earned</th>
+                        <th class="text-right">Allowances</th>
                         <th class="text-right">Total Earned</th>
                         <th class="text-right">GSIS PS</th>
                         <th class="text-right">PHIC</th>
@@ -625,11 +708,14 @@
                             @if ($employee->middle_name) {{ substr($employee->middle_name, 0, 1) }}. @endif
                         </td>
                         <td class="text-muted">{{ $employee->position_title ?? '—' }}</td>
-                        <td>{{ $effectivityFmt }}</td>
                         <td class="text-right">₱{{ number_format($result['basic_salary'],    2) }}</td>
                         <td class="text-right">₱{{ number_format($result['salary_earned'],   2) }}</td>
-                        <td class="text-right">₱{{ number_format($result['pera'],            2) }}</td>
-                        <td class="text-right">₱{{ number_format($result['pera_earned'],     2) }}</td>
+                        <td class="text-right">
+                            <button type="button" class="allowance-total-btn"
+                                    onclick="openAllowanceBreakdown()">
+                                ₱{{ number_format($allowancesTotalForDisplay, 2) }}
+                            </button>
+                        </td>
                         <td class="text-right fw-bold">₱{{ number_format($result['net_earned'], 2) }}</td>
                         <td class="text-right" style="color:#B71C1C;">₱{{ number_format($result['gsis_ps'], 2) }}</td>
                         <td class="text-right text-muted">₱{{ number_format($result['phic'],   2) }}</td>
@@ -642,11 +728,10 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colspan="4" style="color:rgba(255,255,255,0.6); font-size:0.78rem;">TOTALS — 1 employee</td>
+                        <td colspan="3" style="color:rgba(255,255,255,0.6); font-size:0.78rem;">TOTALS — 1 employee</td>
                         <td class="text-right">₱{{ number_format($result['basic_salary'],    2) }}</td>
                         <td class="text-right gold-text">₱{{ number_format($result['salary_earned'],   2) }}</td>
-                        <td class="text-right">₱{{ number_format($result['pera'],            2) }}</td>
-                        <td class="text-right gold-text">₱{{ number_format($result['pera_earned'],     2) }}</td>
+                        <td class="text-right gold-text">₱{{ number_format($allowancesTotalForDisplay, 2) }}</td>
                         <td class="text-right gold-text">₱{{ number_format($result['net_earned'],      2) }}</td>
                         <td class="text-right red-text">₱{{ number_format($result['gsis_ps'],         2) }}</td>
                         <td class="text-right">₱{{ number_format($result['phic'],   2) }}</td>
@@ -750,4 +835,42 @@
     </div>
 </div>
 
+{{-- ── Allowances breakdown modal (PERA + any other applied types) ── --}}
+<div id="allowanceModal" class="allowance-modal-overlay no-print"
+     onclick="if (event.target === this) closeAllowanceBreakdown()">
+    <div class="allowance-modal">
+        <div class="allowance-modal-header">
+            <strong>Allowances Breakdown</strong>
+            <button type="button" onclick="closeAllowanceBreakdown()" aria-label="Close">&times;</button>
+        </div>
+        <table class="allowance-modal-table">
+            <tbody>
+                @foreach ($allowanceBreakdown as $line)
+                <tr>
+                    <td>{{ $line['name'] }}</td>
+                    <td class="text-right">₱{{ number_format($line['amount'], 2) }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td>Total</td>
+                    <td class="text-right">₱{{ number_format($allowancesTotalForDisplay, 2) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+@endsection
+
+@section('scripts')
+<script>
+function openAllowanceBreakdown() {
+    document.getElementById('allowanceModal').style.display = 'flex';
+}
+function closeAllowanceBreakdown() {
+    document.getElementById('allowanceModal').style.display = 'none';
+}
+</script>
 @endsection

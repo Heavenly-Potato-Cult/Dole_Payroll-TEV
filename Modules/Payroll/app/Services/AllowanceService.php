@@ -16,9 +16,9 @@ class AllowanceService
     /**
      * Resolve allowance lines for an employee in a payroll period.
      *
-     * Sources (later sources override earlier for the same type):
-     *   1. Active employee_allowances (standing/recurring)
-     *   2. Approved/released allowance_assignment entries for the same period
+     * Thin wrapper around resolveForPeriod() — kept for backward
+     * compatibility with existing PayrollBatch call sites. No behavior
+     * change vs. the previous implementation.
      *
      * @return array<int, array{allowance_type_id: int, code: string, name: string, amount: float}>
      */
@@ -31,6 +31,40 @@ class AllowanceService
             ? Carbon::parse($batch->period_end)
             : $periodStart->copy()->endOfMonth();
 
+        return $this->resolveForPeriod(
+            $employee,
+            (int) $batch->period_year,
+            (int) $batch->period_month,
+            $periodStart,
+            $periodEnd
+        );
+    }
+
+    /**
+     * Resolve allowance lines for an employee over an arbitrary period.
+     *
+     * This is the extracted core of what used to live only in
+     * resolveForPayroll(), so both the regular PayrollBatch flow and any
+     * other batch type (e.g. SpecialPayrollBatch, which is a different
+     * Eloquent model and can't be type-hinted here) can share one
+     * resolution/precedence path instead of forking the logic.
+     *
+     * Sources (later sources override earlier for the same allowance type):
+     *   1. Active employee_allowances (standing/recurring)
+     *   2. Legacy PERA fallback (employee.pera column, if no standing PERA line)
+     *   3. Released allowance_assignment entries for the same period_year +
+     *      period_month (applies regardless of caller — no special-casing
+     *      of newly-hired employees here; see Goal-1 Q2 discussion)
+     *
+     * @return array<int, array{allowance_type_id: int, code: string, name: string, amount: float}>
+     */
+    public function resolveForPeriod(
+        Employee $employee,
+        int $periodYear,
+        int $periodMonth,
+        Carbon $periodStart,
+        Carbon $periodEnd
+    ): array {
         $lines = [];
 
         // --- 1. Standing / recurring allowances -----------------------------------
@@ -67,9 +101,9 @@ class AllowanceService
         $assignmentEntries = AllowanceAssignmentEntry::query()
             ->with(['allowanceType', 'assignment'])
             ->where('employee_id', $employee->id)
-            ->whereHas('assignment', function ($q) use ($batch) {
-                $q->where('period_year', $batch->period_year)
-                  ->where('period_month', $batch->period_month)
+            ->whereHas('assignment', function ($q) use ($periodYear, $periodMonth) {
+                $q->where('period_year', $periodYear)
+                  ->where('period_month', $periodMonth)
                   ->whereIn('status', ['released']);
             })
             ->get()
@@ -190,6 +224,48 @@ class AllowanceService
         }
 
         return $amounts;
+    }
+
+    /**
+     * Filter resolved allowance lines down to a selected set of allowance
+     * type IDs and pro-rate each by (working_days / divisor), rounding the
+     * same way NewlyHiredPayrollService rounds basic salary and PERA.
+     *
+     * PERA is always excluded here — it's already a first-class column in
+     * NewlyHiredPayrollService::compute() (pro-rated separately from
+     * employee->pera), so including it again via the generic allowance
+     * path would double-count it.
+     *
+     * @param  array<int, array{allowance_type_id:int, code:string, name:string, amount:float}>  $lines
+     * @param  int[]  $selectedTypeIds  Allowance type IDs the preparer checked in the UI
+     * @return array<int, array{allowance_type_id:int, code:string, name:string, full_amount:float, amount:float}>
+     */
+    public function proRateLines(array $lines, array $selectedTypeIds, int $workingDays, int $divisor = 22): array
+    {
+        $selected = array_flip($selectedTypeIds);
+
+        $result = [];
+        foreach ($lines as $line) {
+            if ($line['code'] === 'PERA') {
+                continue;
+            }
+            if (! isset($selected[$line['allowance_type_id']])) {
+                continue;
+            }
+
+            $fullAmount = (float) $line['amount'];
+            $prorated   = round(($fullAmount / $divisor) * $workingDays, 2);
+
+            $result[] = [
+                'allowance_type_id' => $line['allowance_type_id'],
+                'code'              => $line['code'],
+                'name'              => $line['name'],
+                'full_amount'       => round($fullAmount, 2),
+                'amount'            => $prorated,
+            ];
+        }
+
+        return $result;
     }
 
     private function lineFromType(AllowanceType $type, float $amount): array

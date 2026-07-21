@@ -123,8 +123,15 @@ Route::middleware(['auth'])->group(function () {
 
             Route::get('/newly-hired',              [SpecialPayrollController::class, 'newHireIndex'])    ->name('newly-hired.index');
             Route::get('/newly-hired/create',       [SpecialPayrollController::class, 'newHireCreate'])   ->name('newly-hired.create');
+            // Must be registered BEFORE /newly-hired/{id} — same reasoning as
+            // the deduction-types/categories route ordering elsewhere in this
+            // file: otherwise "allowances-preview" gets swallowed as an {id}.
+            Route::get('/newly-hired/allowances-preview',
+                                                     [SpecialPayrollController::class, 'newHireAllowancesPreview'])
+                                                                                                            ->name('newly-hired.allowances-preview');
             Route::post('/newly-hired',             [SpecialPayrollController::class, 'newHireStore'])    ->name('newly-hired.store');
             Route::get('/newly-hired/{id}',         [SpecialPayrollController::class, 'newHireShow'])     ->name('newly-hired.show');
+            Route::get('/newly-hired/{id}/payslip', [SpecialPayrollController::class, 'newHirePayslip'])  ->name('newly-hired.payslip');
             Route::post('/newly-hired/{id}/approve',[SpecialPayrollController::class, 'newHireApprove'])  ->name('newly-hired.approve');
             Route::delete('/newly-hired/{id}',      [SpecialPayrollController::class, 'newHireDestroy'])  ->name('newly-hired.destroy');
 

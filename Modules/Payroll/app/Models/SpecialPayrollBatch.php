@@ -7,9 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * SpecialPayrollBatch
- * 
+ *
  * Covers: newly_hired, salary_differential, nosi, nosa, step_increment, generic_special
- * 
+ *
  * Table columns (from migration 2026_03_20_200011_create_special_payroll_batches_table):
  *   id, type, title, year, month, effectivity_date,
  *   period_start, period_end, employee_id,
@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *   old_position, new_position, pro_rated_days,
  *   gross_amount, deductions_amount, net_amount,
  *   status, approved_by, approved_at, remarks, timestamps
- * 
+ *
  * @property int $id
  * @property string $type
  * @property string $title
@@ -41,7 +41,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $remarks
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
- * 
+ *
  * @property-read \App\SharedKernel\Models\Employee $employee
  * @property-read \App\Models\User $approver
  * @property-read \App\Models\User $creator
@@ -69,6 +69,7 @@ class SpecialPayrollBatch extends Model
         'pro_rated_days',
         'gross_amount',
         'deductions_amount',
+        'gsis_rate_applied',
         'net_amount',
         'status',
         'approved_by',
@@ -87,6 +88,7 @@ class SpecialPayrollBatch extends Model
         'pro_rated_days'   => 'decimal:3',
         'gross_amount'     => 'decimal:2',
         'deductions_amount'=> 'decimal:2',
+        'gsis_rate_applied'=> 'decimal:4',
         'net_amount'       => 'decimal:2',
     ];
     // ── Relationships ──────────────────────────────────────────────────────
@@ -99,6 +101,19 @@ class SpecialPayrollBatch extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'approved_by');
+    }
+
+    /**
+     * Optional allowance lines (RATA/etc) applied to this batch — currently
+     * only populated for type = newly_hired / transferee via
+     * NewlyHiredPayrollService + AllowanceService::proRateLines().
+     */
+    public function allowances()
+    {
+        return $this->hasMany(
+            \Modules\Payroll\Models\Allowances\SpecialPayrollBatchAllowance::class,
+            'special_payroll_batch_id'
+        );
     }
 
     public function creator(): BelongsTo
