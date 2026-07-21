@@ -28,26 +28,43 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('special_payroll_batches', function (Blueprint $table) {
-            $table->unsignedTinyInteger('old_step')->nullable()->after('differential_amount');
-            $table->unsignedTinyInteger('new_step')->nullable()->after('old_step');
-            $table->unsignedTinyInteger('old_salary_grade')->nullable()->after('new_step');
-            $table->unsignedTinyInteger('new_salary_grade')->nullable()->after('old_salary_grade');
-            $table->string('old_position')->nullable()->after('new_salary_grade');
-            $table->string('new_position')->nullable()->after('old_position');
+            if (! Schema::hasColumn('special_payroll_batches', 'old_step')) {
+                $table->unsignedTinyInteger('old_step')->nullable()->after('differential_amount');
+            }
+            if (! Schema::hasColumn('special_payroll_batches', 'new_step')) {
+                $table->unsignedTinyInteger('new_step')->nullable()->after('old_step');
+            }
+            if (! Schema::hasColumn('special_payroll_batches', 'old_salary_grade')) {
+                $table->unsignedTinyInteger('old_salary_grade')->nullable()->after('new_step');
+            }
+            if (! Schema::hasColumn('special_payroll_batches', 'new_salary_grade')) {
+                $table->unsignedTinyInteger('new_salary_grade')->nullable()->after('old_salary_grade');
+            }
+            if (! Schema::hasColumn('special_payroll_batches', 'old_position')) {
+                $table->string('old_position')->nullable()->after('new_salary_grade');
+            }
+            if (! Schema::hasColumn('special_payroll_batches', 'new_position')) {
+                $table->string('new_position')->nullable()->after('old_position');
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('special_payroll_batches', function (Blueprint $table) {
-            $table->dropColumn([
+            $cols = [
                 'old_step',
                 'new_step',
                 'old_salary_grade',
                 'new_salary_grade',
                 'old_position',
                 'new_position',
-            ]);
+            ];
+
+            $existing = array_filter($cols, fn ($col) => Schema::hasColumn('special_payroll_batches', $col));
+            if (! empty($existing)) {
+                $table->dropColumn(array_values($existing));
+            }
         });
     }
 };
