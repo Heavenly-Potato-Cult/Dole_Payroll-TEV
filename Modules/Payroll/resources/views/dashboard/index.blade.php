@@ -83,7 +83,7 @@
         align-items: flex-start;
         gap: 8px;
     }
-    
+
     .db-greeting .db-role-pill {
         align-self: flex-start;
     }
@@ -443,6 +443,19 @@
 }
 .db-chart-wrap { position: relative; width: 100%; max-height: 190px; }
 
+.db-chart-toggle { display: flex; gap: 4px; flex-shrink: 0; }
+.db-chart-tab {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+}
+.db-chart-tab.active { background: var(--navy); border-color: var(--navy); color: #fff; }
+
 /* ── System info ─────────────────────────────────────────────── */
 .db-sysinfo { padding: 14px 16px; }
 .db-sysinfo-row {
@@ -791,6 +804,15 @@
                         All clear
                     @endif
                 </div>
+                @if(($pendingSpecialTotal ?? 0) > 0)
+                <div class="db-breakdown">
+                    @foreach($pendingSpecialByType as $spType => $spCount)
+                        @if($spCount > 0)
+                        <span class="db-breakdown-pill db-bp-payroll">{{ $spCount }} {{ $specialTypeLabels[$spType] ?? ucwords(str_replace('_',' ',$spType)) }}</span>
+                        @endif
+                    @endforeach
+                </div>
+                @endif
             </div>
             <div class="db-stat-tag">Payroll</div>
         </div>
@@ -805,15 +827,14 @@
     <div class="db-stat neutral">
         <div class="db-stat-left">
             <div>
-                @php $spPending = \Modules\Payroll\Models\SpecialPayrollBatch::whereIn('status',['draft','computed'])->count(); @endphp
                 <div class="db-stat-title">Special Payroll</div>
-                <div class="db-stat-subtitle">Draft / computed batches</div>
+                <div class="db-stat-subtitle">Draft batches, all types</div>
             </div>
             <div class="db-stat-tag">Payroll</div>
         </div>
         <div class="db-stat-divider"></div>
         <div class="db-stat-right">
-            <div class="db-stat-value">{{ $spPending }}</div>
+            <div class="db-stat-value">{{ $pendingSpecialTotal }}</div>
         </div>
     </div>
     @endrole
@@ -837,7 +858,10 @@
         <div class="db-stat-left">
             <div>
                 <div class="db-stat-title">Payroll for Review</div>
-                <div class="db-stat-subtitle">Awaiting accountant cert.</div>
+                <div class="db-stat-subtitle">
+                    Awaiting accountant cert.
+                    @if($pendingSpecialTotal > 0) &middot; {{ $pendingSpecialTotal }} special @endif
+                </div>
             </div>
             <div class="db-stat-tag">Payroll</div>
         </div>
@@ -852,7 +876,10 @@
         <div class="db-stat-left">
             <div>
                 <div class="db-stat-title">Payroll for Approval</div>
-                <div class="db-stat-subtitle">Acct. certified, needs RD</div>
+                <div class="db-stat-subtitle">
+                    Acct. certified, needs RD
+                    @if($pendingSpecialTotal > 0) &middot; {{ $pendingSpecialTotal }} special @endif
+                </div>
             </div>
             <div class="db-stat-tag">Payroll</div>
         </div>
@@ -896,7 +923,7 @@
     <div class="db-stat purple">
         <div class="db-stat-left">
             <div>
-                @php 
+                @php
                 $officerRoles = ['super_admin', 'payroll_officer', 'hrmo', 'cashier', 'accountant', 'ard', 'budget_officer', 'chief_admin_officer'];
                 $totalUsers = \App\Models\User::whereHas('roles', function($query) use ($officerRoles) {
                     $query->whereIn('name', $officerRoles);
@@ -1121,7 +1148,13 @@
 
         @if($recentPayroll->isNotEmpty())
         <div class="db-card">
-            <div class="db-card-head"><h3>📊 Payroll Status Overview</h3></div>
+            <div class="db-card-head">
+                <h3>📊 Payroll Status Overview</h3>
+                <div class="db-chart-toggle">
+                    <button type="button" class="db-chart-tab active" data-chart-tab="regular">Regular</button>
+                    <button type="button" class="db-chart-tab" data-chart-tab="special">Special</button>
+                </div>
+            </div>
             <div class="db-chart-body">
                 <div class="db-chart-wrap"><canvas id="payrollChart"></canvas></div>
             </div>
@@ -1144,6 +1177,17 @@
                     <a href="{{ route('special-payroll.newly-hired.index') }}" class="db-action-btn">
                         <span class="db-action-left">🆕 Newly Hired Payroll</span><span>→</span>
                     </a>
+                    @foreach($pendingSpecialByType as $spType => $spCount)
+                        @continue($spCount <= 0)
+                        @php $spRoute = $specialTypeIndexRoutes[$spType] ?? null; @endphp
+                        @if($spRoute && \Illuminate\Support\Facades\Route::has($spRoute))
+                        <a href="{{ route($spRoute) }}?status=draft" class="db-action-btn primary">
+                            <span class="db-action-left">📋 Review {{ $specialTypeLabels[$spType] ?? ucwords(str_replace('_',' ',$spType)) }} Drafts
+                                <span class="db-action-count">{{ $spCount }}</span>
+                            </span><span>→</span>
+                        </a>
+                        @endif
+                    @endforeach
                 </div>
                 <div class="db-actions-col">
                     <div class="db-action-sep">Reports & Admin</div>
@@ -1211,35 +1255,28 @@
             </div>
             <div class="db-card-body">
                 @php
-                    $nhPending   = \Modules\Payroll\Models\SpecialPayrollBatch::where('type','newly_hired')->whereIn('status',['draft','computed'])->count();
-                    $diffPending = \Modules\Payroll\Models\SpecialPayrollBatch::where('type','salary_differential')->whereIn('status',['draft','computed'])->count();
-                    $nosiPending = \Modules\Payroll\Models\SpecialPayrollBatch::whereIn('type',['nosi','nosa'])->whereIn('status',['draft','computed'])->count();
-                    $nhTotal     = \Modules\Payroll\Models\SpecialPayrollBatch::where('type','newly_hired')->count();
-                    $diffTotal   = \Modules\Payroll\Models\SpecialPayrollBatch::where('type','salary_differential')->count();
-                    $nosiTotal   = \Modules\Payroll\Models\SpecialPayrollBatch::whereIn('type',['nosi','nosa'])->count();
+                    // Pending counts are already scoped to this user's queue
+                    // (Payroll Officer prepares — so "pending" here means
+                    // draft) by DashboardController::index(). Totals are
+                    // all-time counts regardless of status.
+                    $spModuleIcons = [
+                        'newly_hired'         => '🆕',
+                        'salary_differential' => '📈',
+                        'nosi'                => '📑',
+                        'nosa'                => '📑',
+                        'generic_special'     => '💵',
+                    ];
                 @endphp
                 <table class="db-mini-table">
+                    @foreach(['newly_hired','salary_differential','nosi','nosa','generic_special'] as $spType)
                     <tr>
-                        <td class="db-mt-label">🆕 Newly Hired</td>
+                        <td class="db-mt-label">{{ $spModuleIcons[$spType] ?? '📋' }} {{ $specialTypeLabels[$spType] ?? ucwords(str_replace('_',' ',$spType)) }}</td>
                         <td class="db-mt-val">
-                            {{ $nhTotal }} total
-                            @if($nhPending > 0)<span class="db-breakdown-pill db-bp-payroll" style="margin-left:6px;">{{ $nhPending }} pending</span>@endif
+                            {{ $specialTotalsByType[$spType] ?? 0 }} total
+                            @if(($pendingSpecialByType[$spType] ?? 0) > 0)<span class="db-breakdown-pill db-bp-payroll" style="margin-left:6px;">{{ $pendingSpecialByType[$spType] }} pending</span>@endif
                         </td>
                     </tr>
-                    <tr>
-                        <td class="db-mt-label">📈 Salary Differential</td>
-                        <td class="db-mt-val">
-                            {{ $diffTotal }} total
-                            @if($diffPending > 0)<span class="db-breakdown-pill db-bp-payroll" style="margin-left:6px;">{{ $diffPending }} pending</span>@endif
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="db-mt-label">📑 NOSI / NOSA</td>
-                        <td class="db-mt-val">
-                            {{ $nosiTotal }} total
-                            @if($nosiPending > 0)<span class="db-breakdown-pill db-bp-payroll" style="margin-left:6px;">{{ $nosiPending }} pending</span>@endif
-                        </td>
-                    </tr>
+                    @endforeach
                     <tr>
                         <td class="db-mt-label">👤 Active Employees</td>
                         <td class="db-mt-val">{{ $totalEmployees }}</td>
@@ -1259,7 +1296,13 @@
 
         @if($recentPayroll->isNotEmpty())
         <div class="db-card">
-            <div class="db-card-head"><h3>📊 Payroll Status Overview</h3></div>
+            <div class="db-card-head">
+                <h3>📊 Payroll Status Overview</h3>
+                <div class="db-chart-toggle">
+                    <button type="button" class="db-chart-tab active" data-chart-tab="regular">Regular</button>
+                    <button type="button" class="db-chart-tab" data-chart-tab="special">Special</button>
+                </div>
+            </div>
             <div class="db-chart-body">
                 <div class="db-chart-wrap"><canvas id="payrollChart"></canvas></div>
             </div>
@@ -1293,6 +1336,17 @@
                     <a href="{{ route('special-payroll.nosi-nosa.create') }}" class="db-action-btn">
                         <span class="db-action-left">📑 NOSI / NOSA</span><span>→</span>
                     </a>
+                    @foreach($pendingSpecialByType as $spType => $spCount)
+                        @continue($spCount <= 0)
+                        @php $spRoute = $specialTypeIndexRoutes[$spType] ?? null; @endphp
+                        @if($spRoute && \Illuminate\Support\Facades\Route::has($spRoute))
+                        <a href="{{ route($spRoute) }}?status=draft" class="db-action-btn primary">
+                            <span class="db-action-left">📋 Review {{ $specialTypeLabels[$spType] ?? ucwords(str_replace('_',' ',$spType)) }} Drafts
+                                <span class="db-action-count">{{ $spCount }}</span>
+                            </span><span>→</span>
+                        </a>
+                        @endif
+                    @endforeach
                 </div>
 
                 <div class="db-actions-col">
@@ -1396,7 +1450,13 @@
     <div class="db-row">
         @if($recentPayroll->isNotEmpty())
         <div class="db-card">
-            <div class="db-card-head"><h3>📊 Payroll Status Overview</h3></div>
+            <div class="db-card-head">
+                <h3>📊 Payroll Status Overview</h3>
+                <div class="db-chart-toggle">
+                    <button type="button" class="db-chart-tab active" data-chart-tab="regular">Regular</button>
+                    <button type="button" class="db-chart-tab" data-chart-tab="special">Special</button>
+                </div>
+            </div>
             <div class="db-chart-body">
                 <div class="db-chart-wrap"><canvas id="payrollChart"></canvas></div>
             </div>
@@ -1412,6 +1472,17 @@
                             @if($pendingPayroll > 0)<span class="db-action-count">{{ $pendingPayroll }}</span>@endif
                         </span><span>→</span>
                     </a>
+                    @foreach($pendingSpecialByType as $spType => $spCount)
+                        @continue($spCount <= 0)
+                        @php $spRoute = $specialTypeIndexRoutes[$spType] ?? null; @endphp
+                        @if($spRoute && \Illuminate\Support\Facades\Route::has($spRoute))
+                        <a href="{{ route($spRoute) }}?status=draft" class="db-action-btn primary">
+                            <span class="db-action-left">📋 Certify {{ $specialTypeLabels[$spType] ?? ucwords(str_replace('_',' ',$spType)) }}
+                                <span class="db-action-count">{{ $spCount }}</span>
+                            </span><span>→</span>
+                        </a>
+                        @endif
+                    @endforeach
                 </div>
                 <div class="db-actions-col">
                     <div class="db-action-sep">TEV &amp; Reports</div>
@@ -1505,7 +1576,13 @@
     <div class="db-row">
         @if($recentPayroll->isNotEmpty())
         <div class="db-card">
-            <div class="db-card-head"><h3>📊 Payroll Status Overview</h3></div>
+            <div class="db-card-head">
+                <h3>📊 Payroll Status Overview</h3>
+                <div class="db-chart-toggle">
+                    <button type="button" class="db-chart-tab active" data-chart-tab="regular">Regular</button>
+                    <button type="button" class="db-chart-tab" data-chart-tab="special">Special</button>
+                </div>
+            </div>
             <div class="db-chart-body">
                 <div class="db-chart-wrap"><canvas id="payrollChart"></canvas></div>
             </div>
@@ -1521,6 +1598,17 @@
                             @if($pendingPayroll > 0)<span class="db-action-count">{{ $pendingPayroll }}</span>@endif
                         </span><span>→</span>
                     </a>
+                    @foreach($pendingSpecialByType as $spType => $spCount)
+                        @continue($spCount <= 0)
+                        @php $spRoute = $specialTypeIndexRoutes[$spType] ?? null; @endphp
+                        @if($spRoute && \Illuminate\Support\Facades\Route::has($spRoute))
+                        <a href="{{ route($spRoute) }}?status=approved" class="db-action-btn primary">
+                            <span class="db-action-left">📋 Release {{ $specialTypeLabels[$spType] ?? ucwords(str_replace('_',' ',$spType)) }}
+                                <span class="db-action-count">{{ $spCount }}</span>
+                            </span><span>→</span>
+                        </a>
+                        @endif
+                    @endforeach
                 </div>
                 <div class="db-actions-col">
                     <div class="db-action-sep">TEV &amp; Reports</div>
@@ -1749,30 +1837,48 @@
     var gold   = cs.getPropertyValue('--gold').trim()   || '#F9A825';
     var red    = cs.getPropertyValue('--red').trim()    || '#B71C1C';
 
-    var allLabels = ['Draft','Computed','Pending Accountant','Pending RD','Released','Locked'];
-    var allColors = ['#9090AA', navy, gold, red, '#1B5E20', '#4A148C'];
-    var rawData   = @json(array_values($payrollStatusData));
+    // ── Regular payroll dataset (6-stage pipeline) ──────────────────
+    var regularAllLabels = ['Draft','Computed','Pending Accountant','Pending RD','Released','Locked'];
+    var regularAllColors = ['#9090AA', navy, gold, red, '#1B5E20', '#4A148C'];
+    var regularRaw       = @json(array_values($payrollStatusData));
 
-    var labels = [], data = [], colors = [];
-    for (var i = 0; i < rawData.length; i++) {
-        if (rawData[i] > 0) {
-            labels.push(allLabels[i]);
-            data.push(rawData[i]);
-            colors.push(allColors[i]);
+    // ── Special payroll dataset (3-stage pipeline: draft/approved/released) ──
+    // Uses its own status set — SpecialPayrollBatch doesn't share PayrollBatch's
+    // 6-stage pipeline (no 'computed', 'pending_accountant', 'pending_rd', 'locked').
+    var specialAllLabels = ['Draft','Approved','Released'];
+    var specialAllColors = ['#9090AA', gold, '#1B5E20'];
+    var specialRaw        = @json(array_values($specialStatusData));
+
+    function buildDataset(rawData, allLabels, allColors) {
+        var labels = [], data = [], colors = [];
+        for (var i = 0; i < rawData.length; i++) {
+            if (rawData[i] > 0) {
+                labels.push(allLabels[i]);
+                data.push(rawData[i]);
+                colors.push(allColors[i]);
+            }
         }
+        if (!data.length) { labels = ['No Batches']; data = [1]; colors = ['#9090AA']; }
+        return { labels: labels, data: data, colors: colors };
     }
-    if (!data.length) { labels = ['No Batches']; data = [1]; colors = ['#9090AA']; }
+
+    var datasets = {
+        regular: buildDataset(regularRaw, regularAllLabels, regularAllColors),
+        special: buildDataset(specialRaw, specialAllLabels, specialAllColors)
+    };
 
     var ctx = document.getElementById('payrollChart');
     if (!ctx) return;
 
-    new Chart(ctx, {
+    var initial = datasets.regular;
+
+    var chart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: labels,
+            labels: initial.labels,
             datasets: [{
-                data: data,
-                backgroundColor: colors,
+                data: initial.data,
+                backgroundColor: initial.colors,
                 borderWidth: 3,
                 borderColor: '#ffffff',
                 hoverOffset: 8,
@@ -1794,6 +1900,25 @@
                 }
             }
         }
+    });
+
+    // Wire up the Regular / Special tab toggle. Every dashboard variant
+    // shares the same #payrollChart id + data-chart-tab buttons, so this
+    // one handler covers HRMO, Payroll Officer, Accountant, and ARD layouts.
+    var tabButtons = document.querySelectorAll('[data-chart-tab]');
+    tabButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var key = btn.getAttribute('data-chart-tab');
+            if (!datasets[key]) return;
+
+            tabButtons.forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+
+            chart.data.labels = datasets[key].labels;
+            chart.data.datasets[0].data = datasets[key].data;
+            chart.data.datasets[0].backgroundColor = datasets[key].colors;
+            chart.update();
+        });
     });
 })();
 </script>
