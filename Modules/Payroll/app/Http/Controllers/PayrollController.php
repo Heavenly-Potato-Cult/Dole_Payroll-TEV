@@ -496,11 +496,13 @@ class PayrollController extends Controller
             return back()->with('error', $message);
         }
 
-        // Hard gate — every active entry must have all required compute
-        // components (attendance, deductions, allowances, lwop) applied at
-        // least once across its compute history, not just the last pass.
-        // A batch computed only with all checkboxes unchecked (basic salary
-        // only, nothing ever layered in) is blocked here.
+        // Soft gate (was a hard block) — every active entry is still checked
+        // against the required compute components (attendance, deductions,
+        // allowances, lwop) applied at least once across its compute history.
+        // As of 2026-08-06 this no longer blocks submission: the client
+        // wants incomplete batches submittable, but the gap is preserved in
+        // the audit log for DOLE sign-off traceability instead of being
+        // silently dropped.
         $incomplete = $payroll->entries()
             ->with('employee:id,last_name,first_name')
             ->get()
@@ -510,6 +512,8 @@ class PayrollController extends Controller
             ])
             ->filter(fn ($row) => ! empty($row['missing']));
 
+        $gapWarning = null;
+
         if ($incomplete->isNotEmpty()) {
             $sample = $incomplete->take(5)->map(function ($row) {
                 $name = $row['entry']->employee->full_name ?? "Entry #{$row['entry']->id}";
@@ -517,18 +521,13 @@ class PayrollController extends Controller
             })->implode('; ');
 
             $remaining = $incomplete->count() - 5;
-            $message = "Cannot submit — {$incomplete->count()} employee(s) have never had all required components applied. {$sample}"
-                . ($remaining > 0 ? " and {$remaining} more." : '.')
-                . ' Run Compute with the missing components checked before submitting.';
+            $gapWarning = "Submitted with {$incomplete->count()} employee(s) missing at least one required component: {$sample}"
+                . ($remaining > 0 ? " and {$remaining} more." : '.');
 
-            if ($request->expectsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $message,
-                    'incomplete_count' => $incomplete->count(),
-                ]);
-            }
-            return back()->with('error', $message);
+            // Logged separately from the status-transition entry below so the
+            // audit trail shows the gap as its own event, not buried in the
+            // transition note.
+            $this->log($payroll, 'Submitted with incomplete components', null, $gapWarning);
         }
 
         $old = $payroll->status;
@@ -542,15 +541,21 @@ class PayrollController extends Controller
         $this->log($payroll, 'Submitted — Forwarded to Accountant', $old, 'pending_accountant');
 
         $message = 'Payroll batch submitted. Forwarded to Accountant for certification.';
+        if ($gapWarning) {
+            $message .= " Note: {$gapWarning} Review the audit log before certification.";
+        }
+
         if ($request->expectsJson()) {
             return response()->json([
-                'success' => true,
-                'message' => $message
+                'success'          => true,
+                'message'          => $message,
+                'has_gaps'         => (bool) $gapWarning,
+                'incomplete_count' => $incomplete->count(),
             ]);
         }
 
         return redirect()->route('payroll.show', $payroll)
-            ->with('success', $message);
+            ->with($gapWarning ? 'warning' : 'success', $message);
     }
 
     // hrApprove() REMOVED — Phase 4
@@ -647,6 +652,10 @@ class PayrollController extends Controller
         DB::transaction(function () use ($payroll) {
             foreach ($payroll->entries as $entry) {
                 $entry->deductions()->delete();
+                // Goal 6: delete is no longer draft-only, so entries reaching
+                // here may already have synced allowances (from Compute) —
+                // clean those up too or they'd be orphaned.
+                $entry->allowances()->delete();
             }
             $payroll->entries()->delete();
             $payroll->auditLogs()->delete();

@@ -58,6 +58,10 @@ class PayrollComputationService
      *    whatever was last persisted (or 0 on first compute).
      *  - Entries flagged is_manually_overridden are protected: compute will
      *    refuse to touch them unless $options['force'] === true.
+     *  - When $options['force'] === true, any component that is NOT selected
+     *    this pass is reset to zero / cleared instead of carrying over its
+     *    last-computed value (clean discard). Without force, unselected
+     *    components always carry over unchanged, same as before.
      *
      * Fix log:
      *  2026-06-10  daysWorked is now derived from the attendance array and
@@ -65,6 +69,11 @@ class PayrollComputationService
      *              for employees with LWOP days in the period.
      *  2026-06-30  Added partial-compute support with carry-over semantics
      *              and a manual-override guard (Phase 8).
+     *  2026-08-06  Force Re-compute now performs a clean discard: unchecked
+     *              components reset to zero instead of carrying over when
+     *              force=true. Previously force only bypassed the
+     *              is_manually_overridden guard and had no effect on
+     *              carry-over behavior for unchecked components.
      *
      * @param  Employee               $employee
      * @param  PayrollBatch           $batch
@@ -134,8 +143,17 @@ class PayrollComputationService
             $rataEarned     = $allowanceSum['rata'];
             $totalAllowances = $allowanceSum['total'];
             $allowancesWereTouched = true;
+        } elseif ($force) {
+            // Force discard: unchecked component resets to zero instead of
+            // carrying over, and existing PayrollEntryAllowance rows are
+            // cleared (empty array, not the null sentinel).
+            $peraEarned            = 0.0;
+            $rataEarned            = 0.0;
+            $totalAllowances       = 0.0;
+            $allowanceLines        = [];
+            $allowancesWereTouched = true;
         } else {
-            // Carry over from the existing entry rather than zeroing.
+            // Normal (non-force) recompute: carry over from the existing entry.
             $peraEarned      = (float) ($existing->pera ?? 0);
             $rataEarned      = (float) ($existing->rata ?? 0);
             $totalAllowances = $existing
@@ -163,6 +181,10 @@ class PayrollComputationService
                 ($utHours * $hourlyRate) + ($this->minuteEquivalent($utRemMins) * $dailyRate),
                 2
             );
+        } elseif ($force) {
+            // Force discard: reset instead of carrying over.
+            $tardiness    = 0.0;
+            $undertimeDed = 0.0;
         } else {
             // Carry over.
             $tardiness    = (float) ($existing->tardiness ?? 0);
@@ -173,6 +195,10 @@ class PayrollComputationService
         if ($applyLwop) {
             $lwopDays      = (float) ($attendance['lwop_days'] ?? 0);
             $lwopDeduction = round(($lwopDays / $denominator) * $basicMonthly, 2);
+        } elseif ($force) {
+            // Force discard: reset instead of carrying over.
+            $lwopDeduction = 0.0;
+            $lwopDays      = 0.0;
         } else {
             // Carry over both the deduction amount AND the day count, since
             // the day count feeds GSIS proration below when deductions ARE
@@ -205,6 +231,11 @@ class PayrollComputationService
                 $totalDays
             );
             $statutoryTotal = round(collect($deductionLines)->sum('amount'), 2);
+        } elseif ($force) {
+            // Force discard: clear existing PayrollDeduction rows (empty
+            // array, not the null sentinel) instead of carrying their sum over.
+            $deductionLines = [];
+            $statutoryTotal = 0.0;
         } else {
             // Carry over — don't touch PayrollDeduction rows, just reuse
             // their persisted sum for the recombined total below.

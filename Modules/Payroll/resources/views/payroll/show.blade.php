@@ -181,6 +181,15 @@
 .ded-panel { display: none; background: var(--bg); border-top: 1px solid var(--border); padding: 10px 14px; }
 .ded-panel.open { display: block; }
 
+/* ── Allowances total → breakdown modal (Goal 5) ── */
+.allow-toggle {
+    background: none; border: none; padding: 0; margin: 0;
+    font: inherit; color: var(--navy);
+    text-decoration: underline dotted; text-underline-offset: 2px;
+    cursor: pointer; white-space: nowrap;
+}
+.allow-toggle:hover { color: var(--navy-light); }
+
 /* ── Virtual Scrolling ── */
 .table-wrap {
     overflow-x: auto;
@@ -501,7 +510,9 @@
                 </form>
             @endif
 
-    @if (in_array($payroll->status, ['released', 'locked']))
+    {{-- Goal 3: previously gated to released/locked only. Client wants this
+         available as soon as the batch is computed, not just after submission. --}}
+    @if (in_array($payroll->status, ['computed', 'pending_accountant', 'pending_rd', 'released', 'locked']))
         <a href="{{ route('reports.general-payroll', [
                     'year'   => $payroll->period_year,
                     'month'  => $payroll->period_month,
@@ -715,9 +726,7 @@
                     <col style="width:180px;">
                     <col style="width:80px;">
                     <col style="width:100px;">
-                    @foreach ($allowanceColumns as $col)
-                    <col style="width:85px;">
-                    @endforeach
+                    <col style="width:110px;">
                     <col style="width:110px;">
                     <col style="width:100px;">
                     <col style="width:80px;">
@@ -733,9 +742,7 @@
                         <th style="color:white;">Employee</th>
                         <th style="color:white;">SG–Step</th>
                         <th style="color:white;" class="text-right">Basic Earned</th>
-                        @foreach ($allowanceColumns as $col)
-                        <th style="color:white;" class="text-right">{{ $col->name }}</th>
-                        @endforeach
+                        <th style="color:white;" class="text-right">Allowances</th>
                         <th style="background:rgba(249,168,37,0.22); color:white;" class="text-right">Gross</th>
                         <th style="color:white;" class="text-right">Tardiness</th>
                         <th style="color:white;" class="text-right">LWOP</th>
@@ -756,8 +763,7 @@
                         <col style="width:180px;">
                         <col style="width:80px;">
                         <col style="width:100px;">
-                        <col style="width:85px;">
-                        <col style="width:85px;">
+                        <col style="width:110px;">
                         <col style="width:110px;">
                         <col style="width:100px;">
                         <col style="width:80px;">
@@ -779,9 +785,7 @@
                     <col style="width:180px;">
                     <col style="width:80px;">
                     <col style="width:100px;">
-                    @foreach ($allowanceColumns as $col)
-                    <col style="width:85px;">
-                    @endforeach
+                    <col style="width:110px;">
                     <col style="width:110px;">
                     <col style="width:100px;">
                     <col style="width:80px;">
@@ -802,12 +806,10 @@
                         <td class="text-right" style="color:white;">
                             ₱{{ number_format($payroll->entries->sum('basic_salary'), 2) }}
                         </td>
-                        @foreach ($allowanceColumns as $col)
                         <td class="text-right" style="color:white;">
-                            @php $colTotal = $allowanceTotals[$col->code] ?? 0; @endphp
-                            {{ $colTotal > 0 ? '₱' . number_format($colTotal, 2) : '' }}
+                            @php $allowanceGrandTotal = collect($allowanceTotals)->sum(); @endphp
+                            {{ $allowanceGrandTotal > 0 ? '₱' . number_format($allowanceGrandTotal, 2) : '' }}
                         </td>
-                        @endforeach
                         <td class="text-right" style="color:var(--gold); background:rgba(249,168,37,0.15);">
                             ₱{{ number_format($totalGross, 2) }}
                         </td>
@@ -855,6 +857,22 @@
                         $deductionSummary = implode(', ', $shown) . ($more > 0 ? " +{$more}" : '');
                     }
 
+                    // Goal 5: per-type allowance amounts collapsed into one
+                    // "Allowances" total + a breakdown array (mirrors the
+                    // $deductions pattern above) for the per-row modal.
+                    $entryAllowanceAmounts = $allowanceAmounts($entry);
+                    $allowanceBreakdown = [];
+                    foreach ($allowanceColumns as $col) {
+                        $amt = $entryAllowanceAmounts[$col->code] ?? 0;
+                        if ($amt > 0) {
+                            $allowanceBreakdown[] = [
+                                'name'   => $col->name,
+                                'amount' => $amt,
+                            ];
+                        }
+                    }
+                    $allowancesTotal = round(array_sum($entryAllowanceAmounts), 2);
+
                     $virtualRows[] = [
                         'id' => $entry->id,
                         'index' => $i + 1,
@@ -864,7 +882,8 @@
                         'sg' => $entry->employee->salary_grade,
                         'step' => $entry->employee->step,
                         'basic_salary' => $entry->basic_salary,
-                        'allowances' => $allowanceAmounts($entry),
+                        'allowances_total' => $allowancesTotal,
+                        'allowances_breakdown' => $allowanceBreakdown,
                         'gross_income' => $entry->gross_income,
                         'tardy' => $tardy,
                         'lwop' => $lwop,
@@ -882,7 +901,6 @@
             @endphp
             <script>
                 window.virtualRowData = @json($virtualRows);
-                window.allowanceColumnCodes = @json($allowanceColumns->pluck('code'));
                 window.payrollStatus = @json($payroll->status);
                 window.payrollId = @json($payroll->id);
                 window.canRemoveEntry = @json($canRemoveEntry);
@@ -1319,6 +1337,39 @@ function openDeductionModal(entryId) {
     });
 }
 
+// Goal 5: per-row Allowances breakdown, mirroring openDeductionModal()
+// above rather than the single-row CSS modal from newly-hired-show —
+// this table is virtual-scrolled (many rows via window.virtualRowData),
+// so the per-row lookup + SweetAlert2 pattern already used for
+// deductions fits without adding a second modal implementation.
+function openAllowanceModal(entryId) {
+    const row = (window.virtualRowData || []).find(r => String(r.id) === String(entryId));
+    if (!row) return;
+
+    const lines = (row.allowances_breakdown || []).map(a => `
+        <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #eee;">
+            <span>${a.name}</span>
+            <span>${formatCurrency(a.amount)}</span>
+        </div>
+    `).join('');
+
+    Swal.fire({
+        title: `Allowances Breakdown — ${row.employee_name}`,
+        html: `
+            <div style="text-align:left; font-size:0.88rem; max-height:320px; overflow-y:auto;">
+                ${lines || '<p style="color:#9ca3af;">No allowance lines.</p>'}
+                <div style="display:flex; justify-content:space-between; padding-top:10px; margin-top:6px; border-top:2px solid #0F1B4C; font-weight:700;">
+                    <span>Total</span>
+                    <span>${formatCurrency(row.allowances_total)}</span>
+                </div>
+            </div>
+        `,
+        confirmButtonText: 'Close',
+        confirmButtonColor: '#0F1B4C',
+        width: 420
+    });
+}
+
 
 // ── Payslip modal ──────────────────────────────────────────
 function openPayslipModal() {
@@ -1688,11 +1739,17 @@ async function confirmNextAction() {
         const tardyDisplay = row.tardy > 0 ? formatCurrency(row.tardy) : '—';
         const lwopDisplay = row.lwop > 0 ? formatCurrency(row.lwop) : '—';
 
-        const allowanceCells = (window.allowanceColumnCodes || []).map(code => {
-            const amt = row.allowances?.[code] || 0;
-            const display = amt > 0 ? formatCurrency(amt) : '—';
-            return `<td class="text-right" style="white-space:nowrap; color:var(--text-light);">${display}</td>`;
-        }).join('');
+        // Goal 5: single Allowances total with a click-through breakdown
+        // modal, mirroring the ded-toggle pattern below instead of one
+        // <td> per allowance type.
+        const allowanceBreakdownCount = (row.allowances_breakdown || []).length;
+        const allowanceCell = allowanceBreakdownCount > 0
+            ? `<td class="text-right" style="white-space:nowrap;">
+                    <button type="button" class="allow-toggle" data-entry-id="${row.id}" title="View allowance breakdown">
+                        ${formatCurrency(row.allowances_total)}
+                    </button>
+               </td>`
+            : `<td class="text-right" style="white-space:nowrap; color:var(--text-light);">—</td>`;
 
         const dedToggle = row.dedCount > 0
             ? `<div style="display:flex; gap:6px; align-items:center; justify-content:flex-end;">
@@ -1728,7 +1785,7 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
             </td>
             <td style="font-size:0.82rem; white-space:nowrap;">SG ${row.sg}–${row.step}</td>
             <td class="text-right" style="white-space:nowrap;">${formatCurrency(row.basic_salary)}</td>
-            ${allowanceCells}
+            ${allowanceCell}
             <td class="text-right fw-bold" style="white-space:nowrap; background:rgba(249,168,37,0.06);">${formatCurrency(row.gross_income)}</td>
             <td class="text-right ${tardyClass}" style="white-space:nowrap;">${tardyDisplay}</td>
             <td class="text-right ${lwopClass}" style="white-space:nowrap;">${lwopDisplay}</td>
@@ -1784,6 +1841,13 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
             btn.addEventListener('click', function() {
                 const entryId = this.dataset.entryId;
                 openDeductionModal(entryId);
+            });
+        });
+
+        tbody.querySelectorAll('.allow-toggle').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const entryId = this.dataset.entryId;
+                openAllowanceModal(entryId);
             });
         });
 

@@ -55,12 +55,15 @@ class PayrollPolicy
     }
 
     /**
-     * Only drafts may be deleted, only by Payroll Officer.
+     * Deletable through pending_accountant, only by Payroll Officer.
+     * Disabled once the Accountant has taken action (pending_rd or beyond) —
+     * updated 2026-08-06, was draft-only. Must stay in sync with the two
+     * status checks in index.blade.php (desktop row + mobile detail row).
      */
     public function delete(User $user, PayrollBatch $batch): bool
     {
         return $user->hasAnyRole(['payroll_officer', 'super_admin'])
-            && $batch->status === 'draft';
+            && in_array($batch->status, ['draft', 'computed', 'pending_accountant'], true);
     }
 
     // ── Compute ───────────────────────────────────────────────────────────
@@ -158,5 +161,5 @@ class PayrollPolicy
     }
 
 
-    
+
 }

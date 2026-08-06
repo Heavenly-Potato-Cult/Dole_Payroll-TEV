@@ -438,7 +438,7 @@ div#tab-active.active {
                                        class="btn btn-outline btn-sm"
                                        onclick="event.stopPropagation();">View</a>
                                     @role('payroll_officer|super_admin')
-                                        @if ($batch->status === 'draft')
+                                        @if (in_array($batch->status, ['draft', 'computed', 'pending_accountant']))
                                             <form id="deleteForm-{{ $batch->id }}" method="POST"
                                                   action="{{ route('payroll.destroy', $batch) }}">
                                                 @csrf
@@ -488,7 +488,7 @@ div#tab-active.active {
                                     <a href="{{ route('payroll.show', $batch) }}"
                                        class="btn btn-outline btn-sm">View</a>
                                     @canCreatePayroll
-                                        @if ($batch->status === 'draft')
+                                        @if (in_array($batch->status, ['draft', 'computed', 'pending_accountant']))
                                             <button type="button" class="btn btn-danger btn-sm" style="width:100%;" onclick="confirmDeletePayroll({{ $batch->id }}, '{{ $batch->period_year }}-{{ str_pad($batch->period_month, 2, '0', STR_PAD_LEFT) }}')">Delete</button>
                                         @endif
                                     @endcanCreatePayroll
