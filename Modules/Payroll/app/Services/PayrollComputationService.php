@@ -414,25 +414,26 @@ class PayrollComputationService
 
     /**
      * Split a computed monthly PayrollEntry into 1st-cutoff and 2nd-cutoff
-     * values based on ACTUAL attendance days in each half.
+     * values.
      *
-     * This is used by:
-     *  - PayrollReportController  (Phase 6) when cutoff='1st' or '2nd'
-     *  - Payslip view             (Phase 7) for side-by-side breakdown
-     *
-     * Split logic (per plan — actual attendance days, NOT 50/50):
-     *   ratio_1st = days_present_1st / total_days_present
-     *   ratio_2nd = days_present_2nd / total_days_present
-     *   gross_1st = ratio_1st * monthly_gross  (etc.)
+     * Split logic — checked in this order:
+     *   1. Employee override (2026-08-14): if
+     *      $entry->employee->salary_split_override_pct is set, that fixed
+     *      percentage (of NET pay, disbursed at the 1st cutoff) is used
+     *      directly, bypassing attendance entirely. This is an explicit
+     *      per-employee preference set on the employee's profile — some
+     *      employees want a different split than actual days worked.
+     *   2. Actual attendance days (unchanged default, per original plan):
+     *        ratio_1st = days_present_1st / total_days_present
+     *        ratio_2nd = days_present_2nd / total_days_present
+     *        gross_1st = ratio_1st * monthly_gross  (etc.)
+     *   3. Legacy fallback — no daily_logs detail and no override: 50/50.
      *
      * Net pay per cutoff is derived as:
      *   net_1st = gross_1st - (total_deductions * ratio_1st)
      *   net_2nd = gross_2nd - (total_deductions * ratio_2nd)
      *
-     * If daily_logs is empty (legacy snapshot without day detail), falls back
-     * to a 50/50 split so the method always returns a usable result.
-     *
-     * @param  PayrollEntry       $entry     The computed monthly entry
+     * @param  PayrollEntry       $entry     The computed monthly entry (employee relation used if loaded, lazy-loaded otherwise)
      * @param  AttendanceSnapshot $snapshot  Must have daily_logs populated
      * @return array{
      *   first_cutoff: array{
@@ -441,14 +442,20 @@ class PayrollComputationService
      *     net_amount: float,
      *     days_present: float, late_minutes: int, undertime_minutes: int
      *   },
-     *   second_cutoff: array{ ... same keys ... }
+     *   second_cutoff: array{ ... same keys ... },
+     *   is_custom_split: bool,
+     *   split_pct_1st: float
      * }
      */
     public function computeCutoffSplit(PayrollEntry $entry, AttendanceSnapshot $snapshot): array
     {
         $dailyLogs = $snapshot->daily_logs ?? [];
+        $overridePct = $entry->employee->salary_split_override_pct ?? null;
 
         // ── Calculate presence counts per cutoff ──────────────────────────
+        // Still computed even when an override is active — these day/minute
+        // counts stay attendance-accurate for display on the payslip, they
+        // just no longer drive the monetary ratio below.
         if (! empty($dailyLogs)) {
             $firstLogs  = array_filter($dailyLogs, fn($log) => ($log['is_first_cutoff'] ?? false) === true);
             $secondLogs = array_filter($dailyLogs, fn($log) => ($log['is_first_cutoff'] ?? false) === false);
@@ -472,8 +479,13 @@ class PayrollComputationService
             $undertimeMinutes2nd = $snapshot->undertime_minutes - $undertimeMinutes1st;
         }
 
-        // Guard against zero present days (e.g. full-month LWOP)
-        if ($totalPresent <= 0) {
+        if ($overridePct !== null) {
+            // Employee-configured fixed disbursement split — takes priority
+            // over attendance entirely.
+            $ratio1st = ((float) $overridePct) / 100;
+            $ratio2nd = 1 - $ratio1st;
+        } elseif ($totalPresent <= 0) {
+            // Guard against zero present days (e.g. full-month LWOP)
             $ratio1st = 0.5;
             $ratio2nd = 0.5;
         } else {
@@ -509,8 +521,10 @@ class PayrollComputationService
         $gross2nd['undertime_minutes'] = $undertimeMinutes2nd;
 
         return [
-            'first_cutoff'  => $gross1st,
-            'second_cutoff' => $gross2nd,
+            'first_cutoff'    => $gross1st,
+            'second_cutoff'   => $gross2nd,
+            'is_custom_split' => $overridePct !== null,
+            'split_pct_1st'   => round($ratio1st * 100, 2),
         ];
     }
 

@@ -56,6 +56,12 @@ class EmployeeController extends Controller
         // Salary arrives formatted ("12,345.00") - strip commas before persisting
         $data = $request->validated();
         $data['basic_salary'] = str_replace(',', '', $data['basic_salary']);
+        // Empty string (field left blank) means "no override" — must be
+        // null, not '', or it would fail the decimal column / read back
+        // as a truthy override in computeCutoffSplit().
+        $data['salary_split_override_pct'] = ($data['salary_split_override_pct'] ?? '') !== ''
+            ? $data['salary_split_override_pct']
+            : null;
 
         Employee::create($data);
 
@@ -83,6 +89,9 @@ class EmployeeController extends Controller
         // Same salary sanitization as store()
         $data = $request->validated();
         $data['basic_salary'] = str_replace(',', '', $data['basic_salary']);
+        $data['salary_split_override_pct'] = ($data['salary_split_override_pct'] ?? '') !== ''
+            ? $data['salary_split_override_pct']
+            : null;
 
         $employee->update($data);
 
@@ -317,7 +326,7 @@ class EmployeeController extends Controller
 
     /**
      * Toggle employee exclusion from payroll processing.
-     * 
+     *
      * HR can exclude employees from payroll computation without deleting them.
      * This is useful for employees on leave, suspended, or other special cases.
      */

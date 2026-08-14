@@ -184,6 +184,24 @@
                            min="0" step="0.01" style="max-width:180px;">
                 </div>
 
+                <div style="margin-top:14px;">
+                    <label for="salary_split_override_pct">
+                        1st Cutoff Split %
+                        <span style="font-weight:400;font-size:0.76rem;color:var(--text-light);">— optional</span>
+                    </label>
+                    <input type="number" id="salary_split_override_pct" name="salary_split_override_pct"
+                           value="{{ old('salary_split_override_pct', $employee->salary_split_override_pct) }}"
+                           min="0" max="100" step="0.01" placeholder="Actual attendance"
+                           class="{{ $errors->has('salary_split_override_pct') ? 'is-invalid' : '' }}"
+                           style="max-width:180px;">
+                    @error('salary_split_override_pct')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <div style="font-size:0.76rem;color:var(--text-light);margin-top:4px;max-width:420px;">
+                        Leave blank to keep the default: cutoff split follows this employee's actual
+                        attendance days each half. Set a number (0–100) to fix the % of net pay paid
+                        out at the 1st cutoff instead — e.g. 60 means 60% on the 1–15 payday, 40% on the 16–end payday.
+                    </div>
+                </div>
+
                 <div style="margin-top:14px;background:var(--bg);border-radius:6px;
                              padding:12px 16px;font-size:0.80rem;color:var(--text-mid);
                              display:flex;gap:16px;flex-wrap:wrap;">

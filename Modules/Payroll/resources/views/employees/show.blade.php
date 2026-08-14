@@ -367,6 +367,17 @@
             <span class="info-label">PERA</span>
             <span class="info-value">₱{{ number_format($employee->pera, 2) }}</span>
         </div>
+        <div class="info-row">
+            <span class="info-label">1st Cutoff Split</span>
+            <span class="info-value">
+                @if ($employee->salary_split_override_pct !== null)
+                    {{ number_format($employee->salary_split_override_pct, 0) }}% / {{ number_format(100 - $employee->salary_split_override_pct, 0) }}%
+                    <span style="color:var(--text-light);font-weight:400;font-size:0.78rem;">(custom)</span>
+                @else
+                    <span style="color:var(--text-light);font-weight:400;">Actual attendance days (default)</span>
+                @endif
+            </span>
+        </div>
         <hr style="border:none;border-top:1px solid var(--border);margin:8px 0;">
         <div class="info-row">
             <span class="info-label">Daily Rate (÷22)</span>

@@ -35,6 +35,7 @@ class Employee extends Model
         'sit_year',
         'basic_salary',
         'pera',
+        'salary_split_override_pct',   // 2026-08-14: nullable per-employee 1st-cutoff split override
 
         // Employment
         'employment_status',        // DB column name (was 'employment_type' — typo fixed)
@@ -72,6 +73,7 @@ class Employee extends Model
         'sit_year'                  => 'integer',
         'basic_salary'              => 'decimal:2',
         'pera'                      => 'decimal:2',
+        'salary_split_override_pct' => 'decimal:2',
         'vacation_leave_balance'    => 'decimal:3',
         'sick_leave_balance'        => 'decimal:3',
         'hire_date'                 => 'date',

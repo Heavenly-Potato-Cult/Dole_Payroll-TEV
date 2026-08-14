@@ -20,7 +20,9 @@ class UpdateEmployeeRequest extends FormRequest
         return [
             // ── Identity ─────────────────────────────────────────
             'plantilla_item_no' => ['required', 'string', 'max:100',
-                                    Rule::unique('employees', 'plantilla_item_no')->ignore($employeeId)],
+                                    Rule::unique('employees', 'plantilla_item_no')
+                                        ->ignore($employeeId)
+                                        ->whereNull('deleted_at')],
             'last_name'         => ['required', 'string', 'max:100'],
             'first_name'        => ['required', 'string', 'max:100'],
             'middle_name'       => ['nullable', 'string', 'max:100'],
@@ -36,6 +38,9 @@ class UpdateEmployeeRequest extends FormRequest
             'sit_year'          => ['required', 'integer', 'min:2021'],
             'basic_salary'      => ['required', 'numeric', 'min:1'],
             'pera'              => ['required', 'numeric', 'min:0'],
+            // 2026-08-14: nullable = keep the actual-attendance-days cutoff
+            // split (default). 0-100 = fixed % of net pay at the 1st cutoff.
+            'salary_split_override_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
 
             // ── Employment ───────────────────────────────────────
             'hire_date'         => ['nullable', 'date'],
@@ -62,6 +67,7 @@ class UpdateEmployeeRequest extends FormRequest
             'plantilla_item_no.unique' => 'This plantilla item number is already assigned to another employee.',
             'division_id.exists'       => 'The selected division does not exist.',
             'basic_salary.required'    => 'Basic salary is required. Use the SG/Step lookup to auto-fill.',
+            'salary_split_override_pct.max' => 'The 1st Cutoff Split % must be between 0 and 100.',
         ];
     }
 
@@ -76,6 +82,7 @@ class UpdateEmployeeRequest extends FormRequest
             'division_id'       => 'Division',
             'salary_grade'      => 'Salary Grade',
             'basic_salary'      => 'Basic Salary',
+            'salary_split_override_pct' => '1st Cutoff Split %',
             'hire_date'         => 'Hire Date',
             'sit_year'          => 'SIT Year',
             'gsis_bp_no'        => 'GSIS Number',

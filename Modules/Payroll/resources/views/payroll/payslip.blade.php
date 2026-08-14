@@ -308,6 +308,10 @@ body {
         : (float) $entry->net_amount / 2;
 
     $netTot = (float) $entry->net_amount;
+
+    // 2026-08-14: employee-configured fixed split (vs. actual attendance).
+    $isCustomSplit = $cutoffSplit['is_custom_split'] ?? false;
+    $splitPct1st   = $cutoffSplit['split_pct_1st'] ?? 50;
 @endphp
 
 <table class="two-col">
@@ -475,6 +479,11 @@ body {
                 <td class="nl-tot">{{ number_format($netTot, 2) }}</td>
             </tr>
         </table>
+        @if ($isCustomSplit)
+        <div style="font-size:0.62rem; color:#666; margin-top:2px; text-align:right;">
+            Custom split: {{ number_format($splitPct1st, 0) }}% / {{ number_format(100 - $splitPct1st, 0) }}%
+        </div>
+        @endif
         </td></tr>
 
         {{-- ── FOOTER ── --}}
