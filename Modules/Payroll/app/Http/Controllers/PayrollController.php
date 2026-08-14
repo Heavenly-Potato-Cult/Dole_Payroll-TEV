@@ -19,6 +19,41 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollController extends Controller
 {
+    /**
+     * Resolve the cutoff split for a payslip, gated the same way the
+     * Payroll Register is (2026-08-14): an employee override always wins
+     * regardless of attendance state, but the actual-attendance ratio is
+     * only used when the MOST RECENT compute pass applied attendance
+     * (per the per-pass last_attendance_applied flag) — not the cumulative
+     * applied_components flag, and not merely because a snapshot happens
+     * to be pulled. This is deliberately per-pass, not sticky: unchecking
+     * Apply Attendance and recomputing should visibly fall back to an
+     * even 50/50 split again, as if attendance were being computed for
+     * the first time — the cumulative flag stays reserved for the
+     * submit-to-accountant gate, which must never un-set once satisfied.
+     * Returning null here is intentional: payslip.blade.php already falls
+     * back to an even net_amount / 2 split whenever cutoffSplit is null,
+     * so no fake "half" array needs to be constructed for that case.
+     */
+    private function resolveCutoffSplit(
+        PayrollEntry $entry,
+        ?AttendanceSnapshot $snapshot,
+        PayrollComputationService $computationService
+    ): ?array {
+        if (! $snapshot) {
+            return null;
+        }
+
+        $hasOverride       = $entry->employee?->salary_split_override_pct !== null;
+        $attendanceApplied = (bool) $entry->last_attendance_applied;
+
+        if (! $hasOverride && ! $attendanceApplied) {
+            return null;
+        }
+
+        return $computationService->computeCutoffSplit($entry, $snapshot);
+    }
+
     // Phase 4: pending_hr removed from the workflow.
     // New flow: draft → computed → pending_accountant → pending_rd → released → locked
     const STATUS_LABELS = [
@@ -130,9 +165,7 @@ class PayrollController extends Controller
             ->where('employee_id', $entry->employee_id)
             ->first();
 
-        $cutoffSplit = $snapshot
-            ? app(PayrollComputationService::class)->computeCutoffSplit($entry, $snapshot)
-            : null;
+        $cutoffSplit = $this->resolveCutoffSplit($entry, $snapshot, app(PayrollComputationService::class));
 
         $dedMap = fn ($e) => $e
             ? $e->deductions->keyBy(fn ($d) => $d->deductionType->code ?? $d->name)
@@ -690,9 +723,7 @@ class PayrollController extends Controller
             ->map(function ($entry) use ($snapshots, $computationService) {
                 $snapshot    = $snapshots->get($entry->employee_id);
                 $netMonthly  = (float) $entry->net_amount;
-                $cutoffSplit = $snapshot
-                    ? $computationService->computeCutoffSplit($entry, $snapshot)
-                    : null;
+                $cutoffSplit = $this->resolveCutoffSplit($entry, $snapshot, $computationService);
 
                 $net1st = $cutoffSplit['first_cutoff']['gross_income']  ?? ($netMonthly / 2);
                 $net2nd = $cutoffSplit['second_cutoff']['gross_income'] ?? ($netMonthly / 2);
@@ -819,9 +850,7 @@ class PayrollController extends Controller
             : collect();
 
         $snapshot    = $snapshots->get($entry->employee_id);
-        $cutoffSplit = $snapshot
-            ? $computationService->computeCutoffSplit($entry, $snapshot)
-            : null;
+        $cutoffSplit = $this->resolveCutoffSplit($entry, $snapshot, $computationService);
 
         $payslips = collect([[
             'employee'    => $entry->employee,
@@ -865,9 +894,7 @@ class PayrollController extends Controller
             : collect();
 
         $snapshot    = $snapshots->get($entry->employee_id);
-        $cutoffSplit = $snapshot
-            ? $computationService->computeCutoffSplit($entry, $snapshot)
-            : null;
+        $cutoffSplit = $this->resolveCutoffSplit($entry, $snapshot, $computationService);
 
         $payslips = collect([[
             'employee'    => $entry->employee,
@@ -944,9 +971,7 @@ class PayrollController extends Controller
 
             $payslips = $chunk->map(function ($entry) use ($snapshots, $computationService, $dedMap) {
                 $snapshot    = $snapshots->get($entry->employee_id);
-                $cutoffSplit = $snapshot
-                    ? $computationService->computeCutoffSplit($entry, $snapshot)
-                    : null;
+                $cutoffSplit = $this->resolveCutoffSplit($entry, $snapshot, $computationService);
 
                 return [
                     'employee'    => $entry->employee,
@@ -1026,9 +1051,7 @@ class PayrollController extends Controller
 
             $payslips = $chunk->map(function ($entry) use ($snapshots, $computationService, $dedMap) {
                 $snapshot    = $snapshots->get($entry->employee_id);
-                $cutoffSplit = $snapshot
-                    ? $computationService->computeCutoffSplit($entry, $snapshot)
-                    : null;
+                $cutoffSplit = $this->resolveCutoffSplit($entry, $snapshot, $computationService);
 
                 return [
                     'employee'    => $entry->employee,

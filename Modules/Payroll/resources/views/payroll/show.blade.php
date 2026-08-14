@@ -750,7 +750,7 @@
                         <th style="color:white;" class="text-right">Ded. Lines</th>
                         <th style="background:rgba(183,28,28,0.12); color:white;" class="text-right">Total Ded.</th>
                         <th style="background:rgba(27,94,32,0.12); color:white;" class="text-right">Net Pay</th>
-                        <th style="color:white;" class="text-center" title="Net pay per cutoff — 1st on top, 2nd below. Navy/bold = fixed override %, gray = actual attendance days.">Split (1st / 2nd)</th>
+                        <th style="color:white;" class="text-center" title="Net pay per cutoff — 1st on top, 2nd below. Navy/bold = fixed override %. Gray = actual attendance days, once Apply Attendance has been applied this batch; otherwise an even 50/50 until then.">Split (1st / 2nd)</th>
                         <th style="color:white;">Remarks</th>
                         <th style="color:white;">Actions</th>
                     </tr>
@@ -842,12 +842,16 @@
                 // Split-amount support: resolve once per page load, not per row.
                 // - override employees: split their monthly net_amount by the
                 //   saved percentage — no attendance data needed.
-                // - everyone else: use the same actual-attendance ratio the
-                //   payslip uses (PayrollComputationService::computeCutoffSplit),
-                //   when a snapshot with daily_logs is available for this batch.
-                // - if neither applies (e.g. a locked/released batch with no
-                //   snapshot loaded), fall back to an even 50/50 split, matching
-                //   the service's own legacy fallback.
+                // - everyone else: only use the actual-attendance ratio
+                //   (PayrollComputationService::computeCutoffSplit) when the
+                //   MOST RECENT compute pass applied attendance — checked via
+                //   last_attendance_applied (2026-08-14), a per-pass flag that
+                //   gets overwritten every compute, unlike the cumulative
+                //   applied_components flag the submit() gate uses. This is
+                //   deliberate: unchecking "Apply Attendance" and recomputing
+                //   should visibly drop the split back to an even 50/50, as if
+                //   attendance were being computed for the first time, rather
+                //   than staying "stuck" on whatever was last actually applied.
                 $computationService  = app(\Modules\Payroll\Services\PayrollComputationService::class);
                 $snapshotsByEmployee = $snapshots->keyBy('employee_id');
 
@@ -855,11 +859,12 @@
                 foreach ($entries as $i => $entry) {
                     $overridePct = $entry->employee->salary_split_override_pct;
                     $snapshotForEntry = $snapshotsByEmployee->get($entry->employee_id);
+                    $attendanceApplied = (bool) $entry->last_attendance_applied;
 
                     if ($overridePct !== null) {
                         $net1st = round($entry->net_amount * ((float) $overridePct) / 100, 2);
                         $net2nd = round($entry->net_amount - $net1st, 2);
-                    } elseif ($snapshotForEntry) {
+                    } elseif ($attendanceApplied && $snapshotForEntry) {
                         $cutoffSplit = $computationService->computeCutoffSplit($entry, $snapshotForEntry);
                         $net1st = $cutoffSplit['first_cutoff']['net_amount'];
                         $net2nd = $cutoffSplit['second_cutoff']['net_amount'];
@@ -867,6 +872,7 @@
                         $net1st = round($entry->net_amount / 2, 2);
                         $net2nd = round($entry->net_amount - $net1st, 2);
                     }
+
 
                     $netWarn = $entry->net_amount < 5000;
                     $tardy = ($entry->tardiness ?? 0) + ($entry->undertime ?? 0);
@@ -927,6 +933,9 @@
                         'net_1st' => $net1st,
                         'net_2nd' => $net2nd,
                         'is_custom_split' => $overridePct !== null,
+                        'split_source' => $overridePct !== null
+                            ? 'override'
+                            : (($attendanceApplied && $snapshotForEntry) ? 'actual' : 'pending'),
                         'remarks' => $entry->override_notes ?? '',
                         'has_payslip' => in_array($payroll->status, ['released', 'locked']),
                         'payroll_id' => $payroll->id,
@@ -1830,8 +1839,8 @@ const actionsHtml = removeBtn ? `${payslipBtn} ${removeBtn}` : `${payslipBtn}`;
             <td class="text-right fw-bold ${netClass}" style="white-space:nowrap; background:rgba(27,94,32,0.04);">
                 ${formatCurrency(row.net_amount)}${netWarnBadge}
             </td>
-            <td class="text-center" style="font-size:0.74rem; white-space:nowrap; line-height:1.35;" title="${row.split_pct_1st !== null ? row.split_pct_1st + '% / ' + (100 - row.split_pct_1st) + '% override' : 'Follows actual attendance days'}">
-                <div style="${row.is_custom_split ? 'color:var(--navy); font-weight:600;' : ''}">${formatCurrency(row.net_1st)}</div>
+            <td class="text-center" style="font-size:0.74rem; white-space:nowrap; line-height:1.35;" title="${row.split_source === 'override' ? row.split_pct_1st + '% / ' + (100 - row.split_pct_1st) + '% override' : row.split_source === 'actual' ? 'Actual attendance days' : 'Even 50/50 — attendance not yet applied this batch'}">
+                <div style="${row.split_source === 'override' ? 'color:var(--navy); font-weight:600;' : ''}">${formatCurrency(row.net_1st)}</div>
                 <div class="text-muted">${formatCurrency(row.net_2nd)}</div>
             </td>
             <td style="font-size:0.78rem; color:var(--text-mid); white-space:nowrap;">${row.remarks || '—'}</td>

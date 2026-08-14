@@ -271,7 +271,8 @@ class PayrollComputationService
             $allowanceLines, $allowancesWereTouched,
             $lwopDeduction, $tardiness, $undertimeDed,
             $totalDeductions, $netAmount,
-            $deductionLines, $appliedComponents
+            $deductionLines, $appliedComponents,
+            $applyAttendance
         ) {
             /** @var PayrollEntry $entry */
             $entry = PayrollEntry::updateOrCreate(
@@ -290,6 +291,12 @@ class PayrollComputationService
                     'total_deductions'    => $totalDeductions,
                     'net_amount'          => $netAmount,
                     'applied_components'  => $appliedComponents,
+                    // 2026-08-14: raw per-pass value, deliberately NOT OR'd
+                    // against the existing entry — this is what makes the
+                    // register's Split column reset to 50/50 the instant
+                    // Apply Attendance is unchecked on a later pass, unlike
+                    // applied_components above which must stay sticky.
+                    'last_attendance_applied' => $applyAttendance,
                 ]
             );
 

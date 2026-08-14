@@ -32,6 +32,10 @@ class PayrollEntry extends Model
         'is_manually_overridden',   // used by force-edit workflow
         'override_notes',
         'applied_components',       // cumulative union of components ever applied (submit gate)
+        'last_attendance_applied',  // 2026-08-14: per-pass (non-cumulative) — did the MOST RECENT
+                                     // compute pass apply attendance. Drives the register's Split
+                                     // column, which should look "freshly computed" each pass, unlike
+                                     // applied_components which must stay sticky for the submit gate.
     ];
 
     protected $casts = [
@@ -48,6 +52,7 @@ class PayrollEntry extends Model
         'net_amount'             => 'decimal:2',
         'is_manually_overridden' => 'boolean',
         'applied_components'     => 'array',
+        'last_attendance_applied' => 'boolean',
     ];
 
     // ── Relationships ────────────────────────────────────────────
