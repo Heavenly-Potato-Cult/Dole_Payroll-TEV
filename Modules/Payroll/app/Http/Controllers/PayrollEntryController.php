@@ -43,7 +43,7 @@ class PayrollEntryController extends Controller
             'actual_entry_ids' => $actualEntries,
             'entry_exists' => in_array($entry, $actualEntries)
         ]);
-        
+
         // Manually resolve the PayrollEntry model
         try {
             $entry = PayrollEntry::findOrFail($entry);
@@ -60,10 +60,10 @@ class PayrollEntryController extends Controller
             }
             abort(404, 'Payroll entry not found.');
         }
-        
+
         // Reload the batch to ensure fresh data
         $payrollBatch->refresh();
-        
+
         \Log::info('Destroy entry check', [
             'batch_id' => $payrollBatch->id,
             'batch_status' => $payrollBatch->status,
@@ -71,7 +71,7 @@ class PayrollEntryController extends Controller
             'allowed_statuses' => ['draft', 'computed'],
             'in_array' => in_array($payrollBatch->status, ['draft', 'computed'])
         ]);
-        
+
         if (! Auth::user()->hasRole('payroll_officer')) {
             if ($request->expectsJson()) {
                 return response()->json([
@@ -110,7 +110,11 @@ class PayrollEntryController extends Controller
             'payroll_batch_id' => $payrollBatch->id,
             'user_id'          => Auth::id(),
             'action'           => 'entry_removed',
-            'old_value'        => (string) $entry->id,
+            // Log the employee's name (not the bare entry ID) so the Audit
+            // Log can say *who* was removed. The entry is deleted right
+            // after this, so we can't look the name up later — capture it
+            // now while $employeeName is still available.
+            'old_value'        => $employeeName,
             'new_value'        => null,
             'ip_address'       => $request->ip(),
         ]);

@@ -997,8 +997,31 @@
 
 {{-- ═══════════════════════════════════════════════════════════════
      AUDIT LOG
+     Rewritten for a non-technical Payroll Officer: instead of raw
+     action codes ("entry_removed") and raw old/new values (JSON,
+     status codes, bare IDs), each row is translated into one plain
+     sentence. Technical detail (IP address, raw values) is kept but
+     tucked behind a small ⓘ icon so it's still there for whoever
+     needs it, without cluttering the main view.
 ═══════════════════════════════════════════════════════════════ --}}
 @if ($auditLogs->isNotEmpty())
+@php
+    // Icon + friendly label per action code/string logged across the module.
+    $auditActionLabels = [
+        'created'                                  => ['icon' => '🆕', 'label' => 'Batch Created'],
+        'attendance_pulled'                        => ['icon' => '📥', 'label' => 'Attendance Pulled'],
+        'attendance_corrected'                     => ['icon' => '✏️', 'label' => 'Attendance Corrected'],
+        'computed'                                 => ['icon' => '🧮', 'label' => 'Payroll Computed'],
+        'entry_removed'                            => ['icon' => '🗑️', 'label' => 'Employee Removed'],
+        'manual_override'                          => ['icon' => '✍️', 'label' => 'Amount Overridden'],
+        'Submitted with incomplete components'     => ['icon' => '⚠️', 'label' => 'Submitted (Incomplete)'],
+        'Submitted — Forwarded to Accountant'      => ['icon' => '➡️', 'label' => 'Sent to Accountant'],
+        'Funds Certified — Forwarded to RD/ARD'    => ['icon' => '✅', 'label' => 'Funds Certified'],
+        'Approved & Released by RD/ARD'            => ['icon' => '✅', 'label' => 'Approved & Released'],
+        'Locked after Disbursement'                => ['icon' => '🔒', 'label' => 'Locked (Paid Out)'],
+        'Force Edit Override'                      => ['icon' => '⚠️', 'label' => 'Emergency Edit'],
+    ];
+@endphp
 <div class="card" style="margin-top:24px;">
     <div class="card-header">
         <h3>Audit Log</h3>
@@ -1012,34 +1035,99 @@
                 <thead>
                     <tr>
                         <th>Date / Time</th>
-                        <th>User</th>
-                        <th>Action</th>
-                        <th>Status Change</th>
-                        <th>IP</th>
+                        <th>Done By</th>
+                        <th>What Happened</th>
+                        <th>Details</th>
+                        <th style="width:28px;"></th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($auditLogs as $log)
+                        @php
+                            $meta = $auditActionLabels[$log->action] ?? ['icon' => '•', 'label' => $log->action];
+                            $description = null;
+
+                            switch ($log->action) {
+                                case 'created':
+                                    $description = 'Payroll batch was created.';
+                                    break;
+
+                                case 'attendance_pulled':
+                                    preg_match('/pulled:(\d+)/', $log->new_value ?? '', $m);
+                                    $description = isset($m[1])
+                                        ? "Attendance pulled for {$m[1]} employee(s)."
+                                        : 'Attendance was pulled for this batch.';
+                                    break;
+
+                                case 'attendance_corrected':
+                                    $note = preg_replace('/^Employee #\d+:\s*/', '', $log->new_value ?? '');
+                                    $description = 'Attendance was corrected. Note: ' . ($note ?: '—');
+                                    break;
+
+                                case 'computed':
+                                    if ($log->old_value === 'draft' && $log->new_value === 'computed') {
+                                        $description = 'Batch status changed from Draft to Computed.';
+                                    } else {
+                                        $opts = [];
+                                        if (preg_match('/options:(\{.*?\})\s/', ($log->new_value ?? '') . ' ', $mo)) {
+                                            $opts = json_decode($mo[1], true) ?? [];
+                                        }
+                                        preg_match('/computed:(\d+)/', $log->new_value ?? '', $mc);
+                                        preg_match('/skipped:(\d+)/', $log->new_value ?? '', $ms);
+
+                                        $applied = collect([
+                                            'apply_attendance' => 'Attendance',
+                                            'apply_deductions' => 'Deductions',
+                                            'apply_allowances' => 'Allowances',
+                                            'apply_lwop'       => 'LWOP',
+                                        ])->filter(fn ($label, $key) => ! empty($opts[$key]))->values();
+
+                                        $skippedNum = (int) ($ms[1] ?? 0);
+                                        $description = 'Computed ' . ($mc[1] ?? '?') . ' employee(s)'
+                                            . ($applied->isNotEmpty()
+                                                ? ' — updated: ' . $applied->implode(', ')
+                                                : ' — nothing new applied, carried over previous values')
+                                            . ($skippedNum > 0 ? ", {$skippedNum} skipped (manually overridden)" : '')
+                                            . '.';
+                                    }
+                                    break;
+
+                                case 'entry_removed':
+                                    $description = $log->old_value
+                                        ? "{$log->old_value} was removed from this batch."
+                                        : 'An employee was removed from this batch.';
+                                    break;
+
+                                case 'manual_override':
+                                    $description = 'Net pay changed from ₱' . number_format((float) $log->old_value, 2)
+                                        . ' to ₱' . number_format((float) $log->new_value, 2) . '.';
+                                    break;
+
+                                default:
+                                    // These actions already read as plain English (e.g. "Sent to
+                                    // Accountant"). Just translate any raw status codes riding
+                                    // along in old/new so nothing shows as a raw db value.
+                                    $oldLabel = $statusLabels[$log->old_value] ?? $log->old_value;
+                                    $newLabel = $statusLabels[$log->new_value] ?? $log->new_value;
+
+                                    if ($log->old_value && $log->new_value) {
+                                        $description = 'Status: ' . $oldLabel . ' → ' . $newLabel;
+                                    } elseif ($log->new_value) {
+                                        $description = $newLabel;
+                                    }
+                            }
+                        @endphp
                         <tr>
                             <td style="white-space:nowrap;">
                                 {{ \Carbon\Carbon::parse($log->performed_at)->format('M d, Y g:i A') }}
                             </td>
-                            <td>{{ $log->user->name ?? '—' }}</td>
-                            <td>{{ $log->action }}</td>
-                            <td>
-                                @if ($log->old_value || $log->new_value)
-                                    <span class="badge badge-draft" style="font-size:0.70rem;">
-                                        {{ $log->old_value ?? '—' }}
-                                    </span>
-                                    <span class="audit-arrow">→</span>
-                                    <span class="badge badge-computed" style="font-size:0.70rem;">
-                                        {{ $log->new_value ?? '—' }}
-                                    </span>
-                                @else
-                                    <span class="text-muted">—</span>
-                                @endif
+                            <td style="white-space:nowrap;">{{ $log->user->name ?? '—' }}</td>
+                            <td style="white-space:nowrap;">{{ $meta['icon'] }} {{ $meta['label'] }}</td>
+                            <td>{{ $description ?? '—' }}</td>
+                            <td class="text-muted" style="text-align:center; cursor:help;"
+                                title="Action code: {{ $log->action }}&#10;IP address: {{ $log->ip_address ?? '—' }}">
+                                ⓘ
                             </td>
-                            <td class="text-muted">{{ $log->ip_address ?? '—' }}</td>
                         </tr>
                     @endforeach
                 </tbody>
