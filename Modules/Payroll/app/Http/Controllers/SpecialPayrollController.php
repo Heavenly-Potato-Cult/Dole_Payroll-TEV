@@ -222,6 +222,19 @@ class SpecialPayrollController extends Controller
                 : NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE;
         }
 
+        // ── Optional PERA override ─────────────────────────────────────────
+        // Payroll officer may type the final PERA Earned figure directly
+        // (e.g. when the auto pro-rated amount doesn't match the standard
+        // ₱2,000 PERA cap) instead of relying on the (pera / 22 × working
+        // days) computation. Validated separately from $allowanceValidated
+        // since it's not part of the allowances array.
+        $peraValidated = $request->validate([
+            'pera_amount' => ['nullable', 'numeric', 'min:0'],
+        ]);
+        $peraOverride = $peraValidated['pera_amount'] !== null && $peraValidated['pera_amount'] !== ''
+            ? (float) $peraValidated['pera_amount']
+            : null;
+
         $result = $service->compute(
             employee:          $employee,
             effectivity_date:  $request->effectivity_date,
@@ -230,7 +243,8 @@ class SpecialPayrollController extends Controller
             lwop_days:         (int) ($request->lwop_days ?? 0),
             tardiness_minutes: 0,
             gsisRate:          $gsisRateUsed,
-            allowanceLines:    $proratedLines
+            allowanceLines:    $proratedLines,
+            peraOverride:      $peraOverride
         );
 
         $cutoffStart = Carbon::parse($request->cutoff_start);
@@ -246,7 +260,7 @@ class SpecialPayrollController extends Controller
             . $employee->last_name . ', ' . $employee->first_name
             . ' (' . $effectivity->format('M d, Y') . ')';
 
-        $batch = DB::transaction(function () use ($request, $employee, $cutoffStart, $payrollType, $title, $result, $proratedLines, $gsisRateUsed) {
+        $batch = DB::transaction(function () use ($request, $employee, $cutoffStart, $payrollType, $title, $result, $proratedLines, $gsisRateUsed, $peraOverride) {
             $batch = SpecialPayrollBatch::create([
                 'type'              => $payrollType,
                 'title'             => $title,
@@ -260,6 +274,7 @@ class SpecialPayrollController extends Controller
                 'gross_amount'      => $result['net_earned'],
                 'deductions_amount' => $result['total_deductions'],
                 'gsis_rate_applied' => $gsisRateUsed,
+                'pera_override'     => $peraOverride,
                 'net_amount'        => $result['net_amount'],
                 'status'            => 'draft',
                 'remarks'           => $request->remarks,
@@ -344,7 +359,8 @@ class SpecialPayrollController extends Controller
             // value (including 0.0 for "off"), so ?? never masks a
             // deliberate opt-out for anything created going forward.
             gsisRate:          $batch->gsis_rate_applied ?? NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE,
-            allowanceLines:    $allowanceLines
+            allowanceLines:    $allowanceLines,
+            peraOverride:      $batch->pera_override !== null ? (float) $batch->pera_override : null
         );
 
         return view('payroll::special-payroll.newly-hired-show', compact('batch', 'employee', 'result'));
@@ -470,7 +486,8 @@ class SpecialPayrollController extends Controller
             lwop_days:         0,
             tardiness_minutes: 0,
             gsisRate:          $batch->gsis_rate_applied ?? NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE,
-            allowanceLines:    $allowanceLines
+            allowanceLines:    $allowanceLines,
+            peraOverride:      $batch->pera_override !== null ? (float) $batch->pera_override : null
         );
 
         $typeLabel = match ($batch->type) {
@@ -577,11 +594,24 @@ class SpecialPayrollController extends Controller
             'deduction_philhealth_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'deduction_pagibig_amount'   => ['nullable', 'numeric', 'min:0'],
             'deduction_wht_percent'       => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // ── PERA adjustment (Goal 6) ────────────────────────────────
+            // Optional flat back-pay figure the payroll officer types in
+            // herself — not auto-fetched from AllowanceService, since a
+            // PERA change on a differential/step-increment/adjustment
+            // batch is an exception case, not a recurring computation.
+            // Not hard-capped at ₱2,000 — the standard PERA ceiling is a
+            // guideline shown in the UI, not enforced server-side, since
+            // the preparer sometimes needs to exceed it.
+            'pera_adjustment'       => ['nullable', 'numeric', 'min:0'],
         ], [
             'new_salary.gt' => 'New salary must be greater than the old salary.',
         ]);
 
         $employee = Employee::findOrFail($request->employee_id);
+
+        $peraAdjustment = $request->pera_adjustment !== null && $request->pera_adjustment !== ''
+            ? (float) $request->pera_adjustment
+            : null;
 
         /** @var SalaryDifferentialService $service */
         $service = app(SalaryDifferentialService::class);
@@ -598,6 +628,7 @@ class SpecialPayrollController extends Controller
                 'pagibig_amount' => $request->deduction_pagibig_amount ?? null,
                 'wht_percent' => $request->deduction_wht_percent ?? null,
             ],
+            peraAdjustment: $peraAdjustment,
         );
 
         $from  = Carbon::parse($request->effectivity_date_from);
@@ -624,8 +655,9 @@ class SpecialPayrollController extends Controller
             'new_salary_grade'    => $request->new_salary_grade ?? null,
             'old_position'        => $request->old_position ?? null,
             'new_position'        => $request->new_position ?? null,
-            'gross_amount'        => $result['total_earned'],
+            'gross_amount'        => $result['gross_amount'],
             'deductions_amount'   => $result['total_deductions'],
+            'pera_override'       => $peraAdjustment,
             'net_amount'          => $result['net_amount'],
             'status'              => 'draft',
             'remarks'             => $request->remarks,
@@ -669,6 +701,7 @@ class SpecialPayrollController extends Controller
             effectivity_date_to:   $batch->period_end->toDateString(),
             old_salary:            (float) $batch->old_basic_salary,
             new_salary:            (float) $batch->new_basic_salary,
+            peraAdjustment:        $batch->pera_override !== null ? (float) $batch->pera_override : null,
         );
 
         return view('payroll::special-payroll.differential-show', compact('batch', 'employee', 'result'));
@@ -781,6 +814,7 @@ class SpecialPayrollController extends Controller
             effectivity_date_to:   $batch->period_end->toDateString(),
             old_salary:            (float) $batch->old_basic_salary,
             new_salary:            (float) $batch->new_basic_salary,
+            peraAdjustment:        $batch->pera_override !== null ? (float) $batch->pera_override : null,
         );
 
         $signatory = Signatory::where('role_type', 'hrmo_designate')
@@ -889,12 +923,18 @@ class SpecialPayrollController extends Controller
             'deduction_philhealth_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'deduction_pagibig_amount'   => ['nullable', 'numeric', 'min:0'],
             'deduction_wht_percent'       => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // ── PERA adjustment (Goal 6) — same rule as Salary Differential ──
+            'pera_adjustment'       => ['nullable', 'numeric', 'min:0'],
         ], [
             'new_salary.gt' => 'New salary must be greater than the old salary.',
             'type.in'       => 'Type must be either NOSI or NOSA.',
         ]);
 
         $employee = Employee::findOrFail($request->employee_id);
+
+        $peraAdjustment = $request->pera_adjustment !== null && $request->pera_adjustment !== ''
+            ? (float) $request->pera_adjustment
+            : null;
 
         /** @var SalaryDifferentialService $service */
         $service = app(SalaryDifferentialService::class);
@@ -911,6 +951,7 @@ class SpecialPayrollController extends Controller
                 'pagibig_amount' => $request->deduction_pagibig_amount ?? null,
                 'wht_percent' => $request->deduction_wht_percent ?? null,
             ],
+            peraAdjustment: $peraAdjustment,
         );
 
         $from      = Carbon::parse($request->effectivity_date_from);
@@ -939,8 +980,9 @@ class SpecialPayrollController extends Controller
             'new_salary_grade'    => $request->new_salary_grade ?? null,
             'old_position'        => $request->old_position ?? null,
             'new_position'        => $request->new_position ?? null,
-            'gross_amount'        => $result['total_earned'],
+            'gross_amount'        => $result['gross_amount'],
             'deductions_amount'   => $result['total_deductions'],
+            'pera_override'       => $peraAdjustment,
             'net_amount'          => $result['net_amount'],
             'status'              => 'draft',
             'remarks'             => $request->remarks,
@@ -983,6 +1025,7 @@ class SpecialPayrollController extends Controller
             effectivity_date_to:   $batch->period_end->toDateString(),
             old_salary:            (float) $batch->old_basic_salary,
             new_salary:            (float) $batch->new_basic_salary,
+            peraAdjustment:        $batch->pera_override !== null ? (float) $batch->pera_override : null,
         );
 
         return view('payroll::special-payroll.nosi-nosa-show', compact('batch', 'employee', 'result'));
@@ -1098,6 +1141,7 @@ class SpecialPayrollController extends Controller
             effectivity_date_to:   $batch->period_end->toDateString(),
             old_salary:            (float) $batch->old_basic_salary,
             new_salary:            (float) $batch->new_basic_salary,
+            peraAdjustment:        $batch->pera_override !== null ? (float) $batch->pera_override : null,
         );
 
         $typeLabel = $batch->type === 'nosi'

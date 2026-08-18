@@ -31,6 +31,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property float|null $old_basic_salary
  * @property float|null $new_basic_salary
  * @property float|null $differential_amount
+ * @property float|null $pera_override  Manual PERA figure — an override of the
+ *   auto pro-rated amount for type=newly_hired/transferee, or a flat one-time
+ *   back-pay adjustment for type=salary_differential/nosi/nosa. Null = no
+ *   PERA involved in this batch.
  * @property float|null $pro_rated_days
  * @property float|null $gross_amount
  * @property float|null $deductions_amount
@@ -70,6 +74,7 @@ class SpecialPayrollBatch extends Model
         'gross_amount',
         'deductions_amount',
         'gsis_rate_applied',
+        'pera_override',
         'net_amount',
         'status',
         'approved_by',
@@ -89,6 +94,7 @@ class SpecialPayrollBatch extends Model
         'gross_amount'     => 'decimal:2',
         'deductions_amount'=> 'decimal:2',
         'gsis_rate_applied'=> 'decimal:4',
+        'pera_override'    => 'decimal:2',
         'net_amount'       => 'decimal:2',
     ];
     // ── Relationships ──────────────────────────────────────────────────────

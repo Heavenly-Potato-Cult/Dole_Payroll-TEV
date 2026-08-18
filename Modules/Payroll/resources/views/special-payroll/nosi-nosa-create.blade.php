@@ -281,6 +281,26 @@
                     </div>
                 </div>
 
+                {{-- PERA Adjustment (manual, optional — Goal 6) --}}
+                <div class="form-group" style="margin-top:16px;">
+                    <label for="pera_adjustment">PERA Adjustment <span class="text-muted">(optional)</span></label>
+                    <input type="number" id="pera_adjustment" name="pera_adjustment"
+                           value="{{ old('pera_adjustment') }}"
+                           step="0.01" min="0"
+                           placeholder="Leave blank if this record does not include a PERA change"
+                           class="{{ $errors->has('pera_adjustment') ? 'is-invalid' : '' }}"
+                           oninput="updatePreview()">
+                    <div style="font-size:0.75rem; color:var(--text-light); margin-top:4px;">
+                        Only fill this in if the employee's PERA also changed as part of this NOSI/NOSA
+                        (e.g. a status change alongside the step/salary change). Entered as a single flat
+                        amount, added once to gross — not subject to GSIS, PhilHealth, or WHT. Typically
+                        capped around the standard ₱2,000 PERA ceiling, but not enforced here.
+                    </div>
+                    @error('pera_adjustment')
+                        <div class="invalid-feedback" style="display:block;">{{ $message }}</div>
+                    @enderror
+                </div>
+
                 {{-- Deduction Percentages (Optional Override) --}}
                 <div class="form-group" style="margin-top:16px; padding:16px; background:#F8F9FA; border-radius:8px; border:1px solid #E9ECEF;">
                     <label style="font-size:0.78rem; font-weight:700; color:var(--navy); margin-bottom:12px; display:block;">
@@ -386,6 +406,14 @@
                             <td style="padding:5px 0; color:var(--text-light);">Total Earned</td>
                             <td style="text-align:right; font-weight:700;" id="prev-earned">—</td>
                         </tr>
+                        <tr style="border-bottom:1px solid var(--border);" id="prev-pera-row">
+                            <td style="padding:5px 0; color:var(--text-light);">PERA Adjustment</td>
+                            <td style="text-align:right; font-weight:600;" id="prev-pera">—</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--border);">
+                            <td style="padding:5px 0; color:var(--text-light); font-weight:600;">Gross Amount</td>
+                            <td style="text-align:right; font-weight:700;" id="prev-gross">—</td>
+                        </tr>
                         <tr style="border-bottom:1px solid var(--border);">
                             <td style="padding:5px 0; color:#B71C1C;">GSIS PS (9%)</td>
                             <td style="text-align:right; color:#B71C1C;" id="prev-gsis">—</td>
@@ -440,11 +468,13 @@
                 <strong>Differential</strong> = New Rate − Old Rate<br>
                 <strong>Partial month</strong> = ROUND(Diff × Days / 22, 2)<br>
                 <strong>Full month</strong> = Differential<br>
-                <strong>GSIS PS</strong> = 9% × monthly earned<br>
+                <strong>GSIS PS</strong> = 9% × monthly earned (calendar days, Sundays included)<br>
+                <strong>PERA Adjustment</strong> = optional flat manual entry — not GSIS/PhilHealth/WHT-able<br>
+                <strong>Gross</strong> = Total Earned + PERA Adjustment<br>
                 <strong>PhilHealth</strong> = 2.5% × monthly earned<br>
                 <strong>Pag-IBIG</strong> = ₱200.00 per month (fixed)<br>
                 <strong>WHT</strong> = 20% × total earned (default)<br>
-                <strong>Net</strong> = Total Earned − All Deductions<br>
+                <strong>Net</strong> = Gross Amount − All Deductions<br>
                 <br>
                 <span style="color:var(--navy); font-weight:600;">
                     NOSI/NOSA tip:
@@ -591,12 +621,21 @@
         }
 
         totalEarned = rnd(totalEarned);
+
+        // PERA Adjustment — optional flat manual entry, never GSIS/PhilHealth/
+        // WHT-able. Mirrors SalaryDifferentialService::compute()'s
+        // $peraAdjustment handling (NOSI/NOSA delegate to that service).
+        var peraEl     = document.getElementById('pera_adjustment');
+        var peraVal    = peraEl && peraEl.value !== '' ? parseFloat(peraEl.value) : null;
+        var peraAmount = (peraVal !== null && !isNaN(peraVal)) ? rnd(peraVal) : 0;
+        var grossAmount = rnd(totalEarned + peraAmount);
+
         var totalGsis    = rnd(totalEarned * 0.09);
         var totalPhic    = rnd(totalEarned * 0.025);
         var totalPagIbig = rnd(perMonth.length * 200);
         var totalWht     = rnd(totalEarned * whtRate);
         var totalDeduct  = rnd(totalGsis + totalPhic + totalPagIbig + totalWht);
-        var netAmount    = rnd(totalEarned - totalDeduct);
+        var netAmount    = rnd(grossAmount - totalDeduct);
 
         document.getElementById('previewEmpty').style.display   = 'none';
         document.getElementById('previewContent').style.display = 'block';
@@ -604,6 +643,8 @@
         document.getElementById('prev-diff').textContent         = fmt(differential) + '/mo.';
         document.getElementById('prev-months-count').textContent = perMonth.length + ' month(s)';
         document.getElementById('prev-earned').textContent       = fmt(totalEarned);
+        document.getElementById('prev-pera').textContent         = peraAmount > 0 ? fmt(peraAmount) : '₱0.00';
+        document.getElementById('prev-gross').textContent        = fmt(grossAmount);
         document.getElementById('prev-gsis').textContent         = fmt(totalGsis);
         document.getElementById('prev-phic').textContent         = fmt(totalPhic);
         document.getElementById('prev-pagibig').textContent      = fmt(totalPagIbig);

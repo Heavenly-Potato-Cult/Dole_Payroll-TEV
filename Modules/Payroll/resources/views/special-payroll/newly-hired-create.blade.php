@@ -231,6 +231,28 @@
                     @enderror
                 </div>
 
+                {{-- PERA (manual override) --}}
+                <div class="form-group" style="max-width:280px;">
+                    <label for="pera_amount">PERA Earned (optional override)</label>
+                    <input type="number" id="pera_amount" name="pera_amount"
+                           value="{{ old('pera_amount') }}"
+                           step="0.01" min="0"
+                           placeholder="Auto: PERA ÷ 22 × working days"
+                           class="{{ $errors->has('pera_amount') ? 'is-invalid' : '' }}"
+                           onchange="updatePreview()">
+                    <div style="font-size:0.72rem; color:var(--text-light); margin-top:4px;">
+                        Leave blank to auto-compute from the employee's PERA record.
+                        Enter a figure here to set it manually — e.g. when the
+                        pro-rated amount doesn't match the ₱2,000 standard PERA cap.
+                        Entering a value here replaces the auto-computed figure
+                        exactly (no further pro-ration or LWOP adjustment is applied
+                        to it).
+                    </div>
+                    @error('pera_amount')
+                        <div class="invalid-feedback" style="display:block;">{{ $message }}</div>
+                    @enderror
+                </div>
+
                 {{-- Allowances (Optional) — Goal 1 --}}
                 <div class="form-group" id="allowancesSection"
                      style="margin-top:16px; padding:16px; background:#F8F9FA; border-radius:8px; border:1px solid #E9ECEF;">
@@ -388,7 +410,7 @@
                             <td style="text-align:right; font-weight:600;" id="prev-salary">—</td>
                         </tr>
                         <tr style="border-bottom:1px solid var(--border);">
-                            <td style="padding:4px 0; color:var(--text-light);">PERA Earned</td>
+                            <td style="padding:4px 0; color:var(--text-light);" id="prev-pera-label">PERA Earned</td>
                             <td style="text-align:right; font-weight:600;" id="prev-pera">—</td>
                         </tr>
                         <tr id="prev-allowances-row" style="border-bottom:1px solid var(--border); display:none;">
@@ -433,11 +455,14 @@
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
                         <span class="fw-bold text-navy">PERA Earned</span><br>
-                        ROUND(PERA ÷ 22 × working days, 2)
+                        ROUND(PERA ÷ 22 × working days, 2) — or the manually
+                        entered PERA Earned amount, if set
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
                         <span class="fw-bold text-navy">GSIS PS</span><br>
-                        9.24% of Salary Earned (employee share)
+                        ROUND(Basic ÷ 22 × calendar days × rate, 2) — calendar
+                        days from effectivity date to cut-off end, inclusive of
+                        Sundays (not the weekday-only Working Days figure above)
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:8px;">
                         <span class="fw-bold text-navy">PhilHealth / Pag-IBIG</span><br>
@@ -485,6 +510,15 @@ function countWeekdays(start, end) {
         cur.setDate(cur.getDate() + 1);
     }
     return count;
+}
+
+// Calendar days (inclusive, Sundays counted) — used only for the GSIS PS
+// base, which is pro-rated on time-in-service rather than the weekday-only
+// Working Days figure. Mirrors NewlyHiredPayrollService::calendarDays().
+function countCalendarDays(start, end) {
+    const s = new Date(start);
+    const e = new Date(end);
+    return Math.round((e - s) / 86400000) + 1;
 }
 
 function fmt(n) {
@@ -725,11 +759,25 @@ function updatePreview() {
     const eff   = effDate > coStart ? effDate : coStart;
     const days  = coEnd >= eff ? countWeekdays(eff, coEnd) : 0;
 
+    // Calendar days (Sundays included) — GSIS PS base only, see countCalendarDays().
+    const calDays = coEnd >= eff ? countCalendarDays(eff, coEnd) : 0;
+
     const salaryEarned = roundPHP((basic / 22) * days);
-    const peraEarned   = roundPHP((pera  / 22) * days);
+
+    // PERA Earned — manual override takes priority over the auto-computed
+    // pro-rated figure. When overridden, LWOP is not re-applied to it: the
+    // entered amount is treated as the final earned figure.
+    const peraOverrideEl  = document.getElementById('pera_amount');
+    const peraOverrideVal = peraOverrideEl && peraOverrideEl.value !== ''
+        ? parseFloat(peraOverrideEl.value)
+        : null;
+    const peraOverridden = peraOverrideVal !== null && !isNaN(peraOverrideVal);
+    const peraEarned = peraOverridden
+        ? roundPHP(peraOverrideVal)
+        : roundPHP((pera / 22) * days);
 
     const lwopSalary   = roundPHP(roundPHP(basic / 22) * lwop);
-    const lwopPera     = roundPHP(roundPHP(pera  / 22) * lwop);
+    const lwopPera     = peraOverridden ? 0 : roundPHP(roundPHP(pera / 22) * lwop);
     const lwopTotal    = roundPHP(lwopSalary + lwopPera);
 
     // Allowances are never GSIS-able (same treatment as PERA) — they're
@@ -740,13 +788,16 @@ function updatePreview() {
 
     // GSIS is opt-in (off by default) — only GSIS-covered appointees get it.
     // Rate mirrors NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE (9%) unless
-    // the preparer entered a custom percent.
+    // the preparer entered a custom percent. Base is calendar days (Sundays
+    // included), not the weekday-only Working Days figure used for salary —
+    // matches NewlyHiredPayrollService::compute()'s gsis_base.
     const applyGsis   = document.getElementById('apply_gsis')?.checked || false;
     const gsisPercent = applyGsis
         ? (parseFloat(document.getElementById('deduction_gsis_percent').value) || 9.00)
         : 0;
-    const gsisPS = applyGsis ? roundPHP(salaryEarned * (gsisPercent / 100)) : 0;
-    const net    = roundPHP(netEarned - gsisPS);
+    const gsisBase = roundPHP((basic / 22) * calDays);
+    const gsisPS   = applyGsis ? roundPHP(gsisBase * (gsisPercent / 100)) : 0;
+    const net      = roundPHP(netEarned - gsisPS);
 
     // Show preview
     document.getElementById('previewEmpty').style.display   = 'none';
@@ -756,6 +807,7 @@ function updatePreview() {
     document.getElementById('prev-basic').textContent  = fmt(basic);
     document.getElementById('prev-salary').textContent = fmt(salaryEarned);
     document.getElementById('prev-pera').textContent   = fmt(peraEarned);
+    document.getElementById('prev-pera-label').textContent = peraOverridden ? 'PERA Earned (manual)' : 'PERA Earned';
 
     const allowRow = document.getElementById('prev-allowances-row');
     if (allowancesEarned > 0) {

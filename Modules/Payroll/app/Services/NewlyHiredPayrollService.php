@@ -16,11 +16,23 @@ use Carbon\CarbonPeriod;
  *   working_days  = weekday count from effectivity_date to cutoff_end (inclusive)
  *   salary_earned = ROUND((basic_salary / 22) * working_days, 2)
  *   pera_earned   = ROUND((pera / 22) * working_days, 2)
+ *                   — OR the payroll officer's manually entered figure
+ *                   (see $peraOverride), when the pro-rated amount doesn't
+ *                   match the standard ₱2,000 PERA cap.
  *   lwop_salary   = ROUND((basic_salary / 22), 2) * lwop_days
  *   lwop_pera     = ROUND((pera / 22), 2) * lwop_days
+ *                   — 0 whenever pera_earned is manually overridden; the
+ *                   entered figure is treated as the final earned amount.
  *   net_earned    = (salary_earned − lwop_salary) + (pera_earned − lwop_pera)
  *
- *   GSIS PS       = ROUND(salary_earned * 0.09, 2)     ← 9% employee share
+ *   calendar_days = ALL days (including Sundays) from effectivity_date to
+ *                   cutoff_end, inclusive — distinct from working_days,
+ *                   which only counts weekdays.
+ *   gsis_base     = ROUND((basic_salary / 22) * calendar_days, 2)
+ *   GSIS PS       = ROUND(gsis_base * rate, 2)     ← 9% employee share by default
+ *                   GSIS premiums are pro-rated on calendar time-in-service
+ *                   for the period, not the weekday-only working_days figure
+ *                   used for salary_earned above.
  *   PHIC          = 0.00   (not deducted for newly hired — govt share only)
  *   Pag-IBIG I    = 0.00   (₱200 is government share, not deducted from net)
  *   WHT           = 0.00   (annualized — insufficient history for newly hired)
@@ -68,6 +80,29 @@ class NewlyHiredPayrollService
     }
 
     /**
+     * Calendar day count (ALL days, including Saturdays and Sundays) from
+     * effectivity_date to cutoff_end, inclusive. Used only for the GSIS
+     * Personal Share base — GSIS premiums are pro-rated on actual calendar
+     * time-in-service for a partial period, unlike salary_earned/pera_earned
+     * which use the weekday-only working_days figure above.
+     *
+     * Example: effectivity 2026-06-16, cutoff_end 2026-06-30 → 15 calendar
+     * days (16 through 30, inclusive), vs. workingDays() which would drop
+     * any Saturdays/Sundays in that span.
+     */
+    public function calendarDays(string $effectivity_date, string $cutoff_end): int
+    {
+        $startDate     = Carbon::parse($effectivity_date);
+        $cutoffEndDate = Carbon::parse($cutoff_end);
+
+        if ($startDate->gt($cutoffEndDate)) {
+            return 0;
+        }
+
+        return $startDate->diffInDays($cutoffEndDate) + 1;
+    }
+
+    /**
      * Compute pro-rated payroll for a newly hired employee.
      *
      * @param  Employee  $employee
@@ -80,9 +115,15 @@ class NewlyHiredPayrollService
      * @param  array<int, array{allowance_type_id:int, code:string, name:string, full_amount:float, amount:float}>  $allowanceLines
      *         Pre-prorated allowance lines (see AllowanceService::proRateLines()).
      *         PERA must not appear here — it stays a first-class column below.
-     *         GSIS PS is computed on salary_earned only; allowances here are
-     *         never part of the GSIS base (confirmed — matches PERA's existing
-     *         treatment).
+     *         GSIS PS is computed on the calendar-day gsis_base only; allowances
+     *         here are never part of the GSIS base (confirmed — matches PERA's
+     *         existing treatment).
+     * @param  float|null $peraOverride     Optional payroll-officer-entered PERA
+     *         Earned figure. When set, this replaces the auto pro-rated
+     *         (pera / 22 × working_days) calculation exactly, and LWOP is not
+     *         separately deducted from it — the entered figure is taken as
+     *         final. Use when the pro-rated amount doesn't match the standard
+     *         ₱2,000 PERA cap.
      * @return array
      */
     public function compute(
@@ -93,25 +134,35 @@ class NewlyHiredPayrollService
         int      $lwop_days         = 0,
         int      $tardiness_minutes = 0,
         ?float   $gsisRate         = null,
-        array    $allowanceLines   = []
+        array    $allowanceLines   = [],
+        ?float   $peraOverride     = null
     ): array {
         // Use custom GSIS rate if provided, otherwise use default
         $gsisRate = $gsisRate ?? self::GSIS_EMPLOYEE_RATE;
 
         $working_days = $this->workingDays($effectivity_date, $cutoff_end);
+        $calendar_days = $this->calendarDays($effectivity_date, $cutoff_end);
 
         $basic = (float) $employee->basic_salary;
         $pera  = (float) $employee->pera;
 
         // ── Core earnings ─────────────────────────────────────────────────
         $salary_earned = round(($basic / 22) * $working_days, 2);
-        $pera_earned   = round(($pera  / 22) * $working_days, 2);
+
+        // PERA Earned — manual override (payroll officer's figure) takes
+        // priority over the auto pro-rated calculation. See docblock above.
+        $pera_is_overridden = $peraOverride !== null;
+        $pera_earned = $pera_is_overridden
+            ? round($peraOverride, 2)
+            : round(($pera / 22) * $working_days, 2);
 
         // ── LWOP deductions ───────────────────────────────────────────────
+        // LWOP is not separately applied to PERA when it's been manually
+        // overridden — the entered figure is treated as final.
         $daily_basic    = round($basic / 22, 2);
         $daily_pera     = round($pera  / 22, 2);
         $lwop_salary    = $daily_basic * $lwop_days;
-        $lwop_pera      = $daily_pera  * $lwop_days;
+        $lwop_pera      = $pera_is_overridden ? 0.0 : ($daily_pera * $lwop_days);
         $lwop_deduction = round($lwop_salary + $lwop_pera, 2);
 
         // ── Allowances (RATA/etc — optional, already pro-rated by caller) ──
@@ -127,12 +178,14 @@ class NewlyHiredPayrollService
         $net_earned = round($net_earned, 2);
 
         // ── Mandatory deductions ──────────────────────────────────────────
-        // GSIS for incomplete periods:
-        //   (basic / 22) * working_days  => salary_earned
-        //   salary_earned * rate         => GSIS amount
-        // NOTE: GSIS base is salary_earned only — allowances (and PERA) are
-        // never GSIS-able, matching the existing PERA treatment.
-        $gsis_ps = round($salary_earned * $gsisRate, 2);
+        // GSIS is pro-rated on CALENDAR days (Sundays included), not the
+        // weekday-only working_days used for salary_earned:
+        //   (basic / 22) * calendar_days  => gsis_base
+        //   gsis_base * rate              => GSIS amount
+        // NOTE: allowances (and PERA) are never GSIS-able, matching the
+        // existing PERA treatment.
+        $gsis_base = round(($basic / 22) * $calendar_days, 2);
+        $gsis_ps   = round($gsis_base * $gsisRate, 2);
         $phic    = 0.00;                                 // Not deducted for newly hired
         $pagibig = 0.00;                                 // ₱200 is govt share only
         $wht     = 0.00;                                 // Zero for newly hired (no history)
@@ -149,12 +202,14 @@ class NewlyHiredPayrollService
         return [
             // Input summary
             'working_days'     => $working_days,
+            'calendar_days'    => $calendar_days,
             'basic_salary'     => $basic,
             'pera'             => $pera,
 
             // Earnings
             'salary_earned'    => $salary_earned,
             'pera_earned'      => $pera_earned,
+            'pera_overridden'  => $pera_is_overridden,
             'allowance_lines'  => $allowanceLines,      // as passed in, for display
             'allowances_earned'=> $allowances_earned,
             'net_earned'       => $net_earned,   // gross before mandatory deductions (now includes allowances)
@@ -166,6 +221,7 @@ class NewlyHiredPayrollService
             'lwop_deduction'   => $lwop_deduction,
 
             // Deductions (employee share — deducted from net)
+            'gsis_base'        => $gsis_base,
             'gsis_ps'          => $gsis_ps,
             'phic'             => $phic,
             'pagibig'          => $pagibig,
