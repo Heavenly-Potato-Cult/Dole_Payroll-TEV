@@ -10,7 +10,45 @@
 @section('page-title', 'Special Payroll')
 
 @section('styles')
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css">
 <style>
+/* ── Searchable Employee Dropdown (Tom Select) ── */
+.ts-wrapper.single .ts-control {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    min-height: unset;
+}
+.ts-wrapper.single.focus .ts-control {
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.08);
+}
+.ts-dropdown {
+    font-size: 0.85rem;
+    border-color: var(--border);
+    background: #ffffff;
+    z-index: 1000;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.ts-dropdown .ts-dropdown-content {
+    background: #ffffff;
+}
+.ts-dropdown [data-selectable],
+.ts-dropdown .option {
+    background: #ffffff;
+    color: var(--text, #1F2937);
+}
+.ts-dropdown .active {
+    background: var(--navy);
+    color: #fff;
+}
+.ts-wrapper.is-invalid .ts-control {
+    border-color: var(--red);
+}
+
 /* ── Responsive: Special Payroll Create Pages ── */
 .sp-create-grid {
     display: grid;
@@ -463,8 +501,20 @@
 @endsection
 
 @section('scripts')
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
 <script>
 (function () {
+    // Searchable/typeable Employee dropdown — Tom Select keeps the original
+    // #employee_id select in sync (data-basic/data-position/etc. and
+    // selectedIndex) and dispatches a normal 'change' event on it, so the
+    // change listener attached to empSelect below keeps working unmodified.
+    new TomSelect('#employee_id', {
+        placeholder: '— Select Employee —',
+        allowEmptyOption: true,
+        sortField: { field: 'text', direction: 'asc' },
+        maxOptions: 500,
+    });
+
     var fields = ['effectivity_date_from', 'effectivity_date_to', 'old_salary', 'new_salary'];
 
     fields.forEach(function (id) {
@@ -481,7 +531,7 @@
         var position = opt.getAttribute('data-position');
         var step = opt.getAttribute('data-step');
         var salaryGrade = opt.getAttribute('data-salary-grade');
-        
+
         var oldSalaryField = document.getElementById('old_salary');
         var oldPositionField = document.getElementById('old_position');
         var oldStepField = document.getElementById('old_step');
