@@ -37,7 +37,11 @@ class UpdateEmployeeRequest extends FormRequest
             'step'              => ['required', 'integer', 'min:1', 'max:8'],
             'sit_year'          => ['required', 'integer', 'min:2021'],
             'basic_salary'      => ['required', 'numeric', 'min:1'],
-            'pera'              => ['required', 'numeric', 'min:0'],
+            // pera removed 2026-08-19 — edit.blade.php no longer submits it
+            // (read-only now, resolved via AllowanceService; see
+            // EmployeeController::resolvedPeraInfo()). A 'required' rule
+            // here would fail every employee update, since the field is
+            // never present in the request body anymore.
             // 2026-08-14: nullable = keep the actual-attendance-days cutoff
             // split (default). 0-100 = fixed % of net pay at the 1st cutoff.
             'salary_split_override_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],

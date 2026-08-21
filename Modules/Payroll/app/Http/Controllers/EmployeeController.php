@@ -10,6 +10,8 @@ use App\SharedKernel\Models\Employee;
 use App\SharedKernel\Services\HrisApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Modules\Payroll\Models\Allowances\EmployeeAllowance;
+use Modules\Payroll\Services\AllowanceService;
 
 class EmployeeController extends Controller
 {
@@ -73,7 +75,9 @@ class EmployeeController extends Controller
     {
         $employee->load(['division', 'promotionHistory', 'deductions']);
 
-        return view('payroll::employees.show', compact('employee'));
+        $peraInfo = $this->resolvedPeraInfo($employee);
+
+        return view('payroll::employees.show', compact('employee', 'peraInfo'));
     }
 
     public function edit(Employee $employee)
@@ -81,7 +85,9 @@ class EmployeeController extends Controller
         $divisions = Division::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
         $sitYears  = [2022, 2021];
 
-        return view('payroll::employees.edit', compact('employee', 'divisions', 'sitYears'));
+        $peraInfo = $this->resolvedPeraInfo($employee);
+
+        return view('payroll::employees.edit', compact('employee', 'divisions', 'sitYears', 'peraInfo'));
     }
 
     public function update(UpdateEmployeeRequest $request, Employee $employee)
@@ -92,6 +98,16 @@ class EmployeeController extends Controller
         $data['salary_split_override_pct'] = ($data['salary_split_override_pct'] ?? '') !== ''
             ? $data['salary_split_override_pct']
             : null;
+
+        // PERA is no longer editable from this form (2026-08-19) — edit.blade.php
+        // now shows it read-only and links to the Allowance module instead.
+        // Editing the raw employee.pera column here was a silent no-op for
+        // any employee who already has a standing PERA enrollment (payroll
+        // resolves PERA via AllowanceService, which ignores this column once
+        // a standing enrollment exists), with no indication to the person
+        // editing that their change had no effect. Stripped defensively here
+        // too, in case UpdateEmployeeRequest still lets it through.
+        unset($data['pera']);
 
         $employee->update($data);
 
@@ -344,5 +360,51 @@ class EmployeeController extends Controller
             'success' => true,
             'message' => $employee->full_name . ' has been ' . ($request->is_excluded ? 'excluded from' : 'included in') . ' payroll processing.',
         ]);
+    }
+
+    /**
+     * Resolve the employee's current PERA the same way payroll actually
+     * computes it — via AllowanceService::resolveForPeriod() — rather than
+     * the raw employee.pera column, plus whether that figure is coming from
+     * a standing Allowance-module enrollment or the legacy employee.pera
+     * fallback. Used by show()/edit() so the Employee profile screens
+     * display what's actually in effect for payroll, instead of a column
+     * that can silently have no bearing on it once a standing enrollment
+     * exists (see 2026-08-19 update() change).
+     *
+     * @return array{amount: float, from_standing_enrollment: bool}
+     */
+    private function resolvedPeraInfo(Employee $employee): array
+    {
+        $today = now();
+
+        $hasStandingPera = EmployeeAllowance::query()
+            ->where('employee_id', $employee->id)
+            ->where('is_active', true)
+            ->whereHas('allowanceType', fn ($q) => $q->where('code', 'PERA'))
+            ->where('effectivity_date', '<=', $today->toDateString())
+            ->where(function ($q) use ($today) {
+                $q->whereNull('expiry_date')
+                  ->orWhere('expiry_date', '>=', $today->toDateString());
+            })
+            ->exists();
+
+        /** @var AllowanceService $allowanceService */
+        $allowanceService = app(AllowanceService::class);
+
+        $resolvedLines = $allowanceService->resolveForPeriod(
+            $employee,
+            $today->year,
+            $today->month,
+            $today->copy()->startOfDay(),
+            $today->copy()->startOfDay()
+        );
+
+        $peraLine = collect($resolvedLines)->firstWhere('code', 'PERA');
+
+        return [
+            'amount'                   => $peraLine['amount'] ?? (float) $employee->pera,
+            'from_standing_enrollment' => $hasStandingPera,
+        ];
     }
 }

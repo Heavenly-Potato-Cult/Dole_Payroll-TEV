@@ -96,6 +96,15 @@ class SpecialPayrollController extends Controller
      * AllowanceService::resolveForPeriod() — same precedence logic the
      * regular payroll module uses (standing → released assignment override),
      * no special-casing for newly hired employees.
+     *
+     * Also returns the resolved monthly PERA base (pera_monthly) alongside
+     * the allowance checklist — not for a checklist row (PERA stays a
+     * first-class field, see newHireCreate()), but so the client-side live
+     * preview can use the same AllowanceService-resolved figure
+     * newHireStore() actually persists, instead of the raw employee.pera
+     * column embedded in the employee <option>'s data-pera attribute, which
+     * goes stale the moment a standing PERA enrollment or assignment
+     * override exists for the employee.
      */
     public function newHireAllowancesPreview(Request $request)
     {
@@ -116,7 +125,7 @@ class SpecialPayrollController extends Controller
         /** @var AllowanceService $service */
         $service = app(AllowanceService::class);
 
-        $lines = $service->resolveForPeriod(
+        $resolvedLines = $service->resolveForPeriod(
             $employee,
             $periodStart->year,
             $periodStart->month,
@@ -124,10 +133,15 @@ class SpecialPayrollController extends Controller
             $periodEnd
         );
 
-        // PERA is always excluded from this checklist — see newHireCreate().
-        $lines = array_values(array_filter($lines, fn ($l) => $l['code'] !== 'PERA'));
+        $peraMonthly = $this->extractPeraMonthly($resolvedLines, $employee);
 
-        return response()->json(['allowances' => $lines]);
+        // PERA is always excluded from the checklist itself — see newHireCreate().
+        $lines = array_values(array_filter($resolvedLines, fn ($l) => $l['code'] !== 'PERA'));
+
+        return response()->json([
+            'allowances'   => $lines,
+            'pera_monthly' => $peraMonthly,
+        ]);
     }
 
     /**
@@ -164,18 +178,27 @@ class SpecialPayrollController extends Controller
         /** @var NewlyHiredPayrollService $service */
         $service = app(NewlyHiredPayrollService::class);
 
+        /** @var AllowanceService $allowanceService */
+        $allowanceService = app(AllowanceService::class);
+
+        $periodStart = Carbon::parse($request->cutoff_start);
+        $periodEnd   = Carbon::parse($request->cutoff_end);
+
+        // Resolved unconditionally (not just when other allowances are
+        // selected) so PERA always goes through the same standing-enrollment
+        // → legacy-column-fallback → released-assignment-override precedence
+        // Regular Payroll uses, instead of reading employee->pera directly.
+        // This resolved figure is persisted below (pera_resolved_amount) and
+        // frozen from here on — newHireShow()/newHirePayslip() read the
+        // stored value rather than re-resolving live.
+        $resolvedLines = $allowanceService->resolveForPeriod(
+            $employee, $periodStart->year, $periodStart->month, $periodStart, $periodEnd
+        );
+
+        $peraMonthly = $this->extractPeraMonthly($resolvedLines, $employee);
+
         $proratedLines = [];
         if (! empty($selectedTypeIds)) {
-            /** @var AllowanceService $allowanceService */
-            $allowanceService = app(AllowanceService::class);
-
-            $periodStart = Carbon::parse($request->cutoff_start);
-            $periodEnd   = Carbon::parse($request->cutoff_end);
-
-            $resolvedLines = $allowanceService->resolveForPeriod(
-                $employee, $periodStart->year, $periodStart->month, $periodStart, $periodEnd
-            );
-
             $workingDays   = $service->workingDays($request->effectivity_date, $request->cutoff_end);
             $proratedLines = $allowanceService->proRateLines($resolvedLines, $selectedTypeIds, $workingDays);
 
@@ -244,7 +267,8 @@ class SpecialPayrollController extends Controller
             tardiness_minutes: 0,
             gsisRate:          $gsisRateUsed,
             allowanceLines:    $proratedLines,
-            peraOverride:      $peraOverride
+            peraOverride:      $peraOverride,
+            peraMonthly:       $peraMonthly
         );
 
         $cutoffStart = Carbon::parse($request->cutoff_start);
@@ -260,24 +284,25 @@ class SpecialPayrollController extends Controller
             . $employee->last_name . ', ' . $employee->first_name
             . ' (' . $effectivity->format('M d, Y') . ')';
 
-        $batch = DB::transaction(function () use ($request, $employee, $cutoffStart, $payrollType, $title, $result, $proratedLines, $gsisRateUsed, $peraOverride) {
+        $batch = DB::transaction(function () use ($request, $employee, $cutoffStart, $payrollType, $title, $result, $proratedLines, $gsisRateUsed, $peraOverride, $peraMonthly) {
             $batch = SpecialPayrollBatch::create([
-                'type'              => $payrollType,
-                'title'             => $title,
-                'year'              => $cutoffStart->year,
-                'month'             => $cutoffStart->month,
-                'effectivity_date'  => $request->effectivity_date,
-                'period_start'      => $request->cutoff_start,
-                'period_end'        => $request->cutoff_end,
-                'employee_id'       => $employee->id,
-                'pro_rated_days'    => $result['working_days'],
-                'gross_amount'      => $result['net_earned'],
-                'deductions_amount' => $result['total_deductions'],
-                'gsis_rate_applied' => $gsisRateUsed,
-                'pera_override'     => $peraOverride,
-                'net_amount'        => $result['net_amount'],
-                'status'            => 'draft',
-                'remarks'           => $request->remarks,
+                'type'                 => $payrollType,
+                'title'                => $title,
+                'year'                 => $cutoffStart->year,
+                'month'                => $cutoffStart->month,
+                'effectivity_date'     => $request->effectivity_date,
+                'period_start'         => $request->cutoff_start,
+                'period_end'           => $request->cutoff_end,
+                'employee_id'          => $employee->id,
+                'pro_rated_days'       => $result['working_days'],
+                'gross_amount'         => $result['net_earned'],
+                'deductions_amount'    => $result['total_deductions'],
+                'gsis_rate_applied'    => $gsisRateUsed,
+                'pera_override'        => $peraOverride,
+                'pera_resolved_amount' => $peraMonthly,
+                'net_amount'           => $result['net_amount'],
+                'status'               => 'draft',
+                'remarks'              => $request->remarks,
             ]);
 
             foreach ($proratedLines as $line) {
@@ -346,6 +371,16 @@ class SpecialPayrollController extends Controller
             'override_reason'   => $a->override_reason,
         ])->all();
 
+        // Frozen at creation (pera_resolved_amount) — same reasoning as the
+        // persisted allowance lines above: the math shown here should match
+        // what was actually applied when the batch was created, not silently
+        // drift if the employee's standing PERA enrollment changes later.
+        // Only batches created before this column existed fall back to a
+        // live resolve.
+        $peraMonthly = $batch->pera_resolved_amount !== null
+            ? (float) $batch->pera_resolved_amount
+            : $this->resolvePeraMonthly($employee, $batch->period_start, $batch->period_end);
+
         $result = $service->compute(
             employee:          $employee,
             effectivity_date:  $batch->effectivity_date->toDateString(),
@@ -360,7 +395,8 @@ class SpecialPayrollController extends Controller
             // deliberate opt-out for anything created going forward.
             gsisRate:          $batch->gsis_rate_applied ?? NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE,
             allowanceLines:    $allowanceLines,
-            peraOverride:      $batch->pera_override !== null ? (float) $batch->pera_override : null
+            peraOverride:      $batch->pera_override !== null ? (float) $batch->pera_override : null,
+            peraMonthly:       $peraMonthly
         );
 
         return view('payroll::special-payroll.newly-hired-show', compact('batch', 'employee', 'result'));
@@ -478,6 +514,14 @@ class SpecialPayrollController extends Controller
             'amount'            => (float) $a->amount,
         ])->all();
 
+        // Same frozen-at-creation figure newHireShow() uses — a released
+        // payslip must keep reflecting what was actually released, not a
+        // value that can drift if the employee's standing PERA enrollment
+        // is edited afterward.
+        $peraMonthly = $batch->pera_resolved_amount !== null
+            ? (float) $batch->pera_resolved_amount
+            : $this->resolvePeraMonthly($employee, $batch->period_start, $batch->period_end);
+
         $result = $service->compute(
             employee:          $employee,
             effectivity_date:  $batch->effectivity_date->toDateString(),
@@ -487,7 +531,8 @@ class SpecialPayrollController extends Controller
             tardiness_minutes: 0,
             gsisRate:          $batch->gsis_rate_applied ?? NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE,
             allowanceLines:    $allowanceLines,
-            peraOverride:      $batch->pera_override !== null ? (float) $batch->pera_override : null
+            peraOverride:      $batch->pera_override !== null ? (float) $batch->pera_override : null,
+            peraMonthly:       $peraMonthly
         );
 
         $typeLabel = match ($batch->type) {
@@ -1370,5 +1415,38 @@ class SpecialPayrollController extends Controller
         if (!Auth::user()->hasAnyRole($roles)) {
             abort(403);
         }
+    }
+
+    /**
+     * Resolve the monthly PERA base for an employee over a period via
+     * AllowanceService::resolveForPeriod() (standing enrollment → legacy
+     * employee.pera fallback → released assignment override — same
+     * precedence Regular Payroll uses), falling back to employee->pera
+     * directly if no PERA line resolves at all.
+     *
+     * Only used as a fallback for newly-hired batches created before
+     * pera_resolved_amount existed; newHireStore() persists the resolved
+     * figure so later reads don't need to call this.
+     */
+    private function resolvePeraMonthly(Employee $employee, Carbon $periodStart, Carbon $periodEnd): float
+    {
+        /** @var AllowanceService $allowanceService */
+        $allowanceService = app(AllowanceService::class);
+
+        $resolvedLines = $allowanceService->resolveForPeriod(
+            $employee, $periodStart->year, $periodStart->month, $periodStart, $periodEnd
+        );
+
+        return $this->extractPeraMonthly($resolvedLines, $employee);
+    }
+
+    /**
+     * @param  array<int, array{code:string, amount:float}>  $resolvedLines
+     */
+    private function extractPeraMonthly(array $resolvedLines, Employee $employee): float
+    {
+        $peraLine = collect($resolvedLines)->firstWhere('code', 'PERA');
+
+        return $peraLine['amount'] ?? (float) $employee->pera;
     }
 }

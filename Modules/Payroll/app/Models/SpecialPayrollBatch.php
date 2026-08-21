@@ -10,13 +10,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * Covers: newly_hired, salary_differential, nosi, nosa, step_increment, generic_special
  *
- * Table columns (from migration 2026_03_20_200011_create_special_payroll_batches_table):
+ * Table columns (from migration 2026_03_20_200011_create_special_payroll_batches_table,
+ * plus 2026_08_18_083047_add_pera_override_to_special_payroll_batches_table
+ * and 2026_08_19_..._add_pera_resolved_amount_to_special_payroll_batches_table):
  *   id, type, title, year, month, effectivity_date,
  *   period_start, period_end, employee_id,
  *   old_basic_salary, new_basic_salary, differential_amount,
  *   old_step, new_step, old_salary_grade, new_salary_grade,
  *   old_position, new_position, pro_rated_days,
- *   gross_amount, deductions_amount, net_amount,
+ *   gross_amount, deductions_amount, gsis_rate_applied,
+ *   pera_override, pera_resolved_amount, net_amount,
  *   status, approved_by, approved_at, remarks, timestamps
  *
  * @property int $id
@@ -35,6 +38,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *   auto pro-rated amount for type=newly_hired/transferee, or a flat one-time
  *   back-pay adjustment for type=salary_differential/nosi/nosa. Null = no
  *   PERA involved in this batch.
+ * @property float|null $pera_resolved_amount  Monthly PERA base resolved via
+ *   AllowanceService::resolveForPeriod() at creation time and frozen from
+ *   then on (type=newly_hired/transferee only). Null on batches created
+ *   before this column existed, and whenever pera_override is set instead.
  * @property float|null $pro_rated_days
  * @property float|null $gross_amount
  * @property float|null $deductions_amount
@@ -75,6 +82,7 @@ class SpecialPayrollBatch extends Model
         'deductions_amount',
         'gsis_rate_applied',
         'pera_override',
+        'pera_resolved_amount',
         'net_amount',
         'status',
         'approved_by',
@@ -95,6 +103,7 @@ class SpecialPayrollBatch extends Model
         'deductions_amount'=> 'decimal:2',
         'gsis_rate_applied'=> 'decimal:4',
         'pera_override'    => 'decimal:2',
+        'pera_resolved_amount' => 'decimal:2',
         'net_amount'       => 'decimal:2',
     ];
     // ── Relationships ──────────────────────────────────────────────────────

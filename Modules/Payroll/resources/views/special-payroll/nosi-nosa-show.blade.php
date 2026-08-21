@@ -593,7 +593,7 @@
             </div>
             @foreach ($result['per_month'] as $mo)
             <div class="mobile-summary-row">
-                <span class="ms-label">{{ $mo['month_label'] }} ({{ $mo['days'] }}d)</span>
+                <span class="ms-label">{{ $mo['month_label'] }} ({{ $mo['calendar_days'] }}d)</span>
                 <span class="ms-value">₱{{ number_format($mo['earned'], 2) }}</span>
             </div>
             @endforeach
@@ -651,7 +651,7 @@
                         @foreach ($result['per_month'] as $mo)
                             <th style="text-align:right; font-size:0.65rem;">
                                 {{ $mo['month_label'] }}<br>
-                                <span style="font-weight:400;">({{ $mo['days'] }}d)</span>
+                                <span style="font-weight:400;">({{ $mo['calendar_days'] }}d)</span>
                             </th>
                         @endforeach
                         <th style="text-align:right; background:#7c1a1a;">TOTAL</th>

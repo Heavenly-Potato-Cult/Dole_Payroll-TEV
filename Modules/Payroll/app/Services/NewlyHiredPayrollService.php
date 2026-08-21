@@ -19,6 +19,8 @@ use Carbon\CarbonPeriod;
  *                   — OR the payroll officer's manually entered figure
  *                   (see $peraOverride), when the pro-rated amount doesn't
  *                   match the standard ₱2,000 PERA cap.
+ *                   `pera` here is the resolved monthly base — see
+ *                   $peraMonthly below.
  *   lwop_salary   = ROUND((basic_salary / 22), 2) * lwop_days
  *   lwop_pera     = ROUND((pera / 22), 2) * lwop_days
  *                   — 0 whenever pera_earned is manually overridden; the
@@ -124,6 +126,13 @@ class NewlyHiredPayrollService
      *         separately deducted from it — the entered figure is taken as
      *         final. Use when the pro-rated amount doesn't match the standard
      *         ₱2,000 PERA cap.
+     * @param  float|null $peraMonthly      Monthly PERA base to pro-rate from,
+     *         resolved by the caller via AllowanceService::resolveForPeriod()
+     *         (standing enrollment → legacy employee.pera fallback → released
+     *         assignment override — same precedence Regular Payroll uses).
+     *         Falls back to $employee->pera when omitted, so existing callers
+     *         that haven't been updated to resolve via AllowanceService keep
+     *         working unchanged. Ignored entirely when $peraOverride is set.
      * @return array
      */
     public function compute(
@@ -135,7 +144,8 @@ class NewlyHiredPayrollService
         int      $tardiness_minutes = 0,
         ?float   $gsisRate         = null,
         array    $allowanceLines   = [],
-        ?float   $peraOverride     = null
+        ?float   $peraOverride     = null,
+        ?float   $peraMonthly      = null
     ): array {
         // Use custom GSIS rate if provided, otherwise use default
         $gsisRate = $gsisRate ?? self::GSIS_EMPLOYEE_RATE;
@@ -144,7 +154,13 @@ class NewlyHiredPayrollService
         $calendar_days = $this->calendarDays($effectivity_date, $cutoff_end);
 
         $basic = (float) $employee->basic_salary;
-        $pera  = (float) $employee->pera;
+
+        // PERA base — prefer the caller-resolved figure (AllowanceService::
+        // resolveForPeriod(), which honors standing-enrollment edits made via
+        // the Allowance module UI) over the raw employee.pera column, which
+        // only reflects the legacy fallback and goes stale once a standing
+        // enrollment or assignment override exists for the employee.
+        $pera = $peraMonthly ?? (float) $employee->pera;
 
         // ── Core earnings ─────────────────────────────────────────────────
         $salary_earned = round(($basic / 22) * $working_days, 2);

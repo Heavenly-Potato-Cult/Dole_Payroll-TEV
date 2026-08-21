@@ -500,6 +500,16 @@ const oldAllowanceOverrideReasons = @json(old('allowance_override_reason', []));
 let resolvedAllowances = [];
 let allowanceFetchToken = 0; // guards against out-of-order responses
 
+// AllowanceService-resolved monthly PERA base (standing enrollment -> legacy
+// employee.pera fallback -> released assignment override), from the same
+// fetch as resolvedAllowances. Null until the first successful fetch resolves
+// for the selected employee — updatePreview() falls back to the employee
+// <option>'s data-pera attribute (raw employee.pera) until then, since that's
+// only ever wrong for an employee with a standing PERA enrollment or
+// assignment override, and even then only for the brief window before the
+// fetch returns.
+let resolvedPeraMonthly = null;
+
 function countWeekdays(start, end) {
     let count = 0;
     const cur = new Date(start);
@@ -565,6 +575,7 @@ function fetchAllowances() {
 
     if (!employeeId || !effDate || !coStart || !coEnd) {
         resolvedAllowances = [];
+        resolvedPeraMonthly = null;
         emptyMsg.style.display = 'block';
         listEl.innerHTML = '';
         return;
@@ -585,11 +596,13 @@ function fetchAllowances() {
         .then(data => {
             if (token !== allowanceFetchToken) return; // a newer request superseded this one
             resolvedAllowances = data.allowances || [];
+            resolvedPeraMonthly = typeof data.pera_monthly === 'number' ? data.pera_monthly : null;
             renderAllowances();
         })
         .catch(() => {
             if (token !== allowanceFetchToken) return;
             resolvedAllowances = [];
+            resolvedPeraMonthly = null;
             emptyMsg.textContent = 'Could not load allowances — you can still submit without them.';
             emptyMsg.style.display = 'block';
             listEl.innerHTML = '';
@@ -747,7 +760,14 @@ function updatePreview() {
 
     const selOpt  = empEl.options[empEl.selectedIndex];
     const basic   = parseFloat(selOpt?.dataset.basic) || 0;
-    const pera    = parseFloat(selOpt?.dataset.pera)  || 0;
+    // Prefer the AllowanceService-resolved figure (fetched alongside the
+    // allowance checklist — see fetchAllowances()) so this matches what
+    // newHireStore() will actually persist. Falls back to the raw
+    // employee.pera value embedded in data-pera only before the first fetch
+    // resolves for this employee, or if the fetch failed.
+    const pera    = resolvedPeraMonthly !== null
+        ? resolvedPeraMonthly
+        : (parseFloat(selOpt?.dataset.pera) || 0);
 
     if (!basic || !effDate || !coEnd) {
         document.getElementById('previewEmpty').style.display  = 'block';

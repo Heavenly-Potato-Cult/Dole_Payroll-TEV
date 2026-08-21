@@ -8,6 +8,45 @@
 
 @extends('layouts.app')
 
+{{--
+    Declared here (before any use below), not after @endsection: PHP only
+    hoists UNCONDITIONAL top-level function declarations to the top of the
+    file at compile time. Wrapping this in function_exists() (needed so a
+    stale compiled-view cache or a future double-render doesn't fatal with
+    "Cannot redeclare") makes it a conditional declaration, which PHP does
+    NOT hoist — it only takes effect once execution actually reaches this
+    line. It must therefore sit above every call site in the file, not
+    below @endsection where the original unguarded version lived.
+--}}
+@php
+if (! function_exists('amountToWords')) {
+function amountToWords(float $amount): string
+{
+    $ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+             'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+             'Seventeen', 'Eighteen', 'Nineteen'];
+    $tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+    $int  = (int) floor($amount);
+    $cent = (int) round(($amount - $int) * 100);
+
+    $convert = function (int $n) use (&$convert, $ones, $tens): string {
+        if ($n === 0)  return '';
+        if ($n < 20)   return $ones[$n];
+        if ($n < 100)  return $tens[(int)($n/10)] . ($n % 10 ? ' ' . $ones[$n % 10] : '');
+        if ($n < 1000) return $ones[(int)($n/100)] . ' Hundred' . ($n % 100 ? ' ' . $convert($n % 100) : '');
+        if ($n < 1_000_000) {
+            return $convert((int)($n/1000)) . ' Thousand' . ($n % 1000 ? ' ' . $convert($n % 1000) : '');
+        }
+        return $convert((int)($n/1_000_000)) . ' Million' . ($n % 1_000_000 ? ' ' . $convert($n % 1_000_000) : '');
+    };
+
+    $words = trim($convert($int)) ?: 'Zero';
+    return $words . ' Pesos and ' . str_pad($cent, 2, '0', STR_PAD_LEFT) . '/100 Only';
+}
+}
+@endphp
+
 @section('title', 'Salary Differential — ' . optional($employee)->last_name)
 @section('page-title', 'Special Payroll')
 
@@ -599,7 +638,7 @@
             </div>
             @foreach ($result['per_month'] as $mo)
             <div class="mobile-summary-row">
-                <span class="ms-label">{{ $mo['month_label'] }} ({{ $mo['days'] }}d)</span>
+                <span class="ms-label">{{ $mo['month_label'] }} ({{ $mo['calendar_days'] }}d)</span>
                 <span class="ms-value">₱{{ number_format($mo['earned'], 2) }}</span>
             </div>
             @endforeach
@@ -657,7 +696,7 @@
                         @foreach ($result['per_month'] as $mo)
                             <th style="text-align:right; font-size:0.65rem;">
                                 {{ $mo['month_label'] }}<br>
-                                <span style="font-weight:400;">({{ $mo['days'] }}d)</span>
+                                <span style="font-weight:400;">({{ $mo['calendar_days'] }}d)</span>
                             </th>
                         @endforeach
                         <th style="text-align:right; background:#7c1a1a;">TOTAL</th>
@@ -796,30 +835,3 @@
 </div>
 
 @endsection
-
-@php
-function amountToWords(float $amount): string
-{
-    $ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-             'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
-             'Seventeen', 'Eighteen', 'Nineteen'];
-    $tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-    $int  = (int) floor($amount);
-    $cent = (int) round(($amount - $int) * 100);
-
-    $convert = function (int $n) use (&$convert, $ones, $tens): string {
-        if ($n === 0)  return '';
-        if ($n < 20)   return $ones[$n];
-        if ($n < 100)  return $tens[(int)($n/10)] . ($n % 10 ? ' ' . $ones[$n % 10] : '');
-        if ($n < 1000) return $ones[(int)($n/100)] . ' Hundred' . ($n % 100 ? ' ' . $convert($n % 100) : '');
-        if ($n < 1_000_000) {
-            return $convert((int)($n/1000)) . ' Thousand' . ($n % 1000 ? ' ' . $convert($n % 1000) : '');
-        }
-        return $convert((int)($n/1_000_000)) . ' Million' . ($n % 1_000_000 ? ' ' . $convert($n % 1_000_000) : '');
-    };
-
-    $words = trim($convert($int)) ?: 'Zero';
-    return $words . ' Pesos and ' . str_pad($cent, 2, '0', STR_PAD_LEFT) . '/100 Only';
-}
-@endphp

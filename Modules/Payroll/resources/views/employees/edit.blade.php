@@ -179,9 +179,17 @@
 
                 <div style="margin-top:14px;">
                     <label for="pera">PERA</label>
-                    <input type="number" id="pera" name="pera"
-                           value="{{ old('pera', $employee->pera) }}"
-                           min="0" step="0.01" style="max-width:180px;">
+                    <input type="text" id="pera"
+                           value="₱{{ number_format($peraInfo['amount'], 2) }}"
+                           readonly style="max-width:180px;background:var(--bg);font-family:monospace;">
+                    <div style="font-size:0.76rem;color:var(--text-light);margin-top:4px;max-width:420px;">
+                        @if ($peraInfo['from_standing_enrollment'])
+                            From this employee's standing PERA enrollment.
+                        @else
+                            No standing enrollment yet — showing the legacy default.
+                        @endif
+                        <a href="{{ route('payroll.employees.allowances', $employee) }}">Manage in Allowances →</a>
+                    </div>
                 </div>
 
                 <div style="margin-top:14px;">

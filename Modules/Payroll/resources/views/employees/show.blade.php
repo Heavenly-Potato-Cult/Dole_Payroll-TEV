@@ -365,7 +365,12 @@
         </div>
         <div class="info-row">
             <span class="info-label">PERA</span>
-            <span class="info-value">₱{{ number_format($employee->pera, 2) }}</span>
+            <span class="info-value">
+                ₱{{ number_format($peraInfo['amount'], 2) }}
+                @unless ($peraInfo['from_standing_enrollment'])
+                    <span style="color:var(--text-light);font-weight:400;font-size:0.78rem;">(legacy default)</span>
+                @endunless
+            </span>
         </div>
         <div class="info-row">
             <span class="info-label">1st Cutoff Split</span>

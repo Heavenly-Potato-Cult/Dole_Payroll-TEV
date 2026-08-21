@@ -223,12 +223,17 @@ class PayrollComputationService
             $gsisProrateDays = $lwopDays > 0 ? $daysWorked : null;
             $ytdGross        = (float) ($attendance['ytd_gross'] ?? 0);
 
+            // Same $peraEarned resolved (or carried over) in step 2 above —
+            // keeps WHT's gross base in sync with the entry's own PERA line
+            // instead of DeductionService re-reading employee.pera_amount
+            // directly (2026-08-19 fix, see DeductionService Fix Log).
             $deductionLines = $this->deductionService->resolveDeductions(
                 $employee,
                 $batch,
                 $ytdGross,
                 $gsisProrateDays,
-                $totalDays
+                $totalDays,
+                $peraEarned
             );
             $statutoryTotal = round(collect($deductionLines)->sum('amount'), 2);
         } elseif ($force) {

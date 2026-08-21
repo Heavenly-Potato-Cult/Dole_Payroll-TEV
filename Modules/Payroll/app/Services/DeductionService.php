@@ -79,6 +79,19 @@ use Carbon\Carbon;
  *              DeductionType::appliesToEmployeeId()). This is the structural
  *              fix for duplicate type pairs (e.g. two "Pag-IBIG 1" rows,
  *              one per share) that must never both apply to the same employee.
+ *
+ *  2026-08-19  Fix 4: WHT's semi-monthly gross was reading employee->pera_amount
+ *              (the raw legacy column) directly, bypassing AllowanceService
+ *              entirely — the same class of bug fixed for Newly Hired
+ *              pro-rated payroll the same day. An employee with a standing
+ *              PERA enrollment or a released assignment override in the
+ *              Allowance module had their WHT computed against a stale PERA
+ *              figure. resolveDeductions() now accepts an optional
+ *              $peraMonthly parameter — PayrollComputationService passes the
+ *              same AllowanceService-resolved (or carried-over) figure it
+ *              already uses for the payroll entry's own PERA line, so both
+ *              stay in sync. Falls back to employee->pera_amount only when
+ *              the caller omits the parameter.
  * ─────────────────────────────────────────────────────────────────────────
  */
 class DeductionService
@@ -151,17 +164,29 @@ class DeductionService
      *                                  calendar year. Passing 0.0 causes WHT = 0 for all.
      * @param  int|null     $daysWorked Days worked in the period (for prorated GSIS)
      * @param  int          $totalDays  Total working days in the period (default 22)
+     * @param  float|null   $peraMonthly Monthly PERA base for the WHT gross calculation,
+     *                                  resolved by the caller via AllowanceService (see
+     *                                  PayrollComputationService::computeEntry(), which
+     *                                  passes the same $peraEarned figure it resolves for
+     *                                  the allowances line, respecting that method's own
+     *                                  apply/force/carry-over semantics). Falls back to
+     *                                  employee->pera_amount when omitted, so any caller
+     *                                  not yet updated keeps working unchanged — but that
+     *                                  fallback reads the raw legacy column directly and
+     *                                  goes stale once a standing PERA enrollment or
+     *                                  assignment override exists for the employee.
      * @return array        Each element: [deduction_type_id, code, name, amount, is_overridden, is_global]
      */
     public function resolveDeductions(
         Employee     $employee,
         PayrollBatch $batch,
-        float        $ytdGross   = 0.0,
-        ?int         $daysWorked = null,
-        int          $totalDays  = 22
+        float        $ytdGross    = 0.0,
+        ?int         $daysWorked  = null,
+        int          $totalDays   = 22,
+        ?float       $peraMonthly = null
     ): array {
         $basicMonthly = (float) $employee->basic_monthly_salary;
-        $peraMonthly  = (float) $employee->pera_amount;
+        $peraMonthly  = $peraMonthly ?? (float) $employee->pera_amount;
         $payrollDate  = Carbon::create($batch->period_year, $batch->period_month, 1)->toDateString();
 
         // Eager-load the assignment pivot scoped to THIS employee only, so
