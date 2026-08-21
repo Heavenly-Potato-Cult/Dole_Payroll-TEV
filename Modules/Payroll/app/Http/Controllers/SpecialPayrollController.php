@@ -563,6 +563,123 @@ class SpecialPayrollController extends Controller
         return $pdf->download($filename);
     }
 
+    /**
+     * Generate the "GENERAL PAYROLL" register/certification document for a
+     * newly hired / transferee pro-rated payroll batch.
+     *
+     * This is NOT the per-employee payslip (newHirePayslip()) — it's the
+     * printable register page that used to be produced by hitting
+     * window.print() on newly-hired-show.blade.php, which broke because
+     * that view is an interactive, app-layout screen (scrollbars, nav
+     * chrome, CSS the browser's print engine can't lay out onto a page)
+     * that DomPDF cannot render as-is. Same "dedicated DomPDF template"
+     * approach as the payslip methods — its own blade, no app layout,
+     * Pdf::loadView(...) — but rendered landscape (not portrait, like the
+     * payslip) since the register table is wide (14 columns for newly
+     * hired). Reuses the same computation path and the same
+     * $allowanceBreakdown/$allowancesTotalForDisplay construction as
+     * newHireShow()'s view-local @php block, moved into the controller
+     * since this template has no app layout to inherit shared helpers
+     * from.
+     *
+     * Not gated on status === 'released' — unlike the payslip, this
+     * register is the print-friendly version of the batch page itself,
+     * which is viewable (and currently printed) at every stage (draft,
+     * approved, released); certification blocks render blank signature
+     * lines for stages not yet reached, same as the on-screen version.
+     */
+    public function newHireGeneralPayroll(int $id)
+    {
+        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+
+        $batch = SpecialPayrollBatch::with('employee.division', 'approver', 'allowances')
+            ->where('type', 'newly_hired')
+            ->findOrFail($id);
+
+        $employee = $batch->employee;
+
+        /** @var NewlyHiredPayrollService $service */
+        $service = app(NewlyHiredPayrollService::class);
+
+        $allowanceLines = $batch->allowances->map(fn ($a) => [
+            'allowance_type_id' => $a->allowance_type_id,
+            'code'              => $a->code,
+            'name'              => $a->name,
+            'full_amount'       => (float) $a->full_amount,
+            'amount'            => (float) $a->amount,
+        ])->all();
+
+        $peraMonthly = $batch->pera_resolved_amount !== null
+            ? (float) $batch->pera_resolved_amount
+            : $this->resolvePeraMonthly($employee, $batch->period_start, $batch->period_end);
+
+        $result = $service->compute(
+            employee:          $employee,
+            effectivity_date:  $batch->effectivity_date->toDateString(),
+            cutoff_start:      $batch->period_start->toDateString(),
+            cutoff_end:        $batch->period_end->toDateString(),
+            lwop_days:         0,
+            tardiness_minutes: 0,
+            gsisRate:          $batch->gsis_rate_applied ?? NewlyHiredPayrollService::GSIS_EMPLOYEE_RATE,
+            allowanceLines:    $allowanceLines,
+            peraOverride:      $batch->pera_override !== null ? (float) $batch->pera_override : null,
+            peraMonthly:       $peraMonthly
+        );
+
+        $typeLabel = match ($batch->type) {
+            'transferee' => 'Transferee',
+            'others'     => 'Others',
+            default      => 'Newly Hired',
+        };
+
+        $statusLabel = match ($batch->status) {
+            'draft'    => 'Draft',
+            'approved' => 'Approved',
+            'released' => 'Released',
+            default    => ucfirst($batch->status),
+        };
+
+        $periodLabel    = $batch->period_start->format('M d') . '–' . $batch->period_end->format('d, Y');
+        $effectivityFmt = $batch->effectivity_date->format('M d, Y');
+
+        // Same construction newly-hired-show.blade.php does in its @php
+        // block — PERA folded in as just another allowance line, since
+        // it's an AllowanceType row like any other.
+        $allowanceBreakdown = collect([
+            ['name' => 'PERA', 'code' => 'PERA', 'amount' => (float) $result['pera_earned']],
+        ])->concat(
+            collect($result['allowance_lines'] ?? [])->map(fn ($l) => [
+                'name'   => $l['name'],
+                'code'   => $l['code'],
+                'amount' => (float) $l['amount'],
+            ])
+        )->values();
+
+        $allowancesTotalForDisplay = round($allowanceBreakdown->sum('amount'), 2);
+
+        $signatory = Signatory::where('role_type', 'hrmo_designate')
+            ->where('is_active', true)
+            ->first();
+
+        $pdf = Pdf::loadView('payroll::special-payroll.newly-hired-general-payroll', compact(
+            'batch', 'employee', 'result', 'typeLabel', 'statusLabel', 'periodLabel',
+            'effectivityFmt', 'allowanceBreakdown', 'allowancesTotalForDisplay', 'signatory'
+        ))
+        ->setPaper('a4', 'landscape')
+        ->setOptions([
+            'defaultFont'          => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled'      => true,
+            'dpi'                  => 96,
+        ]);
+
+        $filename = 'general_payroll_newly_hired_'
+            . str_replace([' ', ',', '.'], '_', $employee->full_name)
+            . "_{$batch->year}_{$batch->month}.pdf";
+
+        return $pdf->stream($filename);
+    }
+
     // =====================================================================
     //  SALARY DIFFERENTIAL
     // =====================================================================
@@ -882,6 +999,75 @@ class SpecialPayrollController extends Controller
             . "_{$batch->year}_{$batch->month}.pdf";
 
         return $pdf->download($filename);
+    }
+
+    /**
+     * Generate the "GENERAL PAYROLL" register/certification document for a
+     * salary differential batch.
+     *
+     * Same rationale and approach as newHireGeneralPayroll(): NOT the
+     * per-employee payslip (differentialPayslip()), but a dedicated
+     * DomPDF-safe replacement for what window.print() on
+     * differential-show.blade.php used to (badly) produce. Re-invokes
+     * SalaryDifferentialService from the batch's stored inputs, same as
+     * differentialShow(), so the numbers always match the batch page.
+     * Landscape — the per-month earned/deduction register table is wide.
+     *
+     * Not gated on status === 'released', same reasoning as
+     * newHireGeneralPayroll() — this mirrors what's already viewable (and
+     * currently printed) on the batch page at every stage.
+     */
+    public function differentialGeneralPayroll(int $id)
+    {
+        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+
+        $batch = SpecialPayrollBatch::with('employee', 'approver')
+            ->where('type', 'salary_differential')
+            ->findOrFail($id);
+
+        $employee = $batch->employee;
+
+        /** @var SalaryDifferentialService $service */
+        $service = app(SalaryDifferentialService::class);
+
+        $result = $service->compute(
+            employee:              $employee,
+            effectivity_date_from: $batch->period_start->toDateString(),
+            effectivity_date_to:   $batch->period_end->toDateString(),
+            old_salary:            (float) $batch->old_basic_salary,
+            new_salary:            (float) $batch->new_basic_salary,
+            peraAdjustment:        $batch->pera_override !== null ? (float) $batch->pera_override : null,
+        );
+
+        $statusLabel = match ($batch->status) {
+            'draft'    => 'Draft',
+            'approved' => 'Approved',
+            'released' => 'Released',
+            default    => ucfirst($batch->status),
+        };
+
+        $period = $batch->period_start->format('M d, Y') . ' – ' . $batch->period_end->format('M d, Y');
+
+        $signatory = Signatory::where('role_type', 'hrmo_designate')
+            ->where('is_active', true)
+            ->first();
+
+        $pdf = Pdf::loadView('payroll::special-payroll.differential-general-payroll', compact(
+            'batch', 'employee', 'result', 'period', 'statusLabel', 'signatory'
+        ))
+        ->setPaper('a4', 'landscape')
+        ->setOptions([
+            'defaultFont'          => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled'      => true,
+            'dpi'                  => 96,
+        ]);
+
+        $filename = 'general_payroll_differential_'
+            . str_replace([' ', ',', '.'], '_', $employee->full_name)
+            . "_{$batch->year}_{$batch->month}.pdf";
+
+        return $pdf->stream($filename);
     }
 
     // =====================================================================
@@ -1213,6 +1399,83 @@ class SpecialPayrollController extends Controller
             . "_{$batch->year}_{$batch->month}.pdf";
 
         return $pdf->download($filename);
+    }
+
+    /**
+     * Generate the "GENERAL PAYROLL" register/certification document for a
+     * NOSI or NOSA batch.
+     *
+     * Same rationale and approach as newHireGeneralPayroll() and
+     * differentialGeneralPayroll(): NOT the per-employee payslip
+     * (nosiNosaPayslip()), but a dedicated DomPDF-safe replacement for what
+     * window.print() on nosi-nosa-show.blade.php used to (badly) produce.
+     * Re-invokes SalaryDifferentialService from the batch's stored inputs,
+     * same as nosiNosaShow(), since NOSI and NOSA both delegate to that
+     * service rather than computing inline. Landscape, same reasoning as
+     * the differential register.
+     *
+     * Type label uses the same official DBM terminology nosiNosaPayslip()
+     * uses (Notice of Step Increment / Notice of Salary Adjustment).
+     *
+     * Not gated on status === 'released', same reasoning as the other two
+     * general-payroll methods.
+     */
+    public function nosiNosaGeneralPayroll(int $id)
+    {
+        $this->authorizeRole(['payroll_officer', 'hrmo', 'accountant', 'ard', 'cashier']);
+
+        $batch = SpecialPayrollBatch::with('employee', 'approver')
+            ->whereIn('type', ['nosi', 'nosa'])
+            ->findOrFail($id);
+
+        $employee = $batch->employee;
+
+        /** @var SalaryDifferentialService $service */
+        $service = app(SalaryDifferentialService::class);
+
+        $result = $service->compute(
+            employee:              $employee,
+            effectivity_date_from: $batch->period_start->toDateString(),
+            effectivity_date_to:   $batch->period_end->toDateString(),
+            old_salary:            (float) $batch->old_basic_salary,
+            new_salary:            (float) $batch->new_basic_salary,
+            peraAdjustment:        $batch->pera_override !== null ? (float) $batch->pera_override : null,
+        );
+
+        $typeUpper = strtoupper($batch->type);
+        $typeTitle = $batch->type === 'nosi'
+            ? 'NOTICE OF STEP INCREMENT'
+            : 'NOTICE OF SALARY ADJUSTMENT';
+
+        $statusLabel = match ($batch->status) {
+            'draft'    => 'Draft',
+            'approved' => 'Approved',
+            'released' => 'Released',
+            default    => ucfirst($batch->status),
+        };
+
+        $period = $batch->period_start->format('M d, Y') . ' – ' . $batch->period_end->format('M d, Y');
+
+        $signatory = Signatory::where('role_type', 'hrmo_designate')
+            ->where('is_active', true)
+            ->first();
+
+        $pdf = Pdf::loadView('payroll::special-payroll.nosi-nosa-general-payroll', compact(
+            'batch', 'employee', 'result', 'period', 'typeUpper', 'typeTitle', 'statusLabel', 'signatory'
+        ))
+        ->setPaper('a4', 'landscape')
+        ->setOptions([
+            'defaultFont'          => 'DejaVu Sans',
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled'      => true,
+            'dpi'                  => 96,
+        ]);
+
+        $filename = 'general_payroll_' . $batch->type . '_'
+            . str_replace([' ', ',', '.'], '_', $employee->full_name)
+            . "_{$batch->year}_{$batch->month}.pdf";
+
+        return $pdf->stream($filename);
     }
 
     // =====================================================================

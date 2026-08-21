@@ -437,7 +437,11 @@
             <div class="d-flex gap-2 flex-wrap">
                 <a href="{{ route('special-payroll.nosi-nosa.index') }}"
                    class="btn btn-outline btn-sm no-print">← All Records</a>
-                <button onclick="window.print()" class="btn btn-outline btn-sm no-print">🖨 Print</button>
+                {{-- Was onclick="window.print()" — see newly-hired-show.blade.php
+                     for why that broke. Opens the dedicated DomPDF register
+                     instead, in a new tab so this page stays put. --}}
+                <a href="{{ route('special-payroll.nosi-nosa.general-payroll', $batch->id) }}"
+                   target="_blank" class="btn btn-outline btn-sm no-print">🖨 Print</a>
 
                 @if ($batch->status === 'released')
                     <a href="{{ route('special-payroll.nosi-nosa.payslip', $batch->id) }}"

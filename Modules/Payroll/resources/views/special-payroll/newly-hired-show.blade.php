@@ -499,9 +499,16 @@
                 <a href="{{ route('special-payroll.newly-hired.index') }}"
                    class="btn btn-outline btn-sm no-print">← All Records</a>
 
-                <button onclick="window.print()" class="btn btn-outline btn-sm no-print">
+                {{-- Was onclick="window.print()" — that printed this interactive
+                     app-layout page as-is (scrollbars baked into the page, table
+                     clipped at the edge, nav/logout chrome repeating on every
+                     printed page, certification blocks splitting onto a blank
+                     second page). Now opens the dedicated DomPDF register
+                     instead, in a new tab so this page stays put. --}}
+                <a href="{{ route('special-payroll.newly-hired.general-payroll', $batch->id) }}"
+                   target="_blank" class="btn btn-outline btn-sm no-print">
                     🖨 Print
-                </button>
+                </a>
 
                 @if ($canApprove)
                     <form method="POST"
