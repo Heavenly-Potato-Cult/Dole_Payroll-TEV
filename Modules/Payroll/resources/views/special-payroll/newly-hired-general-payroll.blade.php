@@ -28,7 +28,7 @@
 <meta charset="utf-8">
 <title>General Payroll — {{ $employee->last_name }}, {{ $employee->first_name }}</title>
 <style>
-    @page { margin: 14mm 10mm; }
+    @page { margin: 9mm 8mm; }
 
     * { box-sizing: border-box; }
 
@@ -40,7 +40,7 @@
         padding: 0;
     }
 
-    .doc-header { text-align: center; padding-bottom: 10px; border-bottom: 2px solid #1A2B6B; margin-bottom: 14px; }
+    .doc-header { text-align: center; padding-bottom: 6px; border-bottom: 2px solid #1A2B6B; margin-bottom: 8px; }
     .doc-header .header-logo { display: block; margin: 0 auto 4px auto; width: 40px; height: 40px; }
     .doc-header .republic { font-size: 6.8pt; font-style: italic; color: #666; margin: 0 0 1px; }
     .doc-header .doc-agency { font-size: 8.5pt; color: #4B5563; margin: 0 0 2px; }
@@ -54,8 +54,8 @@
     }
 
     /* ── Meta table (label/value pairs, 3 columns) ── */
-    table.doc-meta { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-    table.doc-meta td { padding: 3px 10px 3px 0; vertical-align: top; width: 33.33%; }
+    table.doc-meta { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+    table.doc-meta td { padding: 2px 10px 2px 0; vertical-align: top; width: 25%; }
     table.doc-meta .label { display: block; font-size: 6.8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #9CA3AF; }
     table.doc-meta .value { display: block; font-size: 8.3pt; font-weight: bold; color: #1F2937; margin-top: 1px; }
 
@@ -86,28 +86,25 @@
         padding: 6px 8px; background: #F8F9FF; border: 1px solid #E5E7EB;
     }
 
-    .amount-words {
-        font-size: 7.8pt; color: #4B5563; text-align: right; margin-bottom: 14px;
-    }
-    .amount-words .peso { font-weight: bold; color: #1A2B6B; }
-
     .remarks-box {
         font-size: 7.8pt; margin-bottom: 14px; padding: 6px 8px;
         background: #FAFBFF; border: 1px solid #E5E7EB;
     }
 
     /* ── Certification blocks — 2x2 table so DomPDF keeps each cell together ── */
-    table.cert-grid { width: 100%; border-collapse: separate; border-spacing: 8px; page-break-inside: avoid; }
+    table.cert-grid { width: 100%; border-collapse: separate; border-spacing: 6px; page-break-inside: avoid; }
     table.cert-grid td.cert-block {
-        width: 50%; vertical-align: top; border: 1px solid #D1D5DB; padding: 10px 12px 16px;
+        width: 25%; vertical-align: top; border: 1px solid #D1D5DB; padding: 7px 8px 8px;
     }
     .cert-block-tag { font-size: 7pt; font-weight: bold; color: #9CA3AF; margin-bottom: 4px; }
-    .cert-block-title { font-size: 7.6pt; color: #4B5563; margin-bottom: 16px; line-height: 1.35; }
-    .cert-meta-line { font-size: 7.6pt; color: #4B5563; margin-bottom: 12px; }
-    .cert-sig-line { border-top: 1px solid #1F2937; margin-top: 26px; }
-    .cert-sig-name { font-size: 8pt; font-weight: bold; margin-top: 4px; }
-    .cert-sig-role { font-size: 7.3pt; color: #4B5563; }
-    .cert-date { font-size: 7.3pt; color: #4B5563; margin-top: 8px; }
+    .cert-block-meta { font-size: 6.6pt; color: #4B5563; margin-top: 8px; }
+    .cert-block-meta span { display: block; padding: 2px 0; border-bottom: 1px solid #D1D5DB; min-width: 90px; margin-bottom: 3px; }
+    .cert-block-title { font-size: 7pt; color: #4B5563; margin-bottom: 12px; line-height: 1.3; }
+    .cert-meta-line { font-size: 7pt; color: #4B5563; margin-bottom: 10px; line-height: 1.3; }
+    .cert-sig-line { border-top: 1px solid #1F2937; margin-top: 18px; }
+    .cert-sig-name { font-size: 7.4pt; font-weight: bold; margin-top: 4px; }
+    .cert-sig-role { font-size: 6.8pt; color: #4B5563; }
+    .cert-date { font-size: 6.8pt; color: #4B5563; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -169,19 +166,19 @@
                 <span class="label">Working Days</span>
                 <span class="value">{{ $result['working_days'] }} day(s) &nbsp;<span style="font-weight:normal; color:#9CA3AF;">(22-day divisor)</span></span>
             </td>
-        </tr>
-        <tr>
             <td>
                 <span class="label">Status</span>
                 <span class="value">{{ $statusLabel }}</span>
             </td>
-            @if ($batch->approver)
+        </tr>
+        @if ($batch->approver)
+        <tr>
             <td>
                 <span class="label">{{ $batch->status === 'released' ? 'Released by' : 'Approved by' }}</span>
                 <span class="value">{{ $batch->approver->name ?? '—' }}</span>
             </td>
-            @endif
         </tr>
+        @endif
     </table>
 
     <table class="reg-table">
@@ -259,13 +256,6 @@
         &emsp;|&emsp; Pag-IBIG GS: <strong>₱{{ number_format($result['hdmf_gs'], 2) }}</strong>
     </div>
 
-    <div class="amount-words">
-        <span class="peso">=P=</span>
-        &nbsp; ₱{{ number_format($result['net_amount'], 2) }}
-        &emsp; ALOBS No.: ______________
-        &emsp; Date: ______________
-    </div>
-
     @if ($batch->remarks)
     <div class="remarks-box">
         <strong style="color:#1A2B6B;">Remarks:</strong> {{ $batch->remarks }}
@@ -301,20 +291,22 @@
                     <div class="cert-sig-role">Accountant</div>
                     <div class="cert-date">Date: ________________________</div>
                 @endif
+                <div class="cert-block-meta">
+                    ALOBS No.: <span></span>
+                    Date: <span></span>
+                </div>
             </td>
-        </tr>
-        <tr>
             <td class="cert-block">
                 <div class="cert-block-tag">[ C ]</div>
                 <div class="cert-block-title">Approved for Payment:</div>
                 <div class="cert-meta-line">
                     <strong>=P=</strong> ₱{{ number_format($result['net_amount'], 2) }}
-                    &emsp; JEV No.: ______________
+                    <br>JEV No.: ______________
                 </div>
                 <div class="cert-sig-line"></div>
                 <div class="cert-sig-name">________________________________</div>
                 <div class="cert-sig-role">Regional Director / ARD</div>
-                <div class="cert-sig-role">Head of Agency / Authorized Representative</div>
+                <div class="cert-sig-role">Head of Agency / Authorized Rep.</div>
                 <div class="cert-date">Date: ________________________</div>
             </td>
             <td class="cert-block">

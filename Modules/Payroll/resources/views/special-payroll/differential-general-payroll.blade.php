@@ -63,7 +63,7 @@ function amountToWordsGeneralPayroll(float $amount): string
 }
 @endphp
 <style>
-    @page { margin: 14mm 10mm; }
+    @page { margin: 9mm 8mm; }
 
     * { box-sizing: border-box; }
 
@@ -75,7 +75,7 @@ function amountToWordsGeneralPayroll(float $amount): string
         padding: 0;
     }
 
-    .doc-header { text-align: center; padding-bottom: 10px; border-bottom: 2px solid #1A2B6B; margin-bottom: 14px; }
+    .doc-header { text-align: center; padding-bottom: 6px; border-bottom: 2px solid #1A2B6B; margin-bottom: 8px; }
     .doc-header .header-logo { display: block; margin: 0 auto 4px auto; width: 40px; height: 40px; }
     .doc-header .republic { font-size: 6.8pt; font-style: italic; color: #666; margin: 0 0 1px; }
     .doc-header .doc-agency { font-size: 8.5pt; color: #4B5563; margin: 0 0 2px; }
@@ -83,10 +83,10 @@ function amountToWordsGeneralPayroll(float $amount): string
     .doc-header h2 { font-size: 9.5pt; font-weight: bold; color: #1A2B6B; margin: 2px 0; }
     .doc-header .doc-period { font-size: 8.5pt; color: #4B5563; margin: 4px 0 0; }
 
-    .ack { font-size: 7.8pt; font-style: italic; color: #4B5563; margin-bottom: 10px; }
+    .ack { font-size: 7.8pt; font-style: italic; color: #4B5563; margin-bottom: 6px; }
 
-    table.doc-meta { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-    table.doc-meta td { padding: 3px 10px 3px 0; vertical-align: top; width: 33.33%; }
+    table.doc-meta { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+    table.doc-meta td { padding: 2px 10px 2px 0; vertical-align: top; }
     table.doc-meta .label { display: block; font-size: 6.8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #9CA3AF; }
     table.doc-meta .value { display: block; font-size: 8.3pt; font-weight: bold; color: #1F2937; margin-top: 1px; }
 
@@ -113,25 +113,22 @@ function amountToWordsGeneralPayroll(float $amount): string
     .red-text { color: #B71C1C; }
     .green-text { color: #1B5E20; }
 
-    .amount-words { font-size: 7.8pt; margin-bottom: 14px; }
-    .amount-words strong { color: #1A2B6B; }
-
     .remarks-box {
         font-size: 7.8pt; margin-bottom: 14px; padding: 6px 8px;
         background: #FAFBFF; border: 1px solid #E5E7EB;
     }
 
-    table.cert-grid { width: 100%; border-collapse: separate; border-spacing: 8px; page-break-inside: avoid; }
+    table.cert-grid { width: 100%; border-collapse: separate; border-spacing: 6px; page-break-inside: avoid; }
     table.cert-grid td.cert-block {
-        width: 50%; vertical-align: top; border: 1px solid #D1D5DB; padding: 10px 12px 16px;
+        width: 25%; vertical-align: top; border: 1px solid #D1D5DB; padding: 7px 8px 8px;
     }
     .cert-block-ref { font-size: 7pt; font-weight: bold; color: #9CA3AF; margin-bottom: 4px; }
-    .cert-block-title { font-size: 7.6pt; color: #4B5563; margin-bottom: 16px; line-height: 1.35; }
-    .cert-block-meta { font-size: 7.3pt; color: #4B5563; margin-top: 10px; }
-    .cert-block-meta span { display: block; padding: 2px 0; border-bottom: 1px solid #D1D5DB; min-width: 160px; margin-bottom: 4px; }
-    .cert-sig-line { border-top: 1px solid #1F2937; margin-top: 26px; }
-    .cert-sig-name { font-size: 8pt; font-weight: bold; margin-top: 4px; }
-    .cert-sig-role { font-size: 7.3pt; color: #4B5563; }
+    .cert-block-title { font-size: 7pt; color: #4B5563; margin-bottom: 12px; line-height: 1.3; }
+    .cert-block-meta { font-size: 6.6pt; color: #4B5563; margin-top: 8px; }
+    .cert-block-meta span { display: block; padding: 2px 0; border-bottom: 1px solid #D1D5DB; min-width: 90px; margin-bottom: 3px; }
+    .cert-sig-line { border-top: 1px solid #1F2937; margin-top: 18px; }
+    .cert-sig-name { font-size: 7.4pt; font-weight: bold; margin-top: 4px; }
+    .cert-sig-role { font-size: 6.8pt; color: #4B5563; }
 </style>
 </head>
 <body>
@@ -157,76 +154,72 @@ function amountToWordsGeneralPayroll(float $amount): string
         <p class="doc-period">For the Period of {{ strtoupper($period) }}</p>
     </div>
 
+    @php
+        // Built as a flat list and chunked into even rows, instead of the
+        // previous fixed 3-cells-per-row layout — that fixed layout left
+        // ragged, half-empty rows (e.g. "Old Rate" alone on its own row)
+        // whenever an optional field like New Position/Salary Grade/Step
+        // was absent, which was also eating vertical space and helping
+        // push the certification blocks onto a near-blank second page.
+        $metaItems = collect([
+            [
+                'label' => 'Employee',
+                'value' => trim(
+                    optional($employee)->last_name . ', ' . optional($employee)->first_name
+                    . (optional($employee)->middle_name ? ' ' . substr($employee->middle_name, 0, 1) . '.' : '')
+                ),
+            ],
+            ['label' => 'Position', 'value' => optional($employee)->position_title ?? '—'],
+        ]);
+
+        if ($batch->new_position) {
+            $metaItems->push(['label' => 'New Position', 'value' => $batch->new_position, 'accent' => true]);
+        }
+        if ($batch->old_salary_grade || $batch->new_salary_grade) {
+            $metaItems->push([
+                'label' => 'Salary Grade',
+                'value' => ($batch->old_salary_grade ? 'SG ' . $batch->old_salary_grade : '—')
+                    . ($batch->new_salary_grade ? ' → SG ' . $batch->new_salary_grade : ''),
+            ]);
+        }
+        if ($batch->old_step || $batch->new_step) {
+            $metaItems->push([
+                'label' => 'Step',
+                'value' => ($batch->old_step ? 'Step ' . $batch->old_step : '—')
+                    . ($batch->new_step ? ' → Step ' . $batch->new_step : ''),
+            ]);
+        }
+
+        $metaItems->push(['label' => 'Old Rate', 'value' => '₱' . number_format($batch->old_basic_salary, 2)]);
+        $metaItems->push(['label' => 'New Rate', 'value' => '₱' . number_format($batch->new_basic_salary, 2)]);
+        $metaItems->push([
+            'label'  => 'Differential',
+            'value'  => '₱' . number_format($result['differential'], 2) . ' / mo.',
+            'accent' => true,
+        ]);
+        $metaItems->push(['label' => 'WHT Rate', 'value' => number_format($result['wht_rate'] * 100, 0) . '%']);
+        $metaItems->push(['label' => 'Status', 'value' => $statusLabel]);
+
+        if ($batch->approver) {
+            $metaItems->push([
+                'label' => $batch->status === 'released' ? 'Released by' : 'Approved by',
+                'value' => $batch->approver->name ?? '—',
+            ]);
+        }
+
+        $metaRows = $metaItems->chunk(4);
+    @endphp
     <table class="doc-meta">
+        @foreach ($metaRows as $row)
         <tr>
-            <td>
-                <span class="label">Employee</span>
-                <span class="value">
-                    {{ optional($employee)->last_name }}, {{ optional($employee)->first_name }}
-                    @if (optional($employee)->middle_name) {{ substr($employee->middle_name, 0, 1) }}. @endif
-                </span>
+            @foreach ($row as $item)
+            <td style="width:25%;">
+                <span class="label">{{ $item['label'] }}</span>
+                <span class="value" @if (! empty($item['accent'])) style="color:#1A2B6B;" @endif>{{ $item['value'] }}</span>
             </td>
-            <td>
-                <span class="label">Position</span>
-                <span class="value">{{ optional($employee)->position_title ?? '—' }}</span>
-            </td>
-            @if ($batch->new_position)
-            <td>
-                <span class="label">New Position</span>
-                <span class="value" style="color:#1A2B6B;">{{ $batch->new_position }}</span>
-            </td>
-            @endif
+            @endforeach
         </tr>
-        <tr>
-            @if ($batch->old_salary_grade || $batch->new_salary_grade)
-            <td>
-                <span class="label">Salary Grade</span>
-                <span class="value">
-                    @if ($batch->old_salary_grade)SG {{ $batch->old_salary_grade }}@else—@endif
-                    @if ($batch->new_salary_grade) → SG {{ $batch->new_salary_grade }}@endif
-                </span>
-            </td>
-            @endif
-            @if ($batch->old_step || $batch->new_step)
-            <td>
-                <span class="label">Step</span>
-                <span class="value">
-                    @if ($batch->old_step)Step {{ $batch->old_step }}@else—@endif
-                    @if ($batch->new_step) → Step {{ $batch->new_step }}@endif
-                </span>
-            </td>
-            @endif
-            <td>
-                <span class="label">Old Rate</span>
-                <span class="value">₱{{ number_format($batch->old_basic_salary, 2) }}</span>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <span class="label">New Rate</span>
-                <span class="value">₱{{ number_format($batch->new_basic_salary, 2) }}</span>
-            </td>
-            <td>
-                <span class="label">Differential</span>
-                <span class="value" style="color:#1A2B6B;">₱{{ number_format($result['differential'], 2) }} / mo.</span>
-            </td>
-            <td>
-                <span class="label">WHT Rate</span>
-                <span class="value">{{ number_format($result['wht_rate'] * 100, 0) }}%</span>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <span class="label">Status</span>
-                <span class="value">{{ $statusLabel }}</span>
-            </td>
-            @if ($batch->approver)
-            <td>
-                <span class="label">{{ $batch->status === 'released' ? 'Released by' : 'Approved by' }}</span>
-                <span class="value">{{ $batch->approver->name ?? '—' }}</span>
-            </td>
-            @endif
-        </tr>
+        @endforeach
     </table>
 
     <p class="ack">
@@ -305,11 +298,6 @@ function amountToWordsGeneralPayroll(float $amount): string
         </tfoot>
     </table>
 
-    <div class="amount-words">
-        <strong>Net Amount in Words:</strong>
-        <em>₱ {{ number_format($result['net_amount'], 2) }}</em>
-    </div>
-
     @if ($batch->remarks)
     <div class="remarks-box">
         <strong style="color:#1A2B6B;">Remarks:</strong> {{ $batch->remarks }}
@@ -327,20 +315,6 @@ function amountToWordsGeneralPayroll(float $amount): string
                 <div class="cert-sig-role">Authorized Official</div>
             </td>
             <td class="cert-block">
-                <div class="cert-block-ref">C</div>
-                <div class="cert-block-title">
-                    APPROVED FOR PAYMENT:
-                    <br>
-                    <strong>{{ strtoupper(amountToWordsGeneralPayroll($result['net_amount'])) }}</strong>
-                    <br>= ₱ {{ number_format($result['net_amount'], 2) }}
-                </div>
-                <div class="cert-sig-line"></div>
-                <div class="cert-sig-name">NAME</div>
-                <div class="cert-sig-role">Head of Agency / Authorized Representative</div>
-            </td>
-        </tr>
-        <tr>
-            <td class="cert-block">
                 <div class="cert-block-ref">B</div>
                 <div class="cert-block-title">
                     CERTIFIED: Funds available, cash available, supporting documents complete and proper.
@@ -354,6 +328,18 @@ function amountToWordsGeneralPayroll(float $amount): string
                     JEV No.: <span></span>
                     Date: <span></span>
                 </div>
+            </td>
+            <td class="cert-block">
+                <div class="cert-block-ref">C</div>
+                <div class="cert-block-title">
+                    APPROVED FOR PAYMENT:
+                    <br>
+                    <strong>{{ strtoupper(amountToWordsGeneralPayroll($result['net_amount'])) }}</strong>
+                    <br>= ₱ {{ number_format($result['net_amount'], 2) }}
+                </div>
+                <div class="cert-sig-line"></div>
+                <div class="cert-sig-name">NAME</div>
+                <div class="cert-sig-role">Head of Agency / Authorized Representative</div>
             </td>
             <td class="cert-block">
                 <div class="cert-block-ref">D</div>

@@ -665,7 +665,7 @@ class SpecialPayrollController extends Controller
             'batch', 'employee', 'result', 'typeLabel', 'statusLabel', 'periodLabel',
             'effectivityFmt', 'allowanceBreakdown', 'allowancesTotalForDisplay', 'signatory'
         ))
-        ->setPaper('a4', 'landscape')
+        ->setPaper('folio', 'landscape') // 8.5x13in — PH "long" bond paper, not US Legal (8.5x14in)
         ->setOptions([
             'defaultFont'          => 'DejaVu Sans',
             'isHtml5ParserEnabled' => true,
@@ -1055,7 +1055,7 @@ class SpecialPayrollController extends Controller
         $pdf = Pdf::loadView('payroll::special-payroll.differential-general-payroll', compact(
             'batch', 'employee', 'result', 'period', 'statusLabel', 'signatory'
         ))
-        ->setPaper('a4', 'landscape')
+        ->setPaper('folio', 'landscape') // 8.5x13in — PH "long" bond paper, not US Legal (8.5x14in)
         ->setOptions([
             'defaultFont'          => 'DejaVu Sans',
             'isHtml5ParserEnabled' => true,
@@ -1463,7 +1463,7 @@ class SpecialPayrollController extends Controller
         $pdf = Pdf::loadView('payroll::special-payroll.nosi-nosa-general-payroll', compact(
             'batch', 'employee', 'result', 'period', 'typeUpper', 'typeTitle', 'statusLabel', 'signatory'
         ))
-        ->setPaper('a4', 'landscape')
+        ->setPaper('folio', 'landscape') // 8.5x13in — PH "long" bond paper, not US Legal (8.5x14in)
         ->setOptions([
             'defaultFont'          => 'DejaVu Sans',
             'isHtml5ParserEnabled' => true,
