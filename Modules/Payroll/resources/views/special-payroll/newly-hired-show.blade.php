@@ -242,10 +242,17 @@
 .allowance-modal-table td { padding: 8px 16px; border-bottom: 1px solid #EEF1FA; }
 .allowance-modal-table tfoot td { border-top: 1.5px solid #1A2B6B; border-bottom: none; font-weight: 700; padding-top: 10px; }
 .comp-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; white-space: nowrap; }
-.comp-table thead th {
-    background: var(--navy); color: white;
-    padding: 8px 12px; text-align: left;
-    font-size: 0.73rem; font-weight: 600; letter-spacing: 0.03em;
+.comp-table thead tr:first-child th {
+    background: var(--navy); color: #fff;
+    padding: 7px 10px; text-align: center;
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.03em;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+.comp-table thead tr:last-child th {
+    background: #2a3c6e; color: #cdd6f4;
+    padding: 5px 8px; text-align: center;
+    font-size: 0.69rem; font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.12);
 }
 .comp-table thead th.text-right { text-align: right; }
 .comp-table tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
@@ -691,20 +698,26 @@
             <table class="comp-table">
                 <thead>
                     <tr>
-                        <th style="width:32px;">#</th>
-                        <th>Name</th>
-                        <th>Position</th>
-                        <th class="text-right">Basic Salary</th>
-                        <th class="text-right">Salary Earned</th>
-                        <th class="text-right">Allowances</th>
-                        <th class="text-right">Total Earned</th>
-                        <th class="text-right">GSIS PS</th>
-                        <th class="text-right">PHIC</th>
-                        <th class="text-right">Pag-IBIG</th>
-                        <th class="text-right">WHT</th>
-                        <th class="text-right">Total Deductions</th>
-                        <th class="text-right">Net Amount</th>
-                        <th style="min-width:90px; text-align:center;">Signature</th>
+                        <th rowspan="2" style="width:32px; text-align:center; vertical-align:middle;">#</th>
+                        <th rowspan="2" style="text-align:left; vertical-align:middle;">Name</th>
+                        <th rowspan="2" style="text-align:left; vertical-align:middle;">Position</th>
+                        <th colspan="4" style="text-align:center; background:#1e3a8a;">
+                            EARNED FOR THE PERIOD
+                        </th>
+                        <th colspan="5" style="text-align:center; background:#7c1a1a;">DEDUCTIONS</th>
+                        <th rowspan="2" style="text-align:right; vertical-align:middle;">Net Amount</th>
+                        <th rowspan="2" style="min-width:90px; text-align:center; vertical-align:middle;">Signature</th>
+                    </tr>
+                    <tr>
+                        <th style="text-align:right;">Basic Salary</th>
+                        <th style="text-align:right;">Salary Earned</th>
+                        <th style="text-align:right;">Allowances</th>
+                        <th style="text-align:right; background:#7c1a1a;">Total Earned</th>
+                        <th style="text-align:right; background:#5b2020;">GSIS PS</th>
+                        <th style="text-align:right; background:#5b2020;">PHIC</th>
+                        <th style="text-align:right; background:#5b2020;">Pag-IBIG</th>
+                        <th style="text-align:right; background:#5b2020;">WHT</th>
+                        <th style="text-align:right; background:#7c1a1a;">Total Deductions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -737,13 +750,13 @@
                     <tr>
                         <td colspan="3" style="color:rgba(255,255,255,0.6); font-size:0.78rem;">TOTALS — 1 employee</td>
                         <td class="text-right">₱{{ number_format($result['basic_salary'],    2) }}</td>
-                        <td class="text-right gold-text">₱{{ number_format($result['salary_earned'],   2) }}</td>
-                        <td class="text-right gold-text">₱{{ number_format($allowancesTotalForDisplay, 2) }}</td>
+                        <td class="text-right">₱{{ number_format($result['salary_earned'],   2) }}</td>
+                        <td class="text-right">₱{{ number_format($allowancesTotalForDisplay, 2) }}</td>
                         <td class="text-right gold-text">₱{{ number_format($result['net_earned'],      2) }}</td>
                         <td class="text-right red-text">₱{{ number_format($result['gsis_ps'],         2) }}</td>
-                        <td class="text-right">₱{{ number_format($result['phic'],   2) }}</td>
-                        <td class="text-right">₱{{ number_format($result['pagibig'], 2) }}</td>
-                        <td class="text-right">₱{{ number_format($result['wht'],    2) }}</td>
+                        <td class="text-right red-text">₱{{ number_format($result['phic'],   2) }}</td>
+                        <td class="text-right red-text">₱{{ number_format($result['pagibig'], 2) }}</td>
+                        <td class="text-right red-text">₱{{ number_format($result['wht'],    2) }}</td>
                         <td class="text-right red-text">₱{{ number_format($result['total_deductions'], 2) }}</td>
                         <td class="text-right green-text" style="font-size:0.95rem;">₱{{ number_format($result['net_amount'], 2) }}</td>
                         <td></td>

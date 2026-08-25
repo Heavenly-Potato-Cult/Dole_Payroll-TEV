@@ -742,14 +742,14 @@
                         <th style="color:white;">#</th>
                         <th style="color:white;">Employee</th>
                         <th style="color:white;">SG–Step</th>
-                        <th style="color:white;" class="text-right">Basic Earned</th>
-                        <th style="color:white;" class="text-right">Allowances</th>
-                        <th style="background:rgba(249,168,37,0.22); color:white;" class="text-right">Gross</th>
-                        <th style="color:white;" class="text-right">Tardiness</th>
-                        <th style="color:white;" class="text-right">LWOP</th>
-                        <th style="color:white;" class="text-right">Ded. Lines</th>
-                        <th style="background:rgba(183,28,28,0.12); color:white;" class="text-right">Total Ded.</th>
-                        <th style="background:rgba(27,94,32,0.12); color:white;" class="text-right">Net Pay</th>
+                        <th style="background:#2a3c6e; color:white;" class="text-right">Basic Earned</th>
+                        <th style="background:#2a3c6e; color:white;" class="text-right">Allowances</th>
+                        <th style="background:#7c1a1a; color:white;" class="text-right">Gross</th>
+                        <th style="background:#5b2020; color:white;" class="text-right">Tardiness</th>
+                        <th style="background:#5b2020; color:white;" class="text-right">LWOP</th>
+                        <th style="background:#5b2020; color:white;" class="text-right">Ded. Lines</th>
+                        <th style="background:#7c1a1a; color:white;" class="text-right">Total Ded.</th>
+                        <th style="color:white;" class="text-right">Net Pay</th>
                         <th style="color:white;" class="text-center" title="Net pay per cutoff — 1st on top, 2nd below. Navy/bold = fixed override %. Gray = actual attendance days, once Apply Attendance has been applied this batch; otherwise an even 50/50 until then.">Split (1st / 2nd)</th>
                         <th style="color:white;">Remarks</th>
                         <th style="color:white;">Actions</th>
@@ -817,17 +817,17 @@
                         <td class="text-right" style="color:var(--gold); background:rgba(249,168,37,0.15);">
                             ₱{{ number_format($totalGross, 2) }}
                         </td>
-                        <td class="text-right" style="color:white;">
+                        <td class="text-right" style="color:#FF8A80;">
                             ₱{{ number_format($payroll->entries->sum('tardiness') + $payroll->entries->sum('undertime'), 2) }}
                         </td>
-                        <td class="text-right" style="color:white;">
+                        <td class="text-right" style="color:#FF8A80;">
                             ₱{{ number_format($payroll->entries->sum('lwop_deduction'), 2) }}
                         </td>
                         <td></td>
-                        <td class="text-right" style="color:white;">
+                        <td class="text-right" style="color:#FF8A80;">
                             ₱{{ number_format($totalDeds, 2) }}
                         </td>
-                        <td class="text-right" style="color:white; font-size:1rem;">
+                        <td class="text-right" style="color:#69F0AE; font-size:1rem;">
                             ₱{{ number_format($totalNet, 2) }}
                         </td>
                         <td></td>
