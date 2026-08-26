@@ -656,7 +656,7 @@
                 CARESS 9 monthly union dues — Payee: DOLE-CARESS9
             </p>
             <div class="report-card-actions">
-                <a href="{{ route('reports.caress-union', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff]) }}"
+                <a href="{{ route('reports.caress-union', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff, 'download' => 1]) }}"
                    class="btn-dl">
                     ⬇ Download
                 </a>
@@ -732,7 +732,7 @@
                 Death benefit schedule — Daily Rate × (0.25 + 0.25 + 0.50)
             </p>
             <div class="report-card-actions">
-                <a href="{{ route('reports.caress-mortuary', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff]) }}"
+                <a href="{{ route('reports.caress-mortuary', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff, 'download' => 1]) }}"
                    class="btn-dl">
                     ⬇ Download
                 </a>
@@ -811,7 +811,7 @@
                 c/o Bureau of Labor Relations, Intramuros, Manila
             </p>
             <div class="report-card-actions">
-                <a href="{{ route('reports.mass', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff]) }}"
+                <a href="{{ route('reports.mass', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff, 'download' => 1]) }}"
                    class="btn-dl">
                     ⬇ Download
                 </a>
@@ -887,7 +887,7 @@
                 Payee: DOLEPFI Inc. — Account No. 2471-0431-01 · Land Bank of the Philippines
             </p>
             <div class="report-card-actions">
-                <a href="{{ route('reports.provident-fund', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff]) }}"
+                <a href="{{ route('reports.provident-fund', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff, 'download' => 1]) }}"
                    class="btn-dl">
                     ⬇ Download
                 </a>
@@ -963,7 +963,7 @@
                 Landbank of the Philippines loan deductions
             </p>
             <div class="report-card-actions">
-                <a href="{{ route('reports.lbp-loan', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff]) }}"
+                <a href="{{ route('reports.lbp-loan', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff, 'download' => 1]) }}"
                    class="btn-dl">
                     ⬇ Download
                 </a>
@@ -1039,7 +1039,7 @@
                 Withholding Tax and other refunds payable to Bureau of Treasury
             </p>
             <div class="report-card-actions">
-                <a href="{{ route('reports.btr-refund', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff]) }}"
+                <a href="{{ route('reports.btr-refund', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff, 'download' => 1]) }}"
                    class="btn-dl">
                     ⬇ Download
                 </a>
