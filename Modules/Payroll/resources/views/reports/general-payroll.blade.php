@@ -150,6 +150,17 @@
     </div>
 
     <div class="gp-columns-card">
+        <h4>🏢 Grouped by PSIPOP Office ({{ count($officeGroups ?? []) }})</h4>
+        <div class="gp-chip-list">
+            @forelse ($officeGroups ?? [] as $office)
+                <span class="gp-chip">{{ $office['name'] }} ({{ $office['count'] }})</span>
+            @empty
+                <span class="gp-chip">No PSIPOP offices found for this period</span>
+            @endforelse
+        </div>
+    </div>
+
+    <div class="gp-columns-card">
         <h4>📋 Deduction columns included ({{ count($deductionColumns) }})</h4>
         <div class="gp-chip-list">
             @forelse ($deductionColumns as $col)
@@ -164,7 +175,7 @@
 <div class="gp-download-card">
     <div>
         <h4 style="color:#fff; margin:0 0 4px; font-size:0.95rem;">⬇ Download Excel Register</h4>
-        <p>No., Name, Position, SG-Step, Basic Salary, PERA, RATA, Gross Income, all active deductions, Total Deductions, Net Amount — sorted by last name, with DOLE letterhead and signature block.</p>
+        <p>Sheet 1 — General Payroll Register: No., Plantilla Item No., Name, Position, SG-Step, Basic Salary, PERA, RATA, Gross Income, all active deductions (color-coded headers), Total Deductions, Net Amount, {{ $cutoff === 'both' ? '1st & 2nd Cutoff Net Pay' : ($cutoff === '1st' ? '1st Cutoff Net Pay' : '2nd Cutoff Net Pay') }} — grouped by PSIPOP office (with a subtotal per office, a "Total Per Division" recap, and a grand total), DOLE letterhead and signature block. Sheet 2 — New Net Pay: 1st/2nd cut-off net pay comparison per employee.</p>
     </div>
     <a href="{{ route('reports.general-payroll-download', ['year' => $year, 'month' => $month, 'cutoff' => $cutoff]) }}"
        class="btn-dl-gold">⬇ Download XLSX</a>

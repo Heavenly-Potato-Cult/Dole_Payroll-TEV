@@ -818,6 +818,7 @@ class PayrollReportController extends Controller
             'grandTotalGross'  => $export->getGrandTotalGross(),
             'grandTotalNet'    => $export->getGrandTotalNet(),
             'deductionColumns' => $export->getDeductionColumns(),
+            'officeGroups'     => $export->getOfficeGroups(),
         ]);
     }
 
