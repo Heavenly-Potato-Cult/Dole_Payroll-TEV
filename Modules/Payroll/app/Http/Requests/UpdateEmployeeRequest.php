@@ -31,6 +31,11 @@ class UpdateEmployeeRequest extends FormRequest
             // ── Position ─────────────────────────────────────────
             'position_title'    => ['required', 'string', 'max:200'],
             'division_id'       => ['required', 'integer', 'exists:divisions,id'],
+            // Nullable — see StoreEmployeeRequest for why. This was the
+            // missing piece causing PSIPOP edits to silently no-op: without
+            // a rule here, $request->validated() dropped the field before
+            // it ever reached $employee->update($data).
+            'psipop_office_id'  => ['nullable', 'integer', 'exists:psipop_offices,id'],
 
             // ── Salary ───────────────────────────────────────────
             'salary_grade'      => ['required', 'integer', 'min:1', 'max:33'],
@@ -70,6 +75,7 @@ class UpdateEmployeeRequest extends FormRequest
         return [
             'plantilla_item_no.unique' => 'This plantilla item number is already assigned to another employee.',
             'division_id.exists'       => 'The selected division does not exist.',
+            'psipop_office_id.exists'  => 'The selected PSIPOP office does not exist.',
             'basic_salary.required'    => 'Basic salary is required. Use the SG/Step lookup to auto-fill.',
             'salary_split_override_pct.max' => 'The 1st Cutoff Split % must be between 0 and 100.',
         ];
@@ -84,6 +90,7 @@ class UpdateEmployeeRequest extends FormRequest
             'middle_name'       => 'Middle Name',
             'position_title'    => 'Position Title',
             'division_id'       => 'Division',
+            'psipop_office_id'  => 'PSIPOP Office',
             'salary_grade'      => 'Salary Grade',
             'basic_salary'      => 'Basic Salary',
             'salary_split_override_pct' => '1st Cutoff Split %',

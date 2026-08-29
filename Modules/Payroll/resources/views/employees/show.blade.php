@@ -295,6 +295,10 @@
             <span class="info-value mono">{{ $employee->plantilla_item_no ?: '—' }}</span>
         </div>
         <div class="info-row">
+            <span class="info-label">PSIPOP Office</span>
+            <span class="info-value">{{ $employee->psipopOffice->name ?? '—' }}</span>
+        </div>
+        <div class="info-row">
             <span class="info-label">Position Title</span>
             <span class="info-value">{{ $employee->position_title }}</span>
         </div>
@@ -456,3 +460,4 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 </script>
 @endsection
+

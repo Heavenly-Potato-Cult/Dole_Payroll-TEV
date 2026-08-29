@@ -7,6 +7,7 @@ use Modules\Payroll\Http\Requests\StoreEmployeeRequest;
 use Modules\Payroll\Http\Requests\UpdateEmployeeRequest;
 use App\SharedKernel\Models\Division;
 use App\SharedKernel\Models\Employee;
+use App\SharedKernel\Models\PsipopOffice;
 use App\SharedKernel\Services\HrisApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -73,7 +74,7 @@ class EmployeeController extends Controller
 
     public function show(Employee $employee)
     {
-        $employee->load(['division', 'promotionHistory', 'deductions']);
+        $employee->load(['division', 'psipopOffice', 'promotionHistory', 'deductions']);
 
         $peraInfo = $this->resolvedPeraInfo($employee);
 
@@ -85,9 +86,16 @@ class EmployeeController extends Controller
         $divisions = Division::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
         $sitYears  = [2022, 2021];
 
+        // Same is_active convention as $divisions above. sort_order is
+        // also enforced by a global scope on the model, but ordering
+        // explicitly here keeps this query self-documenting.
+        $psipopOffices = PsipopOffice::where('is_active', true)
+            ->orderBy('sort_order')
+            ->get(['id', 'name', 'sort_order']);
+
         $peraInfo = $this->resolvedPeraInfo($employee);
 
-        return view('payroll::employees.edit', compact('employee', 'divisions', 'sitYears', 'peraInfo'));
+        return view('payroll::employees.edit', compact('employee', 'divisions', 'sitYears', 'peraInfo', 'psipopOffices'));
     }
 
     public function update(UpdateEmployeeRequest $request, Employee $employee)
@@ -196,7 +204,15 @@ class EmployeeController extends Controller
                     }
                 }
 
-                // Map API field names → local database columns
+                // Map API field names → local database columns.
+                // psipop_office_id is deliberately NOT mapped here — PSIPOP
+                // doesn't exist in the HRIS payload (dummy or real) and
+                // never will. It's assigned locally only, exactly like
+                // plantilla_item_no below. Leaving it out of $dbData means
+                // $existing->update($dbData) never touches the column on
+                // sync, and Employee::create($dbData) leaves it unset so
+                // the model's booted() creating hook fills it with the
+                // "Unassigned" default (see App\SharedKernel\Models\PsipopOffice).
                 $dbData = [
                     'division_id'               => $division->id,
                     'hris_employee_id'          => $empData['employee_id']               ?? null, // Store original HRIS employee_id for reference
@@ -259,6 +275,9 @@ class EmployeeController extends Controller
                     if (!is_null($existing->plantilla_item_no)) {
                         unset($dbData['plantilla_item_no']);
                     }
+                    // psipop_office_id needs no equivalent guard here — it was
+                    // never added to $dbData above, so it's already outside
+                    // what this update() call can touch, on every sync.
                     $existing->update($dbData);
                     $updated++;
                 } else {

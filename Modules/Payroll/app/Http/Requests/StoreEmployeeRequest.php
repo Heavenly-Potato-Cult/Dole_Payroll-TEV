@@ -26,6 +26,13 @@ class StoreEmployeeRequest extends FormRequest
             // ── Position ─────────────────────────────────────────
             'position_title'    => ['required', 'string', 'max:200'],
             'division_id'       => ['required', 'integer', 'exists:divisions,id'],
+            // Nullable because the "always populated" guarantee is enforced
+            // by Employee::booted()'s creating hook (defaults to the
+            // Unassigned bucket), not by the validator — the form always
+            // sends a value in practice since edit.blade.php's <select>
+            // has no blank option, but this must not block a submission
+            // that somehow omits it.
+            'psipop_office_id'  => ['nullable', 'integer', 'exists:psipop_offices,id'],
 
             // ── Salary ───────────────────────────────────────────
             'salary_grade'      => ['required', 'integer', 'min:1', 'max:33'],
@@ -75,6 +82,7 @@ class StoreEmployeeRequest extends FormRequest
             'middle_name'       => 'Middle Name',
             'position_title'    => 'Position Title',
             'division_id'       => 'Division',
+            'psipop_office_id'  => 'PSIPOP Office',
             'salary_grade'      => 'Salary Grade',
             'basic_salary'      => 'Basic Salary',
             'hire_date'         => 'Hire Date',

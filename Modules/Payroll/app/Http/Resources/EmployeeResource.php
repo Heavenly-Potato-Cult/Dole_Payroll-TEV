@@ -24,6 +24,10 @@ class EmployeeResource extends JsonResource
                 'name' => $this->division->name,
                 'code' => $this->division->code,
             ]),
+            'psipop_office'     => $this->whenLoaded('psipopOffice', fn () => [
+                'id'   => $this->psipopOffice->id,
+                'name' => $this->psipopOffice->name,
+            ]),
             'salary_grade'      => $this->salary_grade,
             'step'              => $this->step,
             'sit_year'          => $this->sit_year,

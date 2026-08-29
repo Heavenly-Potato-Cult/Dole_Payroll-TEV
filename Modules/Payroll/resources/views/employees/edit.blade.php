@@ -84,15 +84,30 @@
         <div class="card">
             <div class="card-header"><h3>Position & Assignment</h3></div>
             <div class="card-body">
-                <div class="form-group">
-                    <label for="plantilla_item_no">Plantilla Item No. <span style="color:var(--red)">*</span></label>
-                    <input type="text" id="plantilla_item_no" name="plantilla_item_no"
-                           value="{{ old('plantilla_item_no', $employee->plantilla_item_no) }}"
-                           class="{{ $errors->has('plantilla_item_no') ? 'is-invalid' : '' }}"
-                           required maxlength="100">
-                    @error('plantilla_item_no')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
                 <div class="position-grid">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="plantilla_item_no">Plantilla Item No. <span style="color:var(--red)">*</span></label>
+                        <input type="text" id="plantilla_item_no" name="plantilla_item_no"
+                               value="{{ old('plantilla_item_no', $employee->plantilla_item_no) }}"
+                               class="{{ $errors->has('plantilla_item_no') ? 'is-invalid' : '' }}"
+                               required maxlength="100">
+                        @error('plantilla_item_no')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="psipop_office_id">PSIPOP Office</label>
+                        <select id="psipop_office_id" name="psipop_office_id"
+                                class="{{ $errors->has('psipop_office_id') ? 'is-invalid' : '' }}">
+                            @foreach ($psipopOffices as $office)
+                                <option value="{{ $office->id }}"
+                                    {{ old('psipop_office_id', $employee->psipop_office_id) == $office->id ? 'selected' : '' }}>
+                                    {{ $office->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('psipop_office_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                </div>
+                <div class="position-grid" style="margin-top:14px;">
                     <div class="form-group" style="margin-bottom:0;">
                         <label for="position_title">Position Title <span style="color:var(--red)">*</span></label>
                         <input type="text" id="position_title" name="position_title"

@@ -30,6 +30,7 @@ class Employee extends Model
         // Position & salary
         'position_title',
         'division_id',
+        'psipop_office_id',
         'salary_grade',
         'step',
         'sit_year',
@@ -94,11 +95,42 @@ class Employee extends Model
         self::STATUS_VACANT,
     ];
 
+    // ── Model events ─────────────────────────────────────────────
+
+    /**
+     * Every employee must always group into a real, visible PSIPOP
+     * office — never a silent null. This covers manual creation, seeders,
+     * and every future HRIS pullFromApi() sync, since PSIPOP has no
+     * equivalent field in that payload and never will.
+     *
+     * DB column stays nullable (see migration) so this is purely an
+     * application-level default; an explicitly passed psipop_office_id
+     * is always respected.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $employee) {
+            if (empty($employee->psipop_office_id)) {
+                $employee->psipop_office_id = \App\SharedKernel\Models\PsipopOffice::unassignedId();
+            }
+        });
+    }
+
     // ── Relationships ────────────────────────────────────────────
 
     public function division(): BelongsTo
     {
         return $this->belongsTo(\App\SharedKernel\Models\Division::class);
+    }
+
+    /**
+     * PSIPOP (DBM staffing document) office grouping — separate from
+     * `division`. Always populated (see booted() above), even though the
+     * FK column itself is nullable at the DB level.
+     */
+    public function psipopOffice(): BelongsTo
+    {
+        return $this->belongsTo(\App\SharedKernel\Models\PsipopOffice::class);
     }
 
     public function promotionHistory(): HasMany
