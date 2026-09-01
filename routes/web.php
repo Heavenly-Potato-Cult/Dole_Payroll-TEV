@@ -12,6 +12,7 @@ use Modules\Payroll\Http\Controllers\SpecialPayrollController;
 // registered in the TEV module's own routes/web.php (under the tev. prefix).
 use Modules\Payroll\Http\Controllers\PayrollReportController;
 use Modules\Payroll\Http\Controllers\DivisionController;
+use Modules\Payroll\Http\Controllers\PsipopOfficeController;
 use Modules\Payroll\Http\Controllers\UserController;
 use Modules\Payroll\Http\Controllers\SalaryIndexTableController;
 use Modules\Payroll\Http\Controllers\SignatoryController;
@@ -87,6 +88,21 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['role:payroll_officer|hrmo|super_admin'])
         ->group(function () {
             Route::resource('divisions', DivisionController::class);
+        });
+
+    // ── PSIPOP Offices ───────────────────────────────────────────
+    // Read-only besides the toggle — see PsipopOfficeController docblock.
+    // No create/store/edit/update/destroy: only('index') deliberately
+    // omits them rather than ->except(...) them, so a future accidental
+    // route addition doesn't silently re-enable editing this fixed list.
+    Route::middleware(['role:payroll_officer|hrmo|super_admin'])
+        ->group(function () {
+            Route::resource('psipop-offices', PsipopOfficeController::class)->only(['index']);
+
+            Route::patch(
+                '/psipop-offices/{psipopOffice}/toggle',
+                [PsipopOfficeController::class, 'toggle']
+            )->name('psipop-offices.toggle');
         });
 
     // ── Special Payroll — Newly Hired ────────────────────────────

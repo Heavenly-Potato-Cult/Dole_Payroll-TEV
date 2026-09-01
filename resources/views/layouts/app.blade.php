@@ -179,6 +179,14 @@
                     </svg>
                 </span> Divisions
             </a>
+            <a href="{{ route('psipop-offices.index') }}"
+               class="nav-item {{ request()->routeIs('psipop-offices.*') ? 'active' : '' }}">
+                <span class="nav-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white" style="display: block;">
+                        <path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/>
+                    </svg>
+                </span> PSIPOP Offices
+            </a>
             @endrole
             @endrole
 
@@ -435,3 +443,4 @@ document.querySelectorAll('.nav-item').forEach(link => {
 
 </body>
 </html>
+
